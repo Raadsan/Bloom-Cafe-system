@@ -40,11 +40,11 @@ model Table {
 }
 
 model Category {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique
-   description String?
-  menuItems MenuItem[]
-  createdAt DateTime   @default(now())
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  description String?
+  menuItems   MenuItem[]
+  createdAt   DateTime   @default(now())
 }
 
 model MenuItem {
@@ -62,16 +62,17 @@ model MenuItem {
 }
 
 model Order {
-  id           Int         @id @default(autoincrement())
-  status       String      @default("pending") // pending | preparing | ready | served | cancelled
-  total        Float       @default(0)
-  customerName String?
-  notes        String?
-  tableId      Int
-  table        Table       @relation(fields: [tableId], references: [id])
-  items        OrderItem[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id            Int         @id @default(autoincrement())
+  status        String      @default("pending")
+  total         Float       @default(0)
+  customerName  String?
+  customerPhone String?
+  notes         String?
+  tableId       Int
+  table         Table       @relation(fields: [tableId], references: [id])
+  items         OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 model OrderItem {
