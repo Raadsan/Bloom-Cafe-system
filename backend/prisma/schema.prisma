@@ -14,6 +14,8 @@ model Role {
   users       User[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("role")
 }
 
 model User {
@@ -27,6 +29,8 @@ model User {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("user")
 }
 
 model Table {
@@ -34,9 +38,12 @@ model Table {
   number    Int      @unique
   name      String?
   qrCode    String   @unique
-  status    String   @default("available") // available | occupied
+  status    String   @default("available")
   orders    Order[]
   createdAt DateTime @default(now())
+  updatedAt DateTime? @updatedAt
+
+  @@map("table")
 }
 
 model Category {
@@ -45,6 +52,9 @@ model Category {
   description String?
   menuItems   MenuItem[]
   createdAt   DateTime   @default(now())
+  updatedAt   DateTime?   @updatedAt
+
+  @@map("category")
 }
 
 model MenuItem {
@@ -59,6 +69,19 @@ model MenuItem {
   orderItems  OrderItem[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+
+  @@map("menuitem")
+}
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  fullName  String
+  phone     String   @unique
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime? @updatedAt
+
+  @@map("customer")
 }
 
 model Order {
@@ -69,10 +92,14 @@ model Order {
   customerPhone String?
   notes         String?
   tableId       Int
+  customerId    Int?
   table         Table       @relation(fields: [tableId], references: [id])
+  customer      Customer?   @relation(fields: [customerId], references: [id])
   items         OrderItem[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+
+  @@map("order")
 }
 
 model OrderItem {
@@ -83,4 +110,6 @@ model OrderItem {
   menuItemId Int
   order      Order    @relation(fields: [orderId], references: [id])
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@map("orderitem")
 }

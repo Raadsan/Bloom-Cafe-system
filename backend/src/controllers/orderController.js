@@ -1,9 +1,9 @@
 import prisma from '../config/db.js'
 
-// CREATE ORDER
+// CREATE ORDER (STAFF)
 export const createOrder = async (req, res) => {
   try {
-    const { tableId, customerName, notes, items } = req.body
+    const { tableId, customerName, customerPhone, notes, items } = req.body
 
     if (!tableId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -57,10 +57,36 @@ export const createOrder = async (req, res) => {
       })
     }
 
+    let customer = null
+
+    if (customerName && customerPhone) {
+      customer = await prisma.customer.findUnique({
+        where: { phone: customerPhone.trim() }
+      })
+
+      if (!customer) {
+        customer = await prisma.customer.create({
+          data: {
+            fullName: customerName.trim(),
+            phone: customerPhone.trim()
+          }
+        })
+      } else {
+        customer = await prisma.customer.update({
+          where: { id: customer.id },
+          data: {
+            fullName: customerName.trim()
+          }
+        })
+      }
+    }
+
     const order = await prisma.order.create({
       data: {
         tableId: Number(tableId),
+        customerId: customer ? customer.id : null,
         customerName: customerName || null,
+        customerPhone: customerPhone || null,
         notes: notes || null,
         total,
         status: 'pending',
@@ -70,6 +96,7 @@ export const createOrder = async (req, res) => {
       },
       include: {
         table: true,
+        customer: true,
         items: {
           include: {
             menuItem: true
@@ -99,13 +126,13 @@ export const createOrder = async (req, res) => {
     })
   }
 }
-
 // GET ALL ORDERS
 export const getAllOrders = async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
       include: {
         table: true,
+        customer: true,
         items: {
           include: {
             menuItem: true
@@ -149,6 +176,7 @@ export const getOrderById = async (req, res) => {
       where: { id: orderId },
       include: {
         table: true,
+        customer: true,
         items: {
           include: {
             menuItem: true
@@ -218,6 +246,7 @@ export const updateOrderStatus = async (req, res) => {
       data: { status },
       include: {
         table: true,
+        customer: true,
         items: {
           include: {
             menuItem: true
@@ -343,6 +372,7 @@ export const getOrdersByTable = async (req, res) => {
       },
       include: {
         table: true,
+        customer: true,
         items: {
           include: {
             menuItem: true
@@ -359,13 +389,145 @@ export const getOrdersByTable = async (req, res) => {
       count: orders.length,
       data: orders
     })
-
   } catch (error) {
-    console.error("Get Orders By Table Error:", error)
-
+    console.error('Get Orders By Table Error:', error)
     res.status(500).json({
       success: false,
-      message: "Failed to fetch orders by table",
+      message: 'Failed to fetch orders by table',
+      error: error.message
+    })
+  }
+}
+
+// CREATE PUBLIC ORDER (CUSTOMER)
+export const createPublicOrder = async (req, res) => {
+  try {
+    let { qrCode, customerName, customerPhone, notes, items } = req.body
+
+    customerName = customerName?.trim()
+    customerPhone = customerPhone?.trim()
+    notes = notes?.trim()
+
+    if (
+      !qrCode ||
+      !customerName ||
+      !customerPhone ||
+      !items ||
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'qrCode, customerName, customerPhone and items are required'
+      })
+    }
+
+    const table = await prisma.table.findUnique({
+      where: { qrCode }
+    })
+
+    if (!table) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invalid QR code or table not found'
+      })
+    }
+
+    let total = 0
+    const orderItemsData = []
+
+    for (const item of items) {
+      const menuItem = await prisma.menuItem.findUnique({
+        where: { id: Number(item.menuItemId) }
+      })
+
+      if (!menuItem) {
+        return res.status(404).json({
+          success: false,
+          message: `Menu item with id ${item.menuItemId} not found`
+        })
+      }
+
+      if (!menuItem.isAvailable) {
+        return res.status(400).json({
+          success: false,
+          message: `${menuItem.name} is not available`
+        })
+      }
+
+      const quantity = Number(item.quantity) || 1
+      const unitPrice = menuItem.price
+
+      total += quantity * unitPrice
+
+      orderItemsData.push({
+        menuItemId: menuItem.id,
+        quantity,
+        unitPrice
+      })
+    }
+
+    let customer = await prisma.customer.findUnique({
+      where: { phone: customerPhone }
+    })
+
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          fullName: customerName,
+          phone: customerPhone
+        }
+      })
+    } else {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          fullName: customerName
+        }
+      })
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        tableId: table.id,
+        customerId: customer.id,
+        customerName,
+        customerPhone,
+        notes: notes || null,
+        total,
+        status: 'pending',
+        items: {
+          create: orderItemsData
+        }
+      },
+      include: {
+        table: true,
+        customer: true,
+        items: {
+          include: {
+            menuItem: true
+          }
+        }
+      }
+    })
+
+    await prisma.table.update({
+      where: { id: table.id },
+      data: {
+        status: 'occupied'
+      }
+    })
+
+    res.status(201).json({
+      success: true,
+      message: 'Customer order created successfully',
+      data: order
+    })
+  } catch (error) {
+    console.error('Create Public Order Error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create public order',
       error: error.message
     })
   }

@@ -190,3 +190,52 @@ export const deleteMenuItem = async (req, res) => {
     })
   }
 }
+
+// GET PUBLIC MENU BY QR CODE
+export const getPublicMenuByQrCode = async (req, res) => {
+  try {
+    const { qrCode } = req.params
+
+    const table = await prisma.table.findUnique({
+      where: { qrCode }
+    })
+
+    if (!table) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invalid QR code or table not found'
+      })
+    }
+
+    const categories = await prisma.category.findMany({
+      include: {
+        menuItems: {
+          where: {
+            isAvailable: true
+          },
+          orderBy: {
+            id: 'asc'
+          }
+        }
+      },
+      orderBy: {
+        id: 'asc'
+      }
+    })
+
+    res.status(200).json({
+      success: true,
+      data: {
+        table,
+        categories
+      }
+    })
+  } catch (error) {
+    console.error('Get Public Menu Error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch public menu',
+      error: error.message
+    })
+  }
+}

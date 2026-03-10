@@ -27,7 +27,8 @@ import {
   getAllMenuItems,
   getMenuItemsByCategory,
   updateMenuItem,
-  deleteMenuItem
+  deleteMenuItem,
+  getPublicMenuByQrCode
 } from '../controllers/menuItemController.js'
 import { protect, authorize } from '../middlewares/authMiddleware.js'
 
@@ -47,5 +48,10 @@ router.patch('/:id', protect, authorize('admin', 'manager'), updateMenuItem)
 
 // Delete menu item
 router.delete('/:id', protect, authorize('admin'), deleteMenuItem)
+
+// Customer scans QR and gets menu
+router.get('/menu/:qrCode', getPublicMenuByQrCode)
+
+
 
 export default router
