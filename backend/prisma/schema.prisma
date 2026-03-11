@@ -113,3 +113,16 @@ model OrderItem {
 
   @@map("orderitem")
 }
+
+model Notification {
+  id         Int      @id @default(autoincrement())
+  title      String
+  message    String
+  role       String?
+  orderId    Int?
+  customerId Int?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@map("notification")
+}

@@ -9,7 +9,7 @@ import menuItemRoutes from './routes/menuItemRoutes.js'
 import orderRoutes from './routes/orderRoutes.js'
 import roleRoutes from './routes/roleRoutes.js'
 import authRoutes from './routes/authRoutes.js'
-// import publicRoutes from './routes/publicRoutes.js'
+import notificationRoutes from './routes/notificationRoutes.js'
 
 const app = express();
 
@@ -23,7 +23,7 @@ app.use('/api/menu-items', menuItemRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/roles', roleRoutes)
 app.use('/api/auth', authRoutes)
-// app.use('/api/public', publicRoutes)
+app.use('/api/notifications', notificationRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');
