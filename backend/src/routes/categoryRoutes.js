@@ -53,6 +53,6 @@ router.get('/:id/with-items', protect, authorize('admin', 'manager', 'kitchen', 
 router.patch('/:id', protect, authorize('admin', 'manager'), updateCategory)
 
 // Delete category
-router.delete('/:id', protect, authorize('admin'), deleteCategory)
+router.delete('/:id', protect, authorize('admin'), deleteCategory) 
 
 export default router
