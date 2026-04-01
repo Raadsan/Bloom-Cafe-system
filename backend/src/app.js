@@ -11,11 +11,13 @@ import roleRoutes from './routes/roleRoutes.js'
 import authRoutes from './routes/authRoutes.js'
 import notificationRoutes from './routes/notificationRoutes.js'
 import paymentRoutes from './routes/paymentRoutes.js'
+import auditLogRoutes from './routes/auditLogRoutes.js'
 
 const app = express();
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
 
 app.use(cors());
-app.use(express.json());
 
 app.use('/api/users', userRoutes);
 app.use('/api/tables', tableRoutes);
@@ -26,6 +28,7 @@ app.use('/api/roles', roleRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/payments', paymentRoutes)
+app.use('/api/audit-logs', auditLogRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');

@@ -29,6 +29,7 @@ model User {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+   auditLogs AuditLog[]
 
   @@map("user")
 }
@@ -147,4 +148,18 @@ model Payment {
   order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("payment")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  action      String
+  entity      String
+  entityId    Int?
+  description String?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@map("auditlog")
 }
