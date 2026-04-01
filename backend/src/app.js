@@ -13,6 +13,7 @@ import notificationRoutes from './routes/notificationRoutes.js'
 import paymentRoutes from './routes/paymentRoutes.js'
 import auditLogRoutes from './routes/auditLogRoutes.js'
 import reportRoutes from './routes/reportRoutes.js'
+import ingredientRoutes from './routes/ingredientRoutes.js'
 
 const app = express();
 app.use(express.json())
@@ -31,6 +32,7 @@ app.use('/api/notifications', notificationRoutes)
 app.use('/api/payments', paymentRoutes)
 app.use('/api/audit-logs', auditLogRoutes)
 app.use('/api/reports', reportRoutes)
+app.use('/api/ingredients', ingredientRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');

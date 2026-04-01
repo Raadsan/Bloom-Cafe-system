@@ -68,6 +68,7 @@ model MenuItem {
   categoryId  Int
   category    Category    @relation(fields: [categoryId], references: [id])
   orderItems  OrderItem[]
+  bomItems    MenuItemBOM[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -162,4 +163,49 @@ model AuditLog {
   user        User?    @relation(fields: [userId], references: [id])
 
   @@map("auditlog")
+}
+
+model Ingredient {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  unit          String
+  stockQuantity Float           @default(0)
+  minStockLevel Float           @default(0)
+  costPerUnit   Float           @default(0)
+  isActive      Boolean         @default(true)
+  bomItems      MenuItemBOM[]
+  movements     StockMovement[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@map("ingredient")
+}
+
+model MenuItemBOM {
+  id               Int         @id @default(autoincrement())
+  menuItemId       Int
+  ingredientId     Int
+  quantityRequired Float
+
+  menuItem         MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  ingredient       Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@unique([menuItemId, ingredientId])
+  @@map("menuitembom")
+}
+
+model StockMovement {
+  id            Int         @id @default(autoincrement())
+  ingredientId  Int
+  type          String
+  quantity      Float
+  note          String?
+  createdAt     DateTime    @default(now())
+
+  ingredient    Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@map("stockmovement")
 }
