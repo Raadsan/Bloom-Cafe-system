@@ -400,326 +400,139 @@ export const getOrdersByTable = async (req, res) => {
 }
 
 // CREATE PUBLIC ORDER (CUSTOMER)
-// export const createPublicOrder = async (req, res) => {
-//   try {
-//     let { qrCode, customerName, customerPhone, notes, items } = req.body
-
-//     customerName = customerName?.trim()
-//     customerPhone = customerPhone?.trim()
-//     notes = notes?.trim()
-
-//     if (
-//       !qrCode ||
-//       !customerName ||
-//       !customerPhone ||
-//       !items ||
-//       !Array.isArray(items) ||
-//       items.length === 0
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'qrCode, customerName, customerPhone and items are required'
-//       })
-//     }
-
-//     const table = await prisma.table.findUnique({
-//       where: { qrCode }
-//     })
-
-//     if (!table) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'Invalid QR code or table not found'
-//       })
-//     }
-
-//     let total = 0
-//     const orderItemsData = []
-
-//     for (const item of items) {
-//       const menuItem = await prisma.menuItem.findUnique({
-//         where: { id: Number(item.menuItemId) }
-//       })
-
-//       if (!menuItem) {
-//         return res.status(404).json({
-//           success: false,
-//           message: `Menu item with id ${item.menuItemId} not found`
-//         })
-//       }
-
-//       if (!menuItem.isAvailable) {
-//         return res.status(400).json({
-//           success: false,
-//           message: `${menuItem.name} is not available`
-//         })
-//       }
-
-//       const quantity = Number(item.quantity) || 1
-//       const unitPrice = menuItem.price
-
-//       total += quantity * unitPrice
-
-//       orderItemsData.push({
-//         menuItemId: menuItem.id,
-//         quantity,
-//         unitPrice
-//       })
-//     }
-
-//     let customer = await prisma.customer.findUnique({
-//       where: { phone: customerPhone }
-//     })
-
-//     if (!customer) {
-//       customer = await prisma.customer.create({
-//         data: {
-//           fullName: customerName,
-//           phone: customerPhone
-//         }
-//       })
-//     } else {
-//       customer = await prisma.customer.update({
-//         where: { id: customer.id },
-//         data: {
-//           fullName: customerName
-//         }
-//       })
-//     }
-
-//     const order = await prisma.order.create({
-//       data: {
-//         tableId: table.id,
-//         customerId: customer.id,
-//         customerName,
-//         customerPhone,
-//         notes: notes || null,
-//         total,
-//         status: 'pending',
-//         items: {
-//           create: orderItemsData
-//         }
-//       },
-//       include: {
-//         table: true,
-//         customer: true,
-//         items: {
-//           include: {
-//             menuItem: true
-//           }
-//         }
-//       }
-//     })
-
-//     await prisma.table.update({
-//       where: { id: table.id },
-//       data: {
-//         status: 'occupied'
-//       }
-//     })
-
-//     res.status(201).json({
-//       success: true,
-//       message: 'Customer order created successfully',
-//       data: order
-//     })
-//   } catch (error) {
-//     console.error('Create Public Order Error:', error)
-//     res.status(500).json({
-//       success: false,
-//       message: 'Failed to create public order',
-//       error: error.message
-//     })
-//   }
-// }
-
-// CREATE PUBLIC ORDER (CUSTOMER)
 export const createPublicOrder = async (req, res) => {
   try {
-    let { qrCode, customerName, customerPhone, notes, items } = req.body
+    const { tableId, items } = req.body
 
-    customerName = customerName?.trim()
-    customerPhone = customerPhone?.trim()
-    notes = notes?.trim()
-
-    if (
-      !qrCode ||
-      !customerName ||
-      !customerPhone ||
-      !items ||
-      !Array.isArray(items) ||
-      items.length === 0
-    ) {
+    if (!tableId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'qrCode, customerName, customerPhone and items are required'
+        message: "tableId and items are required"
       })
     }
 
-    const table = await prisma.table.findUnique({
-      where: { qrCode }
-    })
+    const result = await prisma.$transaction(async (tx) => {
 
-    if (!table) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invalid QR code or table not found'
+      // 1. CHECK TABLE
+      const table = await tx.table.findUnique({
+        where: { id: Number(tableId) }
       })
-    }
 
-    // CHECK TABLE STATUS
-    if (table.status === 'occupied') {
-      const activeOrder = await prisma.order.findFirst({
-        where: {
-          tableId: table.id,
-          status: {
-            in: ['pending', 'preparing', 'ready']
-          }
+      if (!table) {
+        throw new Error("Table not found")
+      }
+
+      let total = 0
+      const orderItemsData = []
+
+      // 2. VALIDATE MENU ITEMS + CALCULATE TOTAL
+      for (const item of items) {
+        const menuItem = await tx.menuItem.findUnique({
+          where: { id: Number(item.menuItemId) }
+        })
+
+        if (!menuItem) {
+          throw new Error(`Menu item ${item.menuItemId} not found`)
         }
-      })
 
-      if (activeOrder) {
-        return res.status(400).json({
-          success: false,
-          message: 'This table already has an active order'
-        })
-      }
-    }
+        if (!menuItem.isAvailable) {
+          throw new Error(`${menuItem.name} is not available`)
+        }
 
-    let total = 0
-    const orderItemsData = []
+        const quantity = Number(item.quantity) || 1
+        const unitPrice = menuItem.price
 
-    for (const item of items) {
-      const menuItem = await prisma.menuItem.findUnique({
-        where: { id: Number(item.menuItemId) }
-      })
+        total += quantity * unitPrice
 
-      if (!menuItem) {
-        return res.status(404).json({
-          success: false,
-          message: `Menu item with id ${item.menuItemId} not found`
+        orderItemsData.push({
+          menuItemId: menuItem.id,
+          quantity,
+          unitPrice
         })
       }
 
-      if (!menuItem.isAvailable) {
-        return res.status(400).json({
-          success: false,
-          message: `${menuItem.name} is not available`
-        })
-      }
-
-      const quantity = Number(item.quantity) || 1
-      const unitPrice = menuItem.price
-
-      total += quantity * unitPrice
-
-      orderItemsData.push({
-        menuItemId: menuItem.id,
-        quantity,
-        unitPrice
-      })
-    }
-
-    // FIND CUSTOMER BY PHONE
-    let customer = await prisma.customer.findUnique({
-      where: { phone: customerPhone }
-    })
-
-    // CREATE CUSTOMER IF NOT EXISTS
-    if (!customer) {
-      customer = await prisma.customer.create({
+      // 3. CREATE ORDER
+      const order = await tx.order.create({
         data: {
-          fullName: customerName,
-          phone: customerPhone
-        }
-      })
-    } else {
-      // UPDATE NAME IF CHANGED
-      customer = await prisma.customer.update({
-        where: { id: customer.id },
-        data: {
-          fullName: customerName
-        }
-      })
-    }
-
-    const order = await prisma.order.create({
-      data: {
-        tableId: table.id,
-        customerId: customer.id,
-        customerName,
-        customerPhone,
-        notes: notes || null,
-        total,
-        status: 'pending',
-        items: {
-          create: orderItemsData
-        }
-      },
-      include: {
-        table: true,
-        customer: true,
-        items: {
-          include: {
-            menuItem: true
+          tableId: Number(tableId),
+          total,
+          status: "pending",
+          items: {
+            create: orderItemsData
           }
+        },
+        include: {
+          items: true
+        }
+      })
+
+      // 4. STOCK AUTO-DEDUCTION
+      for (const item of orderItemsData) {
+
+        const bomItems = await tx.menuItemBOM.findMany({
+          where: { menuItemId: item.menuItemId }
+        })
+
+        for (const bom of bomItems) {
+
+          const totalRequired = bom.quantity * item.quantity
+
+          const ingredient = await tx.ingredient.findUnique({
+            where: { id: bom.ingredientId }
+          })
+
+          if (!ingredient || ingredient.stockQuantity < totalRequired) {
+            throw new Error(
+              `Not enough stock for ingredient ID ${bom.ingredientId}`
+            )
+          }
+
+          // UPDATE STOCK
+          await tx.ingredient.update({
+            where: { id: bom.ingredientId },
+            data: {
+              stockQuantity: {
+                decrement: totalRequired
+              }
+            }
+          })
+
+          // STOCK MOVEMENT LOG
+          await tx.stockMovement.create({
+            data: {
+              ingredientId: bom.ingredientId,
+              type: "out",
+              quantity: totalRequired,
+              note: `Auto deduction for order ${order.id}`
+            }
+          })
         }
       }
+
+      // 5. UPDATE TABLE STATUS
+      await tx.table.update({
+        where: { id: Number(tableId) },
+        data: { status: "occupied" }
+      })
+
+      return order
     })
 
-    // UPDATE TABLE STATUS
-    await prisma.table.update({
-      where: { id: table.id },
-      data: {
-        status: 'occupied'
-      }
-    })
-
-    // CREATE NOTIFICATIONS
-   await prisma.notification.createMany({
-  data: [
-    {
-      title: 'New Order',
-      message: `Table ${table.number} placed a new order`,
-      role: 'kitchen',
-      orderId: order.id
-    },
-    {
-      title: 'New Order',
-      message: `Table ${table.number} placed a new order`,
-      role: 'admin',
-      orderId: order.id
-    },
-    {
-      title: 'New Order',
-      message: `Table ${table.number} placed a new order`,
-      role: 'manager',
-      orderId: order.id
-    },
-    {
-      title: 'Order Received',
-      message: 'Your order has been received',
-      role: 'customer',
-      orderId: order.id,
-      customerId: customer.id
-    }
-  ]
-})
     res.status(201).json({
       success: true,
-      message: 'Customer order created successfully',
-      data: order
+      message: "Order created successfully with stock deduction",
+      data: result
     })
+
   } catch (error) {
-    console.error('Create Public Order Error:', error)
+    console.error("Create Public Order Error:", error)
+
     res.status(500).json({
       success: false,
-      message: 'Failed to create public order',
-      error: error.message
+      message: error.message
     })
   }
 }
-
 
 // UPDATE ORDER STATUS
 export const updateOrderStatus = async (req, res) => {
