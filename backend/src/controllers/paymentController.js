@@ -575,3 +575,101 @@ export const deletePayment = async (req, res) => {
     })
   }
 }
+
+export const createPrepaidOrder = async (req, res) => {
+  try {
+    const { cartId, paymentMethod } = req.body
+
+    // 1. GET CART
+    const cart = await prisma.cart.findUnique({
+      where: { id: Number(cartId) },
+      include: {
+        items: {
+          include: { menuItem: true }
+        }
+      }
+    })
+
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cart is empty'
+      })
+    }
+
+    // 2. CALCULATE TOTAL
+    let total = 0
+
+    cart.items.forEach(item => {
+      total += item.quantity * item.menuItem.price
+    })
+
+    // 3. CREATE PAYMENT (PENDING)
+    const payment = await prisma.payment.create({
+      data: {
+        amount: total,
+        method: paymentMethod || 'EVC',
+        status: 'pending'
+      }
+    })
+
+    // ⚠️ HERE YOU WILL INTEGRATE EVC / EDAHAB LATER
+
+    // 4. SIMULATE PAYMENT SUCCESS
+    const paymentSuccess = true
+
+    if (!paymentSuccess) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment failed'
+      })
+    }
+
+    // 5. UPDATE PAYMENT → SUCCESS
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: 'paid' }
+    })
+
+    // 6. CREATE ORDER (AFTER PAYMENT)
+    const orderItems = cart.items.map(item => ({
+      menuItemId: item.menuItemId,
+      quantity: item.quantity,
+      unitPrice: item.menuItem.price
+    }))
+
+    const order = await prisma.order.create({
+      data: {
+        tableId: cart.tableId,
+        total,
+        status: 'pending',
+        paymentId: payment.id,
+        items: {
+          create: orderItems
+        }
+      }
+    })
+
+    // 7. CLEAR CART
+    await prisma.cartItem.deleteMany({
+      where: { cartId: cart.id }
+    })
+
+    await prisma.cart.update({
+      where: { id: cart.id },
+      data: { status: 'completed' }
+    })
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment successful & order created',
+      data: { payment, order }
+    })
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+}

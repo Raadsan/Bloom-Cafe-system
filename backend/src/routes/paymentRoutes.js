@@ -60,4 +60,7 @@ router.delete(
   deletePayment
 )
 
+// PUBLIC (customer)
+router.post('/checkout', createPrepaidOrder)
+
 export default router

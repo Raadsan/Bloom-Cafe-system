@@ -16,6 +16,7 @@ import reportRoutes from './routes/reportRoutes.js'
 import ingredientRoutes from './routes/ingredientRoutes.js'
 import bomRoutes from './routes/bomRoutes.js'
 import stockMovementRoutes from './routes/stockMovementRoutes.js'
+import cartRoutes from './routes/cartRoutes.js'
 
 const app = express();
 app.use(express.json())
@@ -37,6 +38,8 @@ app.use('/api/reports', reportRoutes)
 app.use('/api/ingredients', ingredientRoutes)
 app.use('/api/bom', bomRoutes)
 app.use('/api/stock-movements', stockMovementRoutes)
+
+app.use('/api/cart', cartRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');
