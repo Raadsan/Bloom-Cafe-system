@@ -1,6 +1,6 @@
 import prisma from '../config/db.js'
 
-// CREATE AUDIT LOG
+// CREATE AUDIT LOG,,,,,,,
 export const createAuditLog = async (req, res) => {
   try {
     let { userId, action, entity, entityId, description } = req.body
