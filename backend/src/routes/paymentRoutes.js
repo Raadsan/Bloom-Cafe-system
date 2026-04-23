@@ -8,6 +8,7 @@ import {
   getPaymentByOrderId,
   updatePaymentStatus,
   deletePayment
+  
 } from '../controllers/paymentController.js'
 import { protect, authorize } from '../middlewares/authMiddleware.js'
 
@@ -59,8 +60,5 @@ router.delete(
   authorize('admin'),
   deletePayment
 )
-
-// PUBLIC (customer)
-router.post('/checkout', createPrepaidOrder)
 
 export default router

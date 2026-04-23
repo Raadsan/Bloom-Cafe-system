@@ -31,7 +31,7 @@ import {
   updateOrderStatus,
   deleteOrder,
   getOrdersByTable,
-  createPublicOrder
+  // createPublicOrder
 } from '../controllers/orderController.js'
 import { protect, authorize } from '../middlewares/authMiddleware.js'
 
@@ -56,6 +56,6 @@ router.patch('/:id/status', protect, authorize('admin', 'manager', 'kitchen', 'w
 router.delete('/:id', protect, authorize('admin', 'manager'), deleteOrder)
 
 // Customer creates order
-router.post('/customer_orders', createPublicOrder)
+// router.post('/customer_orders', createPublicOrder)
 
 export default router
