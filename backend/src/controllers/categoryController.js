@@ -129,7 +129,7 @@ export const deleteCategory = async (req, res) => {
     const existingCategory = await prisma.category.findUnique({
       where: { id: categoryId },
       include: {
-        menuItems: true
+        menuitem: true
       }
     })
 
@@ -140,7 +140,7 @@ export const deleteCategory = async (req, res) => {
       })
     }
 
-    if (existingCategory.menuItems.length > 0) {
+    if (existingCategory.menuitem.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Cannot delete category because it has related menu items'
@@ -171,7 +171,7 @@ export const getCategoriesWithItems = async (req, res) => {
 
     const categories = await prisma.category.findMany({
       include: {
-        menuItems: true
+        menuitem: true
       },
       orderBy: {
         id: 'asc'
@@ -211,7 +211,7 @@ export const getCategoryByIdWithItems = async (req, res) => {
     const category = await prisma.category.findUnique({
       where: { id: categoryId },
       include: {
-        menuItems: {
+        menuitem: {
           orderBy: {
             id: 'asc'
           }

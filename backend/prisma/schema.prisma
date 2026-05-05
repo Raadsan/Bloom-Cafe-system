@@ -7,245 +7,250 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum OrderStatus {
-  pending
-  preparing
-  ready
-  served
-  cancelled
-}
-
-// USER & ROLE
-model Role {
-  id          Int     @id @default(autoincrement())
-  name        String  @unique
+model auditlog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  action      String
+  entity      String
+  entityId    Int?
   description String?
+  createdAt   DateTime @default(now())
+  user        user?    @relation(fields: [userId], references: [id])
 
-  users User[]
+  @@index([userId], map: "auditlog_userId_fkey")
 }
 
-model User {
-  id       Int     @id @default(autoincrement())
-  fullName String
-  email    String  @unique
-  phone    String? @unique
-  password String
-  isActive Boolean @default(true)
-  roleId   Int
-
-  role Role @relation(fields: [roleId], references: [id])
+model category {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  createdAt   DateTime   @default(now())
+  description String?
+  updatedAt   DateTime?
+  menuitem    menuitem[]
 }
 
-// TABLE & CUSTOMER
-model Table {
-  id     Int    @id @default(autoincrement())
-  number Int    @unique
-  name   String
-  qrCode String @unique
-  status String @default("available")
-
-  orders   Order[]
-  scanLogs QrScanLog[]
+model customer {
+  id        Int       @id @default(autoincrement())
+  fullName  String
+  phone     String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  order     order[]
 }
 
-model Customer {
-  id       Int    @id @default(autoincrement())
-  fullName String
-  phone    String @unique
-
-  orders Order[]
+model ingredient {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  unit          String
+  stockQuantity Float           @default(0)
+  minStockLevel Float           @default(0)
+  costPerUnit   Float           @default(0)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  menuitembom   menuitembom[]
+  stockmovement stockmovement[]
 }
 
-// CATEGORY & MENU
-model Category {
-  id   Int    @id @default(autoincrement())
-  name String
-
-  menuItems MenuItem[]
-}
-
-model MenuItem {
-  id          Int     @id @default(autoincrement())
+model menuitem {
+  id          Int           @id @default(autoincrement())
   name        String
+  description String?
   price       Float
-  isAvailable Boolean @default(true)
+  imageUrl    String?
+  isAvailable Boolean       @default(true)
   categoryId  Int
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime
+  category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+  menuitembom menuitembom[]
+  orderitem   orderitem[]
 
-  category Category @relation(fields: [categoryId], references: [id])
-
-  bom   MenuItemBOM[]
-  items OrderItem[]
-
-  // 🔥 ADD THIS LINE
-  cartItems CartItem[]
+  @@index([categoryId], map: "MenuItem_categoryId_fkey")
 }
 
-// BOM & INVENTORY
-model Ingredient {
-  id            Int    @id @default(autoincrement())
-  name          String
-  stockQuantity Float
+model menuitembom {
+  id               Int        @id @default(autoincrement())
+  menuItemId       Int
+  ingredientId     Int
+  quantityRequired Float
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime
+  ingredient       ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  menuitem         menuitem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
-  movements StockMovement[]
-  bomItems  MenuItemBOM[]
+  @@unique([menuItemId, ingredientId])
+  @@index([ingredientId], map: "menuitembom_ingredientId_fkey")
 }
 
-model MenuItemBOM {
-  id           Int   @id @default(autoincrement())
-  menuItemId   Int
-  ingredientId Int
-  quantity     Float
-
-  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id])
-  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+model notification {
+  id         Int      @id @default(autoincrement())
+  title      String
+  message    String
+  role       String?
+  orderId    Int?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  customerId Int?
 }
 
-model StockMovement {
-  id           Int      @id @default(autoincrement())
+model order {
+  id            Int         @id @default(autoincrement())
+  status        String      @default("pending")
+  total         Float       @default(0)
+  tableId       Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime
+  customerName  String?
+  notes         String?
+  customerPhone String?
+  customerId    Int?
+  customer      customer?   @relation(fields: [customerId], references: [id])
+  table         table       @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  orderitem     orderitem[]
+  payment       payment?
+
+  @@index([tableId], map: "Order_tableId_fkey")
+  @@index([customerId], map: "order_customerId_fkey")
+}
+
+model orderitem {
+  id         Int      @id @default(autoincrement())
+  quantity   Int      @default(1)
+  unitPrice  Float
+  orderId    Int
+  menuItemId Int
+  menuitem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: NoAction)
+  order      order    @relation(fields: [orderId], references: [id], onDelete: NoAction)
+
+  @@index([menuItemId], map: "OrderItem_menuItemId_fkey")
+  @@index([orderId], map: "OrderItem_orderId_fkey")
+}
+
+model payment {
+  id           Int       @id @default(autoincrement())
+  orderId      Int       @unique
+  amount       Float
+  method       String
+  status       String    @default("pending")
+  paidAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime
+  internalRef  String?   @unique
+  phone        String?
+  providerName String?
+  providerRef  String?   @unique
+  order        order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model role {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  description    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  user           user[]
+  roleMenuAccess roleMenuAccess[]
+}
+
+model stockmovement {
+  id           Int        @id @default(autoincrement())
   ingredientId Int
   type         String
   quantity     Float
   note         String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime   @default(now())
+  ingredient   ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
-  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+  @@index([ingredientId], map: "stockmovement_ingredientId_fkey")
 }
 
-// ORDER SYSTEM
-model Order {
-  id            Int      @id @default(autoincrement())
-  tableId       Int
-  customerId    Int?
-  customerName  String?
-  customerPhone String?
-  notes         String?
-  total         Float
-  status        String
-  createdAt     DateTime @default(now())
-
-  table    Table     @relation(fields: [tableId], references: [id])
-  customer Customer? @relation(fields: [customerId], references: [id])
-
-  payment Payment?
-
-  items   OrderItem[]
-  logs    OrderStatusHistory[]
-  invoice Invoice?
+model table {
+  id        Int       @id @default(autoincrement())
+  number    Int       @unique
+  status    String    @default("available")
+  createdAt DateTime  @default(now())
+  name      String?
+  qrCode    String    @unique
+  updatedAt DateTime?
+  order     order[]
 }
 
-model OrderItem {
-  id         Int   @id @default(autoincrement())
-  orderId    Int
-  menuItemId Int
-  quantity   Int
-  unitPrice  Float
+model user {
+  id        Int        @id @default(autoincrement())
+  email     String     @unique
+  password  String
+  createdAt DateTime   @default(now())
+  fullName  String
+  isActive  Boolean    @default(true)
+  phone     String?    @unique
+  updatedAt DateTime
+  roleId    Int
+  auditlog  auditlog[]
+  role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
 
-  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+  @@index([roleId], map: "User_roleId_fkey")
 }
 
-// ORDER STATUS HISTORY
-model OrderStatusHistory {
-  id        Int      @id @default(autoincrement())
-  orderId   Int
-  status    String
-  changedBy Int?
-  createdAt DateTime @default(now())
-
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+model menu {
+  id             Int              @id @default(autoincrement())
+  title          String
+  url            String
+  icon           String
+  order          Int              @default(0)
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  roleMenuAccess roleMenuAccess[]
+  submenu        submenu[]
 }
 
-// PAYMENT SYSTEM
-model Payment {
-  id        Int      @id @default(autoincrement())
-  orderId   Int      @unique
-  amount    Float
-  status    String
-  method    String?
-  createdAt DateTime @default(now())
+model roleMenuAccess {
+  id                Int                 @id @default(autoincrement())
+  roleId            Int
+  menuId            Int
+  canView           Boolean             @default(true)
+  canAdd            Boolean             @default(false)
+  canEdit           Boolean             @default(false)
+  canDelete         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  role              role                @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  roleSubMenuAccess roleSubMenuAccess[]
 
-  order        Order                @relation(fields: [orderId], references: [id])
-  transactions PaymentTransaction[]
+  @@unique([roleId, menuId])
+  @@index([menuId], map: "roleMenuAccess_menuId_fkey")
 }
 
-model PaymentTransaction {
-  id        Int      @id @default(autoincrement())
-  paymentId Int
-  amount    Float
-  method    String
-  status    String
-  reference String?
-  createdAt DateTime @default(now())
+model submenu {
+  id                Int                 @id @default(autoincrement())
+  menuId            Int
+  title             String
+  url               String
+  order             Int                 @default(0)
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  roleSubMenuAccess roleSubMenuAccess[]
 
-  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  @@index([menuId], map: "submenu_menuId_fkey")
 }
 
-// NOTIFICATIONS
-model Notification {
-  id         Int      @id @default(autoincrement())
-  title      String
-  message    String
-  role       String
-  orderId    Int?
-  customerId Int?
-  isRead     Boolean  @default(false)
-  createdAt  DateTime @default(now())
-}
+model roleSubMenuAccess {
+  id               Int            @id @default(autoincrement())
+  roleMenuAccessId Int
+  subMenuId        Int
+  canView          Boolean        @default(true)
+  canAdd           Boolean        @default(false)
+  canEdit          Boolean        @default(false)
+  canDelete        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  roleMenuAccess   roleMenuAccess @relation(fields: [roleMenuAccessId], references: [id], onDelete: Cascade)
+  submenu          submenu        @relation(fields: [subMenuId], references: [id], onDelete: Cascade)
 
-// CART SYSTEM
-model Cart {
-  id        Int      @id @default(autoincrement())
-  userId    Int?
-  tableId   Int?
-  status    String   @default("active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  items CartItem[]
-}
-
-model CartItem {
-  id         Int @id @default(autoincrement())
-  cartId     Int
-  menuItemId Int
-  quantity   Int @default(1)
-
-  cart     Cart     @relation(fields: [cartId], references: [id])
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
-}
-
-// SETTINGS
-model Setting {
-  id    Int    @id @default(autoincrement())
-  key   String @unique
-  value String
-}
-
-// QR SCAN LOG
-model QrScanLog {
-  id        Int      @id @default(autoincrement())
-  tableId   Int
-  scannedAt DateTime @default(now())
-
-  table Table @relation(fields: [tableId], references: [id], onDelete: Cascade)
-}
-
-// INVOICE
-model Invoice {
-  id        Int      @id @default(autoincrement())
-  orderId   Int      @unique
-  total     Float
-  createdAt DateTime @default(now())
-
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-}
-
-// AUDIT LOG
-model AuditLog {
-  id        Int      @id @default(autoincrement())
-  action    String
-  entity    String
-  entityId  Int
-  userId    Int?
-  createdAt DateTime @default(now())
+  @@unique([roleMenuAccessId, subMenuId])
+  @@index([subMenuId], map: "roleSubMenuAccess_subMenuId_fkey")
 }

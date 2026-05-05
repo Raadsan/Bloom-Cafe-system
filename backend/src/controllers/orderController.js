@@ -771,7 +771,7 @@ export const createOrder = async (req, res) => {
     const orderItemsData = []
 
     for (const item of items) {
-      const menuItem = await prisma.menuItem.findUnique({
+      const menuItem = await prisma.menuitem.findUnique({
         where: { id: Number(item.menuItemId) }
       })
 
@@ -816,13 +816,13 @@ export const createOrder = async (req, res) => {
         notes,
         total,
         status: 'pending',
-        items: {
+        orderitem: {
           create: orderItemsData
         }
       },
       include: {
         table: true,
-        items: { include: { menuItem: true } }
+        orderitem: { include: { menuitem: true } }
       }
     })
 
@@ -832,13 +832,14 @@ export const createOrder = async (req, res) => {
       data: { status: 'occupied' }
     })
 
-    // 🔥 STATUS HISTORY
+    /* 
     await prisma.orderStatusHistory.create({
       data: {
         orderId: order.id,
         status: 'pending'
       }
     })
+    */
 
     // 🔥 SOCKET → KITCHEN
     emitNewOrder(order)
@@ -878,19 +879,19 @@ export const updateOrderStatus = async (req, res) => {
       include: {
         table: true,
         customer: true,
-        items: { include: { menuItem: true } }
+        orderitem: { include: { menuitem: true } }
       }
     })
 
-    // 🔥 STATUS HISTORY
+    /*
     await prisma.orderStatusHistory.create({
       data: {
         orderId: order.id,
         status
       }
     })
+    */
 
-    // 🔥 NOTIFICATIONS
     if (status === 'ready') {
       await prisma.notification.create({
         data: {
@@ -910,18 +911,117 @@ export const updateOrderStatus = async (req, res) => {
       })
     }
 
-    // 🔥 SOCKET (IMPORTANT)
+    // 🔥 SOCKET → WAITER/KITCHEN
     emitOrderUpdate(updatedOrder)
 
-    res.json({
+    res.status(200).json({
       success: true,
       data: updatedOrder
     })
-
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
 }
+
+/**
+ * 🔥 UPDATE ORDER DETAILS (ITEMS, TABLE, ETC)
+ */
+export const updateOrder = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { tableId, customerName, customerPhone, notes, items } = req.body
+
+    const orderId = Number(id)
+    if (isNaN(orderId)) {
+      return res.status(400).json({ success: false, message: 'Invalid order id' })
+    }
+
+    if (!tableId || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'tableId and items are required' })
+    }
+
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: orderId }
+    })
+
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: 'Order not found' })
+    }
+
+    let total = 0
+    const orderItemsData = []
+
+    for (const item of items) {
+      const menuItem = await prisma.menuitem.findUnique({
+        where: { id: Number(item.menuItemId) }
+      })
+
+      if (!menuItem || !menuItem.isAvailable) {
+        return res.status(400).json({ success: false, message: 'Menu item not available' })
+      }
+
+      const quantity = Number(item.quantity) || 1
+      const unitPrice = menuItem.price
+
+      total += quantity * unitPrice
+
+      orderItemsData.push({
+        menuItemId: menuItem.id,
+        quantity,
+        unitPrice
+      })
+    }
+
+    // Delete old items
+    await prisma.orderitem.deleteMany({
+      where: { orderId: orderId }
+    })
+
+    // Update customer if needed
+    let customer = null
+    if (customerName && customerPhone) {
+      customer = await prisma.customer.upsert({
+        where: { phone: customerPhone.trim() },
+        update: { fullName: customerName.trim() },
+        create: {
+          fullName: customerName.trim(),
+          phone: customerPhone.trim()
+        }
+      })
+    }
+
+    // Update order and create new items
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        tableId: Number(tableId),
+        customerId: customer?.id || existingOrder.customerId,
+        customerName: customerName || existingOrder.customerName,
+        customerPhone: customerPhone || existingOrder.customerPhone,
+        notes: notes || existingOrder.notes,
+        total,
+        orderitem: {
+          create: orderItemsData
+        }
+      },
+      include: {
+        table: true,
+        orderitem: { include: { menuitem: true } }
+      }
+    })
+
+    emitOrderUpdate(updatedOrder)
+
+    res.status(200).json({
+      success: true,
+      data: updatedOrder
+    })
+  } catch (error) {
+    console.error('Update Order Error:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
 
 ///////////////////////////////////////////////////////////////
 
@@ -929,15 +1029,20 @@ export const updateOrderStatus = async (req, res) => {
  * 🔥 GET ALL ORDERS
  */
 export const getAllOrders = async (req, res) => {
-  const orders = await prisma.order.findMany({
-    include: {
-      table: true,
-      items: { include: { menuItem: true } }
-    },
-    orderBy: { createdAt: 'desc' }
-  })
+  try {
+    const orders = await prisma.order.findMany({
+      include: {
+        table: true,
+        orderitem: { include: { menuitem: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
 
-  res.json({ success: true, data: orders })
+    res.json({ success: true, data: orders })
+  } catch (error) {
+    console.error('Get All Orders Error:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
 }
 
 /**
@@ -948,7 +1053,7 @@ export const getOrderById = async (req, res) => {
     where: { id: Number(req.params.id) },
     include: {
       table: true,
-      items: { include: { menuItem: true } }
+      orderitem: { include: { menuitem: true } }
     }
   })
 
@@ -963,7 +1068,7 @@ export const getOrderById = async (req, res) => {
 export const deleteOrder = async (req, res) => {
   const id = Number(req.params.id)
 
-  await prisma.orderItem.deleteMany({ where: { orderId: id } })
+  await prisma.orderitem.deleteMany({ where: { orderId: id } })
   await prisma.order.delete({ where: { id } })
 
   res.json({ success: true })
@@ -987,8 +1092,8 @@ export const getOrdersByTable = async (req, res) => {
       include: {
         table: true,
         customer: true,
-        items: {
-          include: { menuItem: true }
+        orderitem: {
+          include: { menuitem: true }
         }
       },
       orderBy: { createdAt: 'desc' }

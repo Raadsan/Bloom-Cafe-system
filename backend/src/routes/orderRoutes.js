@@ -29,6 +29,7 @@ import {
   getAllOrders,
   getOrderById,
   updateOrderStatus,
+  updateOrder,
   deleteOrder,
   getOrdersByTable,
   // createPublicOrder
@@ -51,6 +52,9 @@ router.get('/:id', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), 
 
 // Update order status
 router.patch('/:id/status', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), updateOrderStatus)
+
+// Update full order
+router.put('/:id', protect, authorize('admin', 'manager'), updateOrder)
 
 // Delete order
 router.delete('/:id', protect, authorize('admin', 'manager'), deleteOrder)

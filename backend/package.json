@@ -9,7 +9,8 @@
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
     "db:studio": "npx prisma studio",
-    "db:seed": "node prisma/seed.js"
+    "db:seed": "node prisma/seed.js",
+    "create-admin": "node prisma/create-admin.js"
   },
   "keywords": [],
   "author": "",
