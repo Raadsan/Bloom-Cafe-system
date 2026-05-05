@@ -1,13 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
+import '../../../../core/theme/colors.dart';
+import '../../../notifications/presentation/screens/notifications_screen.dart';
+import '../widgets/pizza_card.dart';
+import '../widgets/pizza_grid_item.dart';
+import '../widgets/recommended_card.dart';
+import 'product_details_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _isGridView = false;
+
+  void _navigateToDetails(String title, String image, String price, String desc) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailsScreen(
+          title: title,
+          image: image,
+          price: price,
+          description: desc,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.bgColor,
       body: SafeArea(
         child: Container(
           decoration: BoxDecoration(
@@ -15,70 +42,47 @@ class HomeScreen extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                const Color(0xFFE8F5E9), // Very light green
-                const Color(0xFFF1F8F1), // Minty white
+                AppColors.bgColor,
+                const Color(0xFFF1F8F1),
                 Colors.white,
               ],
             ),
           ),
           child: Stack(
             children: [
-              // Decorative background elements
-              Positioned(
-                top: -100,
-                right: -50,
-                child: Container(
-                  width: 300,
-                  height: 300,
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.05),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 200,
-                left: -100,
-                child: Container(
-                  width: 400,
-                  height: 400,
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.03),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
               SingleChildScrollView(
-                padding: const EdgeInsets.only(
-                  bottom: 100,
-                ), // Space for floating bar
+                padding: const EdgeInsets.only(bottom: 100),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 10),
                     _buildHeader(),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
                     _buildSearchBar(),
                     const SizedBox(height: 25),
-                    _buildSectionHeader("Order's List", () {}),
-                    const SizedBox(height: 15),
-                    _buildOrderList(),
-                    const SizedBox(height: 25),
                     _buildSectionHeader("Search By Categories", () {}),
-                    const SizedBox(height: 15),
+                    const SizedBox(height: 5),
                     _buildCategoryList(),
+                    const SizedBox(height: 25),
+                    _buildRecommendedSection(),
                     const SizedBox(height: 25),
                     _buildSectionHeader(
                       "All Pizza's",
                       () {},
                       showGridToggle: true,
+                      isGrid: _isGridView,
+                      onGridToggle: () {
+                        setState(() {
+                          _isGridView = !_isGridView;
+                        });
+                      },
                     ),
                     const SizedBox(height: 5),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Text(
                         "List of all available pizzas in the store.",
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12, fontFamily: "Poppins"),
                       ),
                     ),
                     const SizedBox(height: 15),
@@ -86,8 +90,6 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              // Floating Selection Bar
-              _buildFloatingSelectionBar(),
             ],
           ),
         ),
@@ -113,16 +115,11 @@ class HomeScreen extends StatelessWidget {
                 ),
               ],
             ),
-            child: CircleAvatar(
+            child: const CircleAvatar(
               radius: 25,
-              backgroundImage: const AssetImage('assets/images/maria_logo.png'),
+              backgroundImage: AssetImage('assets/images/maria_logo.png'),
               backgroundColor: Colors.white,
-              onBackgroundImageError: (exception, stackTrace) {},
-              child: const Icon(
-                Icons.restaurant,
-                color: Colors.green,
-                size: 20,
-              ),
+              child: Icon(Icons.restaurant, color: Colors.green, size: 20),
             ),
           ),
           const SizedBox(width: 12),
@@ -131,68 +128,66 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "Maria's Kitchen",
+                  "Welcome",
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    fontFamily: "Poppins",
                     color: Color(0xFF2D3E2D),
                   ),
                 ),
                 Row(
                   children: [
-                    Icon(
-                      IconlyLight.location,
-                      size: 14,
-                      color: Colors.grey[600],
-                    ),
+                    Icon(IconlyLight.location, size: 14, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
-                        "Madhavaram Milk colony...",
+                        "Somalia, Mogadishu",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600], fontFamily: "Poppins"),
                       ),
                     ),
-                    Icon(
-                      Icons.keyboard_arrow_down,
-                      size: 16,
-                      color: Colors.grey[600],
-                    ),
+                    Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey[600]),
                   ],
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                Icon(IconlyLight.notification, color: Colors.grey[800]),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const SizedBox(width: 4, height: 4),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
                   ),
-                ),
-              ],
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Icon(IconlyLight.notification, color: Colors.grey[800]),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      child: const SizedBox(width: 4, height: 4),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -224,14 +219,11 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   Icon(IconlyLight.search, color: Colors.grey[400]),
                   const SizedBox(width: 10),
-                  Expanded(
+                   Expanded(
                     child: TextField(
                       decoration: InputDecoration(
                         hintText: "What are you looking for?",
-                        hintStyle: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 14,
-                        ),
+                        hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14, fontFamily: "Poppins"),
                         border: InputBorder.none,
                       ),
                     ),
@@ -245,7 +237,7 @@ class HomeScreen extends StatelessWidget {
             height: 55,
             width: 55,
             decoration: BoxDecoration(
-              color: const Color(0xFFA5D6A7), // Light green filter bg
+              color: const Color(0xFFA5D6A7),
               borderRadius: BorderRadius.circular(20),
             ),
             child: const Icon(IconlyLight.filter, color: Color(0xFF2E7D32)),
@@ -259,6 +251,8 @@ class HomeScreen extends StatelessWidget {
     String title,
     VoidCallback onSeeAll, {
     bool showGridToggle = false,
+    bool isGrid = false,
+    VoidCallback? onGridToggle,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -268,8 +262,9 @@ class HomeScreen extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              fontFamily: "Poppins",
+              fontWeight: FontWeight.w500,
               color: Color(0xFF2D3E2D),
             ),
           ),
@@ -279,170 +274,31 @@ class HomeScreen extends StatelessWidget {
                 onPressed: onSeeAll,
                 child: Row(
                   children: [
-                    Text(
-                      "See all",
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                    ),
+                    Text("See all", style: TextStyle(color: Colors.grey[600], fontSize: 13, fontFamily: "Poppins")),
                     const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_circle_right,
-                      size: 16,
-                      color: Colors.green[800],
-                    ),
+                    Icon(IconlyLight.arrow_right_2, size: 16, color: Colors.green[800]),
                   ],
                 ),
               ),
               if (showGridToggle) ...[
                 const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Icon(
-                    Icons.grid_view_rounded,
-                    size: 18,
-                    color: Colors.grey[400],
+                GestureDetector(
+                  onTap: onGridToggle,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: isGrid ? AppColors.primaryColor : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: isGrid ? AppColors.primaryColor : Colors.grey[300]!),
+                    ),
+                    child: Icon(
+                      isGrid ? Icons.list_rounded : Icons.grid_view_rounded,
+                      size: 18,
+                      color: isGrid ? Colors.white : Colors.grey[400],
+                    ),
                   ),
                 ),
               ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderList() {
-    return SizedBox(
-      height: 150,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        children: [
-          _buildOrderCard(
-            "#2140",
-            "Ready to Serve",
-            "🍔 🍕",
-            "2 Items",
-            "₹349.00",
-            "2 Mins Ago",
-            "Table 12",
-            const Color(0xFFFFF9C4), // Yellowish for ready
-          ),
-          const SizedBox(width: 15),
-          _buildOrderCard(
-            "#2139",
-            "Delivered",
-            "🍪 🍫",
-            "2 Items",
-            "₹150.00",
-            "10 Mins Ago",
-            "Takeaway",
-            const Color(0xFFFFEBEE), // Pinkish for delivered
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderCard(
-    String id,
-    String status,
-    String icons,
-    String itemsCount,
-    String price,
-    String time,
-    String location,
-    Color statusColor,
-  ) {
-    return Container(
-      width: 200,
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Order $id",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: status == "Delivered"
-                        ? Colors.red[300]
-                        : Colors.orange[400],
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(icons, style: const TextStyle(fontSize: 18)),
-              const SizedBox(width: 8),
-              Text(
-                itemsCount,
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
-              const Spacer(),
-              Text(
-                price,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 20),
-          Row(
-            children: [
-              Icon(IconlyLight.time_circle, size: 14, color: Colors.grey[400]),
-              const SizedBox(width: 4),
-              Text(
-                time,
-                style: TextStyle(color: Colors.grey[400], fontSize: 11),
-              ),
-              const Spacer(),
-              Icon(
-                Icons.table_restaurant_outlined,
-                size: 14,
-                color: Colors.grey[400],
-              ),
-              const SizedBox(width: 4),
-              Text(
-                location,
-                style: TextStyle(color: Colors.grey[400], fontSize: 11),
-              ),
             ],
           ),
         ],
@@ -475,13 +331,7 @@ class HomeScreen extends StatelessWidget {
         color: isSelected ? const Color(0xFF4CAF50) : Colors.white,
         borderRadius: BorderRadius.circular(25),
         boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: Colors.green.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ]
+            ? [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]
             : [],
       ),
       child: Text(
@@ -489,273 +339,174 @@ class HomeScreen extends StatelessWidget {
         style: TextStyle(
           color: isSelected ? Colors.white : Colors.grey[800],
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          fontFamily: "Poppins",
         ),
       ),
     );
   }
 
   Widget _buildPizzaList() {
+    if (_isGridView) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 15,
+          mainAxisSpacing: 15,
+          childAspectRatio: 0.75,
+          children: [
+            PizzaGridItem(
+              title: "Chili BBQ Chicken",
+              desc: "Our special bbq sauce",
+              image: "assets/images/pizza_bbq.png",
+              price: 6.28,
+              onTap: () => _navigateToDetails("Chili BBQ Chicken", "assets/images/pizza_bbq.png", "\$6.28", "Our special bbq sauce with chicken and cheese. Freshly baked in wood fire oven."),
+            ),
+            PizzaGridItem(
+              title: "Pepperoni Pizza",
+              desc: "Fresh Mozzarella",
+              image: "assets/images/pizza_pepperoni.png",
+              price: 5.08,
+              onTap: () => _navigateToDetails("Pepperoni Pizza", "assets/images/pizza_pepperoni.png", "\$5.08", "Fresh Mozzarella, beef pepperoni and sauce. A classic choice for pizza lovers."),
+            ),
+            PizzaGridItem(
+              title: "Mixed Pizza",
+              desc: "Chicken and meat mixed",
+              image: "assets/images/pizza_cheese.png",
+              price: 5.48,
+              onTap: () => _navigateToDetails("Mixed Pizza", "assets/images/pizza_cheese.png", "\$5.48", "Chicken and meat mixed with black olives and extra mozzarella cheese."),
+            ),
+            PizzaGridItem(
+              title: "Shrimp Pizza",
+              desc: "Light-garlic lemon sauce",
+              image: "assets/images/pizza_cheese.png",
+              price: 7.80,
+              onTap: () => _navigateToDetails("Shrimp Pizza", "assets/images/pizza_cheese.png", "\$7.80", "Topped with light-garlic lemon sauce with cheese and Jaa sauce."),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          _buildPizzaCard(
-            "Chili BBQ Chicken Pizza",
-            "Our special bbq sauce with chicken and cheese",
-            "-20%",
-            "assets/images/pizza_bbq.png",
-            6.28,
-            7.85,
+          PizzaCard(
+            title: "Chili BBQ Chicken Pizza",
+            desc: "Our special bbq sauce with chicken and cheese",
+            discount: "-20%",
+            image: "assets/images/pizza_bbq.png",
+            price: 6.28,
+            oldPrice: 7.85,
+            onTap: () => _navigateToDetails("Chili BBQ Chicken Pizza", "assets/images/pizza_bbq.png", "\$6.28", "Our special bbq sauce with chicken and cheese. Freshly baked in wood fire oven."),
           ),
           const SizedBox(height: 15),
-          _buildPizzaCard(
-            "Pepperoni Pizza",
-            "Fresh Mozzarella, beef pepperoni and sauce",
-            "-20%",
-            "assets/images/pizza_pepperoni.png",
-            5.08,
-            6.35,
+          PizzaCard(
+            title: "Pepperoni Pizza",
+            desc: "Fresh Mozzarella, beef pepperoni and sauce",
+            discount: "-20%",
+            image: "assets/images/pizza_pepperoni.png",
+            price: 5.08,
+            oldPrice: 6.35,
+            onTap: () => _navigateToDetails("Pepperoni Pizza", "assets/images/pizza_pepperoni.png", "\$5.08", "Fresh Mozzarella, beef pepperoni and sauce. A classic choice for pizza lovers."),
           ),
           const SizedBox(height: 15),
-          _buildPizzaCard(
-            "Mixed Pizza",
-            "Chicken and meat mixed with black olives.",
-            "-20%",
-            "assets/images/pizza_cheese.png", // Reusing cheese image for demo
-            5.48,
-            6.85,
+          PizzaCard(
+            title: "Mixed Pizza",
+            desc: "Chicken and meat mixed with black olives.",
+            discount: "-20%",
+            image: "assets/images/pizza_cheese.png",
+            price: 5.48,
+            oldPrice: 6.85,
+            onTap: () => _navigateToDetails("Mixed Pizza", "assets/images/pizza_cheese.png", "\$5.48", "Chicken and meat mixed with black olives and extra mozzarella cheese."),
           ),
           const SizedBox(height: 15),
-          _buildPizzaCard(
-            "Shrimp Pizza",
-            "Topped with light-garlic lemon sauce with cheese and Jaa sauce",
-            "-20%",
-            "assets/images/pizza_cheese.png", // Reusing image
-            7.80,
-            9.75,
+          PizzaCard(
+            title: "Shrimp Pizza",
+            desc: "Topped with light-garlic lemon sauce with cheese and Jaa sauce",
+            discount: "-20%",
+            image: "assets/images/pizza_cheese.png",
+            price: 7.80,
+            oldPrice: 9.75,
+            onTap: () => _navigateToDetails("Shrimp Pizza", "assets/images/pizza_cheese.png", "\$7.80", "Topped with light-garlic lemon sauce with cheese and Jaa sauce."),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPizzaCard(
-    String title,
-    String desc,
-    String discount,
-    String image,
-    double price,
-    double oldPrice,
-  ) {
-    return Container(
-      height: 110,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Image with Discount Badge
-          Stack(
+  Widget _buildRecommendedSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader("Recommended Food", () {}),
+        const SizedBox(height: 15),
+        SizedBox(
+          height: 220,
+          child: Stack(
             children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(15),
-                ),
-                child: Image.asset(
-                  image,
-                  width: 110,
-                  height: 110,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    width: 110,
-                    height: 110,
-                    color: Colors.grey[200],
-                    child: const Icon(Icons.star, color: Colors.grey),
+              Positioned.fill(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [AppColors.primaryColor.withOpacity(0.12), AppColors.primaryColor.withOpacity(0.0)],
+                    ),
+                    borderRadius: BorderRadius.circular(30),
                   ),
                 ),
               ),
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 3,
+              ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 10),
+                physics: const BouncingScrollPhysics(),
+                children: [
+                  RecommendedCard(
+                    title: "Gourmet Cheese Pizza",
+                    desc: "Extra mozzarella with fresh herbs",
+                    price: "₹299",
+                    image: "assets/images/pizza_cheese.png",
+                    discount: "15% OFF",
+                    onTap: () => _navigateToDetails("Gourmet Cheese Pizza", "assets/images/pizza_cheese.png", "₹299", "Extra mozzarella with fresh herbs and organic tomatoes."),
                   ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFD54F), // Yellow discount
-                    borderRadius: BorderRadius.circular(5),
+                  const SizedBox(width: 20),
+                  RecommendedCard(
+                    title: "BBQ Feast Pizza",
+                    desc: "Smoky chicken & red onions",
+                    price: "₹450",
+                    image: "assets/images/pizza_bbq.png",
+                    discount: "HOT",
+                    onTap: () => _navigateToDetails("BBQ Feast Pizza", "assets/images/pizza_bbq.png", "₹450", "Smoky chicken & red onions with our signature BBQ sauce."),
                   ),
-                  child: Text(
-                    discount,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
+                  const SizedBox(width: 20),
+                  RecommendedCard(
+                    title: "Spicy Pepperoni",
+                    desc: "Beef pepperoni with jalapeños",
+                    price: "₹399",
+                    image: "assets/images/pizza_pepperoni.png",
+                    discount: "POPULAR",
+                    onTap: () => _navigateToDetails("Spicy Pepperoni", "assets/images/pizza_pepperoni.png", "₹399", "Beef pepperoni with spicy jalapeños for an extra kick."),
                   ),
-                ),
+                  const SizedBox(width: 20),
+                  RecommendedCard(
+                    title: "Veggie Paradise",
+                    desc: "All garden fresh vegetables",
+                    price: "₹349",
+                    image: "assets/images/pizza_cheese.png",
+                    discount: "VEG",
+                    onTap: () => _navigateToDetails("Veggie Paradise", "assets/images/pizza_cheese.png", "₹349", "All garden fresh vegetables with low-fat mozzarella."),
+                  ),
+                ],
               ),
             ],
           ),
-          // Details
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    desc,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Price and Plus Button
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      "\$${price.toStringAsFixed(2)}",
-                      style: const TextStyle(
-                        color: Color(0xFFFBC02D), // Gold/Yellow price
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      "\$${oldPrice.toStringAsFixed(2)}",
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 10,
-                        decoration: TextDecoration.lineThrough,
-                      ),
-                    ),
-                  ],
-                ),
-                GestureDetector(
-                  onTap: () {
-                    // Add to cart logic
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFA5D6A7), // Light green plus button
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.green.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.add,
-                      color: Color(0xFF2E7D32),
-                      size: 24,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFloatingSelectionBar() {
-    return Positioned(
-      bottom: 20,
-      left: 20,
-      right: 20,
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1B3022), // Dark green
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 15,
-              offset: const Offset(0, 10),
-            ),
-          ],
         ),
-        child: Row(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "01 Items selected",
-                  style: TextStyle(color: Colors.white, fontSize: 14),
-                ),
-                Text(
-                  "Cheese Pizza, with tomato flavor.",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: [
-                  const Text(
-                    "98",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }

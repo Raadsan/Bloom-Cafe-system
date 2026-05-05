@@ -18,9 +18,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const CartScreen(),
-    const OrderTrackingScreen(),
-    const SettingsScreen(),
+    const OrderTrackingScreen(), // Stores (Placeholder)
+    const CartScreen(), // Carts
+    const SettingsScreen(), // Profile
   ];
 
   @override
@@ -65,7 +65,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _buildNavItem(IconlyBold.home, IconlyLight.home, 'Home', 0),
               _buildNavItem(IconlyBold.category, IconlyLight.category, 'Stores', 1),
               const SizedBox(width: 40), // Space for FAB
-              _buildNavItem(IconlyBold.chat, IconlyLight.chat, 'Chats', 2),
+              _buildNavItem(IconlyBold.buy, IconlyLight.buy, 'Carts', 2),
               _buildNavItem(IconlyBold.profile, IconlyLight.profile, 'Profile', 3),
             ],
           ),
@@ -91,10 +91,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isSelected ? activeIcon : inactiveIcon,
-            color: isSelected ? const Color(0xFF4CAF50) : Colors.grey[400],
-            size: 24,
-          ),
+              isSelected ? activeIcon : inactiveIcon,
+              color: isSelected ? const Color(0xFF4CAF50) : Colors.grey[400],
+              size: 24,
+            ),
           const SizedBox(height: 4),
           Text(
             label,

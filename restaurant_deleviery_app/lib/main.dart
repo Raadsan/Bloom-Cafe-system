@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'features/navigation/presentation/screens/main_navigation_screen.dart';
+import 'features/auth/presentation/screens/login_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,13 +16,13 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         fontFamily: 'Poppins',
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4c5fb3),
-          primary: const Color(0xFF4c5fb3),
+          seedColor: const Color(0xFF4CAF50),
+          primary: const Color(0xFF4CAF50),
           surface: const Color(0xFFF8F9FA),
         ),
         useMaterial3: true,
       ),
-      home: const MainNavigationScreen(),
+      home: const LoginScreen(),
     );
   }
 }
