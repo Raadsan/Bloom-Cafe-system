@@ -1,7 +1,7 @@
 import prisma from '../config/db.js'
 
 // CREATE OR GET CART
-export const getOrCreateCart = async (req, res) => {
+export const getOrCreateCart = async (req, res) => { 
   try {
     const { tableId } = req.body
 
