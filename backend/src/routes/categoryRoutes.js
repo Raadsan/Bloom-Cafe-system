@@ -33,26 +33,26 @@ import {
   getCategoriesWithItems,
   getCategoryByIdWithItems
 } from '../controllers/categoryController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
 // Create category
-router.post('/', protect, authorize('admin', 'manager'), createCategory)
+router.post('/', protect, checkPermission('/menu/categories', 'canAdd'), createCategory)
 
 // Get all categories
-router.get('/all', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getAllCategories)
+router.get('/all', protect, checkPermission('/menu/categories', 'canView'), getAllCategories)
 
 // Get categories with items
-router.get('/with-items', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getCategoriesWithItems)
+router.get('/with-items', protect, checkPermission('/menu/categories', 'canView'), getCategoriesWithItems)
 
 // Get category by id with items
-router.get('/:id/with-items', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getCategoryByIdWithItems)
+router.get('/:id/with-items', protect, checkPermission('/menu/categories', 'canView'), getCategoryByIdWithItems)
 
 // Update category
-router.patch('/:id', protect, authorize('admin', 'manager'), updateCategory)
+router.patch('/:id', protect, checkPermission('/menu/categories', 'canEdit'), updateCategory)
 
 // Delete category
-router.delete('/:id', protect, authorize('admin'), deleteCategory) 
+router.delete('/:id', protect, checkPermission('/menu/categories', 'canDelete'), deleteCategory)
 
 export default router

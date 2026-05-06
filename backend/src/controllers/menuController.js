@@ -54,12 +54,21 @@ export const getMenusByRole = async (req, res) => {
             canEdit: p.canEdit,
             canDelete: p.canDelete,
           },
-          items: allowedSubmenus.map(sm => ({
-            id: sm.id,
-            title: sm.title,
-            url: sm.url,
-            order: sm.order
-          }))
+          items: allowedSubmenus.map(sm => {
+            const subAccess = p.roleSubMenuAccess.find(rsa => rsa.subMenuId === sm.id);
+            return {
+              id: sm.id,
+              title: sm.title,
+              url: sm.url,
+              order: sm.order,
+              permissions: {
+                canView: subAccess?.canView || false,
+                canAdd: subAccess?.canAdd || false,
+                canEdit: subAccess?.canEdit || false,
+                canDelete: subAccess?.canDelete || false,
+              }
+            };
+          })
         };
       });
 

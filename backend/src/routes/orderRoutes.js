@@ -32,34 +32,30 @@ import {
   updateOrder,
   deleteOrder,
   getOrdersByTable,
-  // createPublicOrder
 } from '../controllers/orderController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
 // Create order
-router.post('/', protect, authorize('admin', 'manager', 'waiter'), createOrder)
+router.post('/', protect, checkPermission('/orders', 'canAdd'), createOrder)
 
 // Get all orders
-router.get('/all', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getAllOrders)
+router.get('/all', protect, checkPermission('/orders', 'canView'), getAllOrders)
 
 // Get orders by table
-router.get('/table/:tableId', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getOrdersByTable)
+router.get('/table/:tableId', protect, checkPermission('/orders', 'canView'), getOrdersByTable)
 
 // Get order by id
-router.get('/:id', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getOrderById)
+router.get('/:id', protect, checkPermission('/orders', 'canView'), getOrderById)
 
 // Update order status
-router.patch('/:id/status', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), updateOrderStatus)
+router.patch('/:id/status', protect, checkPermission('/orders', 'canEdit'), updateOrderStatus)
 
 // Update full order
-router.put('/:id', protect, authorize('admin', 'manager'), updateOrder)
+router.put('/:id', protect, checkPermission('/orders', 'canEdit'), updateOrder)
 
 // Delete order
-router.delete('/:id', protect, authorize('admin', 'manager'), deleteOrder)
-
-// Customer creates order
-// router.post('/customer_orders', createPublicOrder)
+router.delete('/:id', protect, checkPermission('/orders', 'canDelete'), deleteOrder)
 
 export default router

@@ -11,6 +11,7 @@ import {
   ChevronDown,
   History
 } from "lucide-react";
+import { usePermissions } from "@/context/PermissionContext";
 import { 
   Table, 
   TableBody, 
@@ -34,6 +35,12 @@ import Link from "next/link";
 
 export default function InventoryPage() {
   const { showToast } = useToast();
+  const { canAdd: checkAdd, canEdit: checkEdit, canDelete: checkDelete } = usePermissions();
+  
+  const canAdd = checkAdd("/inventory");
+  const canEdit = checkEdit("/inventory");
+  const canDelete = checkDelete("/inventory");
+
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -217,9 +224,11 @@ export default function InventoryPage() {
               <ChevronDown className="size-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
 
-            <Button onClick={openAddModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
-              <Plus className="mr-2 size-4" /> Add Ingredient
-            </Button>
+            {canAdd && (
+              <Button onClick={openAddModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
+                <Plus className="mr-2 size-4" /> Add Ingredient
+              </Button>
+            )}
           </div>
         </div>
 
@@ -290,22 +299,26 @@ export default function InventoryPage() {
                       </TableCell>
                       <TableCell className="px-6 py-5 text-right">
                         <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => openEditModal(ing)} 
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                          >
-                            <Edit className="size-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => openDeleteModal(ing)} 
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
+                          {canEdit && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => openEditModal(ing)} 
+                              className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                            >
+                              <Edit className="size-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => openDeleteModal(ing)} 
+                              className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

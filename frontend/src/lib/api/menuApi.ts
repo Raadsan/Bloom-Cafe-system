@@ -12,6 +12,8 @@ export interface SubMenu {
   title: string;
   url: string;
   order: number;
+  permissions: MenuPermission;
+  isActive?: boolean;
 }
 
 export interface Menu {
@@ -22,6 +24,7 @@ export interface Menu {
   order: number;
   permissions: MenuPermission;
   items?: SubMenu[];
+  isActive?: boolean;
 }
 
 export const menuApi = {

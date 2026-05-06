@@ -6,42 +6,42 @@ import {
   getStockMovementsByIngredient,
   deleteStockMovement
 } from '../controllers/stockMovementController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
 router.post(
   '/',
   protect,
-  authorize('admin', 'manager'),
+  checkPermission('/inventory/movements', 'canAdd'),
   createStockMovement
 )
 
 router.get(
   '/all',
   protect,
-  authorize('admin', 'manager', 'kitchen'),
+  checkPermission('/inventory/movements', 'canView'),
   getAllStockMovements
 )
 
 router.get(
   '/ingredient/:ingredientId',
   protect,
-  authorize('admin', 'manager', 'kitchen'),
+  checkPermission('/inventory/movements', 'canView'),
   getStockMovementsByIngredient
 )
 
 router.get(
   '/:id',
   protect,
-  authorize('admin', 'manager', 'kitchen'),
+  checkPermission('/inventory/movements', 'canView'),
   getStockMovementById
 )
 
 router.delete(
   '/:id',
   protect,
-  authorize('admin'),
+  checkPermission('/inventory/movements', 'canDelete'),
   deleteStockMovement
 )
 

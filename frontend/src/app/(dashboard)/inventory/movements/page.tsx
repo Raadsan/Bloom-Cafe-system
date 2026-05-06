@@ -32,10 +32,15 @@ import { Button } from "@/components/ui/button";
 import { stockMovementApi, StockMovement, MovementType } from "@/lib/api/stockMovementApi";
 import { ingredientApi, Ingredient } from "@/lib/api/ingredientApi";
 import { useToast } from "@/components/ui/toast";
+import { usePermissions } from "@/context/PermissionContext";
 import Link from "next/link";
 
 export default function StockMovementsPage() {
   const { showToast } = useToast();
+  const { canAdd: checkAdd, canDelete: checkDelete } = usePermissions();
+  const canAdd = checkAdd("/inventory/movements");
+  const canDelete = checkDelete("/inventory/movements");
+
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,9 +198,11 @@ export default function StockMovementsPage() {
               <ChevronDown className="size-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
 
-            <Button onClick={openRecordModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
-              <History className="mr-2 size-4" /> Record Entry
-            </Button>
+            {canAdd && (
+              <Button onClick={openRecordModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
+                <History className="mr-2 size-4" /> Record Entry
+              </Button>
+            )}
           </div>
         </div>
 
@@ -279,14 +286,16 @@ export default function StockMovementsPage() {
                       </TableCell>
                       <TableCell className="px-6 py-5 text-right">
                         <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => openDeleteModal(move)} 
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
+                          {canDelete && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => openDeleteModal(move)} 
+                              className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

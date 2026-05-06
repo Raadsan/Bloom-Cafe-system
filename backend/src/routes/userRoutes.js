@@ -23,23 +23,23 @@ import {
   deleteUser,
   getUsersByRole
 } from '../controllers/userController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, authorize, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
 // Create user
-router.post('/', protect, authorize('admin'), createUser)
+router.post('/', protect, checkPermission('/users', 'canAdd'), createUser)
 
 // Get all users
-router.get('/', protect, authorize('admin', 'manager'), getAllUsers)
+router.get('/', protect, checkPermission('/users', 'canView'), getAllUsers)
 
 // Get users by role
-router.get('/role/:roleId', protect, authorize('admin', 'manager'), getUsersByRole)
+router.get('/role/:roleId', protect, checkPermission('/users', 'canView'), getUsersByRole)
 
 // Update user
-router.patch('/:id', protect, authorize('admin', 'manager'), updateUser)
+router.patch('/:id', protect, checkPermission('/users', 'canEdit'), updateUser)
 
 // Delete user
-router.delete('/:id', protect, authorize('admin'), deleteUser)
+router.delete('/:id', protect, checkPermission('/users', 'canDelete'), deleteUser)
 
 export default router

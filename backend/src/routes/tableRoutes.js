@@ -20,20 +20,20 @@ import {
   deleteTable,
   getAllTables
 } from '../controllers/tableController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
 // Create table
-router.post('/', protect, authorize('admin', 'manager'), createTable)
+router.post('/', protect, checkPermission('/tables', 'canAdd'), createTable)
 
 // Get all tables
-router.get('/all', protect, authorize('admin', 'manager', 'waiter'), getAllTables)
+router.get('/all', protect, checkPermission('/tables', 'canView'), getAllTables)
 
 // Update table
-router.patch('/:id', protect, authorize('admin', 'manager'), updateTable)
+router.patch('/:id', protect, checkPermission('/tables', 'canEdit'), updateTable)
 
 // Delete table
-router.delete('/:id', protect, authorize('admin'), deleteTable)
+router.delete('/:id', protect, checkPermission('/tables', 'canDelete'), deleteTable)
 
 export default router

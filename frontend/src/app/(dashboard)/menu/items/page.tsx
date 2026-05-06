@@ -6,10 +6,13 @@ import { UtensilsCrossed, Plus, Search, Filter, MoreVertical, PackageSearch } fr
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
+import { usePermissions } from "@/context/PermissionContext";
 
 export default function MenuItemsPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const { canAdd: checkAdd } = usePermissions();
+  const canAdd = checkAdd("/menu/items");
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -32,10 +35,12 @@ export default function MenuItemsPage() {
           <h1 className="text-2xl font-bold tracking-tight uppercase">MENU ITEMS</h1>
           <div className="h-1 w-20 bg-primary mt-2"></div>
         </div>
-        <Button size="sm" className="gap-2">
-          <Plus className="size-4" />
-          ADD MENU ITEM
-        </Button>
+        {canAdd && (
+          <Button size="sm" className="gap-2">
+            <Plus className="size-4" />
+            ADD MENU ITEM
+          </Button>
+        )}
       </div>
 
       <Card className="rounded-md border border-border shadow-sm">

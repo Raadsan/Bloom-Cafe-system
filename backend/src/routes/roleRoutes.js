@@ -26,15 +26,15 @@ import {
   updateRole,
   deleteRole
 } from '../controllers/roleController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, authorize, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
-// Create role
+// Create role — admin-only action, keep authorize as fallback
 router.post('/', protect, authorize('admin'), createRole)
 
-// Get all roles
-router.get('/', protect, authorize('admin'), getAllRoles)
+// Get all roles — needed by multiple pages, keep authorize
+router.get('/', protect, authorize('admin', 'manager'), getAllRoles)
 
 // Update role
 router.patch('/:id', protect, authorize('admin'), updateRole)

@@ -7,9 +7,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { categoryApi, Category, CategoryWithItems } from "@/lib/api/categoryApi";
 import { useToast } from "@/components/ui/toast";
+import { usePermissions } from "@/context/PermissionContext";
 
 export default function MenuCategoriesPage() {
   const { showToast } = useToast();
+  const { canAdd: checkAdd, canEdit: checkEdit, canDelete: checkDelete } = usePermissions();
+  const canAdd = checkAdd("/menu/categories");
+  const canEdit = checkEdit("/menu/categories");
+  const canDelete = checkDelete("/menu/categories");
   const [categories, setCategories] = useState<CategoryWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -140,9 +145,11 @@ export default function MenuCategoriesPage() {
                 className="w-full pl-10 pr-4 py-2.5 text-[14px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all shadow-sm"
               />
             </div>
-            <Button onClick={openAdd} size="sm" className="h-[42px] px-5 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap">
-              <Plus className="mr-2 size-4" /> Add Category
-            </Button>
+            {canAdd && (
+              <Button onClick={openAdd} size="sm" className="h-[42px] px-5 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap">
+                <Plus className="mr-2 size-4" /> Add Category
+              </Button>
+            )}
           </div>
         </div>
 
@@ -198,12 +205,16 @@ export default function MenuCategoriesPage() {
                           <Button variant="ghost" size="sm" onClick={() => openView(cat)} className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors" title="View items">
                             <Eye className="size-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(cat)} className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit">
-                            <Edit className="size-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => openDelete(cat)} className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors" title="Delete">
-                            <Trash2 className="size-4" />
-                          </Button>
+                          {canEdit && (
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(cat)} className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit">
+                              <Edit className="size-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="sm" onClick={() => openDelete(cat)} className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors" title="Delete">
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

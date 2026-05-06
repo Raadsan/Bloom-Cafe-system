@@ -8,56 +8,16 @@ import {
   getMonthlyReport,
   getStaffPerformanceReport
 } from '../controllers/reportController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
-router.get(
-  '/summary',
-  protect,
-  authorize('admin', 'manager'),
-  getDashboardSummary
-)
-
-router.get(
-  '/revenue',
-  protect,
-  authorize('admin', 'manager'),
-  getRevenueReport
-)
-
-router.get(
-  '/top-items',
-  protect,
-  authorize('admin', 'manager'),
-  getTopSellingItems
-)
-
-router.get(
-  '/table-performance',
-  protect,
-  authorize('admin', 'manager'),
-  getTablePerformanceReport
-)
-router.get(
-  '/daily',
-  protect,
-  authorize('admin', 'manager'),
-  getDailyReport
-)
-
-router.get(
-  '/monthly',
-  protect,
-  authorize('admin', 'manager'),
-  getMonthlyReport
-)
-
-router.get(
-  '/staff-performance',
-  protect,
-  authorize('admin', 'manager'),
-  getStaffPerformanceReport
-)
+router.get('/summary', protect, checkPermission('/reports', 'canView'), getDashboardSummary)
+router.get('/revenue', protect, checkPermission('/reports', 'canView'), getRevenueReport)
+router.get('/top-items', protect, checkPermission('/reports', 'canView'), getTopSellingItems)
+router.get('/table-performance', protect, checkPermission('/reports', 'canView'), getTablePerformanceReport)
+router.get('/daily', protect, checkPermission('/reports', 'canView'), getDailyReport)
+router.get('/monthly', protect, checkPermission('/reports', 'canView'), getMonthlyReport)
+router.get('/staff-performance', protect, checkPermission('/reports', 'canView'), getStaffPerformanceReport)
 
 export default router

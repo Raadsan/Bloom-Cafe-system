@@ -41,12 +41,17 @@ import {
 import { tableApi, Table as RestaurantTable, TableStatus } from "@/lib/api/tableApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/context/PermissionContext";
 
 export default function TablesPage() {
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const { showToast } = useToast();
+  const { canAdd: checkAdd, canEdit: checkEdit, canDelete: checkDelete } = usePermissions();
+  const canAdd = checkAdd("/tables");
+  const canEdit = checkEdit("/tables");
+  const canDelete = checkDelete("/tables");
 
   // Modal states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -307,10 +312,12 @@ export default function TablesPage() {
                 className="w-full pl-10 pr-4 py-2.5 text-[14.5px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all shadow-sm"
               />
             </div>
-            <Button size="sm" onClick={() => setIsAddOpen(true)} className="w-full md:w-auto text-[14.5px] font-bold h-[42px] rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] transition-all border-none shadow-md px-6">
-              <Plus className="mr-2 size-4" />
-              Add New Table
-            </Button>
+            {canAdd && (
+              <Button size="sm" onClick={() => setIsAddOpen(true)} className="w-full md:w-auto text-[14.5px] font-bold h-[42px] rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] transition-all border-none shadow-md px-6">
+                <Plus className="mr-2 size-4" />
+                Add New Table
+              </Button>
+            )}
           </div>
         </div>
 
@@ -385,12 +392,16 @@ export default function TablesPage() {
                           <Button variant="ghost" size="sm" onClick={() => openViewModal(table)} className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors">
                             <Eye className="size-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => openEditModal(table)} className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
-                            <Edit className="size-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedTable(table); setIsDeleteOpen(true); }} className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors">
-                            <Trash2 className="size-4" />
-                          </Button>
+                          {canEdit && (
+                            <Button variant="ghost" size="sm" onClick={() => openEditModal(table)} className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+                              <Edit className="size-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="sm" onClick={() => { setSelectedTable(table); setIsDeleteOpen(true); }} className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors">
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

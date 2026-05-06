@@ -32,9 +32,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { customerApi, Customer } from "@/lib/api/customerApi";
 import { useToast } from "@/components/ui/toast";
+import { usePermissions } from "@/context/PermissionContext";
 
 export default function ClientsPage() {
   const { showToast } = useToast();
+  const { canAdd: checkAdd, canEdit: checkEdit, canDelete: checkDelete } = usePermissions();
+  const canAdd = checkAdd("/clients");
+  const canEdit = checkEdit("/clients");
+  const canDelete = checkDelete("/clients");
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -173,9 +179,11 @@ export default function ClientsPage() {
               />
             </div>
 
-            <Button onClick={openAddModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
-              <Plus className="mr-2 size-4" /> New Client
-            </Button>
+            {canAdd && (
+              <Button onClick={openAddModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
+                <Plus className="mr-2 size-4" /> New Client
+              </Button>
+            )}
           </div>
         </div>
 
@@ -247,22 +255,26 @@ export default function ClientsPage() {
                     </TableCell>
                     <TableCell className="px-6 py-5 text-right">
                       <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => openEditModal(c)} 
-                          className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                        >
-                          <Edit className="size-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => openDeleteModal(c)} 
-                          className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        {canEdit && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => openEditModal(c)} 
+                            className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          >
+                            <Edit className="size-4" />
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => openDeleteModal(c)} 
+                            className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

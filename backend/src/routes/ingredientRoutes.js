@@ -6,42 +6,42 @@ import {
   updateIngredient,
   deleteIngredient
 } from '../controllers/ingredientController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, authorize, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
 router.post(
   '/',
   protect,
-  authorize('admin', 'manager'),
+  checkPermission('/inventory', 'canAdd'),
   createIngredient
 )
 
 router.get(
   '/',
   protect,
-  authorize('admin', 'manager', 'kitchen'),
+  checkPermission('/inventory', 'canView'),
   getAllIngredients
 )
 
 router.get(
   '/:id',
   protect,
-  authorize('admin', 'manager', 'kitchen'),
+  checkPermission('/inventory', 'canView'),
   getIngredientById
 )
 
 router.put(
   '/:id',
   protect,
-  authorize('admin', 'manager'),
+  checkPermission('/inventory', 'canEdit'),
   updateIngredient
 )
 
 router.delete(
   '/:id',
   protect,
-  authorize('admin'),
+  checkPermission('/inventory', 'canDelete'),
   deleteIngredient
 )
 

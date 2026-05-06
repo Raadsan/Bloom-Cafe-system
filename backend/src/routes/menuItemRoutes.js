@@ -30,28 +30,26 @@ import {
   deleteMenuItem,
   getPublicMenuByQrCode
 } from '../controllers/menuItemController.js'
-import { protect, authorize } from '../middlewares/authMiddleware.js'
+import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
 // Create menu item
-router.post('/', protect, authorize('admin', 'manager'), createMenuItem)
+router.post('/', protect, checkPermission('/menu/items', 'canAdd'), createMenuItem)
 
 // Get all menu items
-router.get('/all', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getAllMenuItems)
+router.get('/all', protect, checkPermission('/menu/items', 'canView'), getAllMenuItems)
 
 // Get menu items by category
-router.get('/category/:categoryId', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getMenuItemsByCategory)
+router.get('/category/:categoryId', protect, checkPermission('/menu/items', 'canView'), getMenuItemsByCategory)
 
 // Update menu item
-router.patch('/:id', protect, authorize('admin', 'manager'), updateMenuItem)
+router.patch('/:id', protect, checkPermission('/menu/items', 'canEdit'), updateMenuItem)
 
 // Delete menu item
-router.delete('/:id', protect, authorize('admin'), deleteMenuItem)
+router.delete('/:id', protect, checkPermission('/menu/items', 'canDelete'), deleteMenuItem)
 
-// Customer scans QR and gets menu
+// Customer scans QR and gets menu (public, no auth needed)
 router.get('/menu/:qrCode', getPublicMenuByQrCode)
-
-
 
 export default router
