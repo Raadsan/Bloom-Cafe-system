@@ -59,7 +59,7 @@ export const createStockMovement = async (req, res) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const movement = await tx.stockMovement.create({
+      const movement = await tx.stockmovement.create({
         data: {
           ingredientId,
           type,
@@ -99,7 +99,7 @@ export const createStockMovement = async (req, res) => {
 // GET ALL STOCK MOVEMENTS
 export const getAllStockMovements = async (req, res) => {
   try {
-    const stockMovements = await prisma.stockMovement.findMany({
+    const stockmovements = await prisma.stockmovement.findMany({
       include: {
         ingredient: true
       },
@@ -110,8 +110,8 @@ export const getAllStockMovements = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      count: stockMovements.length,
-      data: stockMovements
+      count: stockmovements.length,
+      data: stockmovements
     })
   } catch (error) {
     console.error('Get Stock Movements Error:', error)
@@ -136,14 +136,14 @@ export const getStockMovementById = async (req, res) => {
       })
     }
 
-    const stockMovement = await prisma.stockMovement.findUnique({
+    const stockmovement = await prisma.stockmovement.findUnique({
       where: { id: movementId },
       include: {
         ingredient: true
       }
     })
 
-    if (!stockMovement) {
+    if (!stockmovement) {
       return res.status(404).json({
         success: false,
         message: 'Stock movement not found'
@@ -152,7 +152,7 @@ export const getStockMovementById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: stockMovement
+      data: stockmovement
     })
   } catch (error) {
     console.error('Get Stock Movement By Id Error:', error)
@@ -188,7 +188,7 @@ export const getStockMovementsByIngredient = async (req, res) => {
       })
     }
 
-    const stockMovements = await prisma.stockMovement.findMany({
+    const stockmovements = await prisma.stockmovement.findMany({
       where: {
         ingredientId: parsedIngredientId
       },
@@ -203,8 +203,8 @@ export const getStockMovementsByIngredient = async (req, res) => {
     return res.status(200).json({
       success: true,
       ingredient,
-      count: stockMovements.length,
-      data: stockMovements
+      count: stockmovements.length,
+      data: stockmovements
     })
   } catch (error) {
     console.error('Get Stock Movements By Ingredient Error:', error)
@@ -229,7 +229,7 @@ export const deleteStockMovement = async (req, res) => {
       })
     }
 
-    const existingMovement = await prisma.stockMovement.findUnique({
+    const existingMovement = await prisma.stockmovement.findUnique({
       where: { id: movementId }
     })
 
@@ -240,7 +240,7 @@ export const deleteStockMovement = async (req, res) => {
       })
     }
 
-    await prisma.stockMovement.delete({
+    await prisma.stockmovement.delete({
       where: { id: movementId }
     })
 

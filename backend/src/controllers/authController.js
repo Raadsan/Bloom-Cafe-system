@@ -57,6 +57,7 @@ export const login = async (req, res) => {
         phone: user.phone,
         roleId: user.roleId,
         role: user.role.name,
+        roleId: user.roleId,
         roleDescription: user.role.description,
         isActive: user.isActive,
         createdAt: user.createdAt,
@@ -95,6 +96,7 @@ export const getMe = async (req, res) => {
       data: {
         ...userWithoutPassword,
         role: user.role.name,
+        roleId: user.roleId,
         roleDescription: user.role.description
       }
     })

@@ -173,7 +173,7 @@ export const getTopSellingItems = async (req, res) => {
     const limit = Number(req.query.limit) || 10
     const dateRange = parseDateRange(req.query)
 
-    const groupedItems = await prisma.orderItem.groupBy({
+    const groupedItems = await prisma.orderitem.groupBy({
       by: ['menuItemId'],
       _sum: {
         quantity: true,
@@ -196,7 +196,7 @@ export const getTopSellingItems = async (req, res) => {
 
     const menuItemIds = groupedItems.map(item => item.menuItemId)
 
-    const menuItems = await prisma.menuItem.findMany({
+    const menuItems = await prisma.menuitem.findMany({
       where: {
         id: {
           in: menuItemIds

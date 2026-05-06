@@ -753,7 +753,7 @@ export const confirmPublicPayment = async (req, res) => {
       where: { id: paymentId },
       include: {
         order: {
-          include: { table: true, customer: true, items: true }
+          include: { table: true, customer: true, orderitem: true }
         }
       }
     })
@@ -884,7 +884,7 @@ export const getPaymentById = async (req, res) => {
         include: {
           table: true,
           customer: true,
-          items: { include: { menuItem: true } }
+          orderitem: { include: { menuitem: true } }
         }
       }
     }
@@ -907,7 +907,7 @@ export const getPaymentByOrderId = async (req, res) => {
         include: {
           table: true,
           customer: true,
-          items: { include: { menuItem: true } }
+          orderitem: { include: { menuitem: true } }
         }
       }
     }

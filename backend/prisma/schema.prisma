@@ -52,6 +52,7 @@ model ingredient {
   stockmovement stockmovement[]
 }
 
+<<<<<<< HEAD
 model menu {
   id             Int              @id @default(autoincrement())
   title          String
@@ -65,6 +66,8 @@ model menu {
   submenu        submenu[]
 }
 
+=======
+>>>>>>> 029bdcdce0d202d326f02a6370dafbab95d5bf11
 model menuitem {
   id          Int           @id @default(autoincrement())
   name        String
@@ -162,6 +165,7 @@ model role {
   description    String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime
+<<<<<<< HEAD
   roleMenuAccess roleMenuAccess[]
   user           user[]
 }
@@ -199,6 +203,10 @@ model roleSubMenuAccess {
 
   @@unique([roleMenuAccessId, subMenuId])
   @@index([subMenuId], map: "roleSubMenuAccess_subMenuId_fkey")
+=======
+  user           user[]
+  roleMenuAccess roleMenuAccess[]
+>>>>>>> 029bdcdce0d202d326f02a6370dafbab95d5bf11
 }
 
 model stockmovement {
@@ -213,6 +221,7 @@ model stockmovement {
   @@index([ingredientId], map: "stockmovement_ingredientId_fkey")
 }
 
+<<<<<<< HEAD
 model submenu {
   id                Int                 @id @default(autoincrement())
   menuId            Int
@@ -253,4 +262,94 @@ model user {
   role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
 
   @@index([roleId], map: "User_roleId_fkey")
+=======
+model table {
+  id        Int       @id @default(autoincrement())
+  number    Int       @unique
+  status    String    @default("available")
+  createdAt DateTime  @default(now())
+  name      String?
+  qrCode    String    @unique
+  updatedAt DateTime?
+  order     order[]
+}
+
+model user {
+  id        Int        @id @default(autoincrement())
+  email     String     @unique
+  password  String
+  createdAt DateTime   @default(now())
+  fullName  String
+  isActive  Boolean    @default(true)
+  phone     String?    @unique
+  updatedAt DateTime
+  roleId    Int
+  auditlog  auditlog[]
+  role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
+
+  @@index([roleId], map: "User_roleId_fkey")
+}
+
+model menu {
+  id             Int              @id @default(autoincrement())
+  title          String
+  url            String
+  icon           String
+  order          Int              @default(0)
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  roleMenuAccess roleMenuAccess[]
+  submenu        submenu[]
+}
+
+model roleMenuAccess {
+  id                Int                 @id @default(autoincrement())
+  roleId            Int
+  menuId            Int
+  canView           Boolean             @default(true)
+  canAdd            Boolean             @default(false)
+  canEdit           Boolean             @default(false)
+  canDelete         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  role              role                @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  roleSubMenuAccess roleSubMenuAccess[]
+
+  @@unique([roleId, menuId])
+  @@index([menuId], map: "roleMenuAccess_menuId_fkey")
+}
+
+model submenu {
+  id                Int                 @id @default(autoincrement())
+  menuId            Int
+  title             String
+  url               String
+  order             Int                 @default(0)
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  roleSubMenuAccess roleSubMenuAccess[]
+
+  @@index([menuId], map: "submenu_menuId_fkey")
+}
+
+model roleSubMenuAccess {
+  id               Int            @id @default(autoincrement())
+  roleMenuAccessId Int
+  subMenuId        Int
+  canView          Boolean        @default(true)
+  canAdd           Boolean        @default(false)
+  canEdit          Boolean        @default(false)
+  canDelete        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  roleMenuAccess   roleMenuAccess @relation(fields: [roleMenuAccessId], references: [id], onDelete: Cascade)
+  submenu          submenu        @relation(fields: [subMenuId], references: [id], onDelete: Cascade)
+
+  @@unique([roleMenuAccessId, subMenuId])
+  @@index([subMenuId], map: "roleSubMenuAccess_subMenuId_fkey")
+>>>>>>> 029bdcdce0d202d326f02a6370dafbab95d5bf11
 }

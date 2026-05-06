@@ -209,7 +209,7 @@ export const getPublicMenuByQrCode = async (req, res) => {
 
     const categories = await prisma.category.findMany({
       include: {
-        menuItems: {
+        menuitem: {
           where: {
             isAvailable: true
           },

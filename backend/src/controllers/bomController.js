@@ -23,7 +23,7 @@ export const createBOMItem = async (req, res) => {
       })
     }
 
-    const menuItem = await prisma.menuItem.findUnique({
+    const menuItem = await prisma.menuitem.findUnique({
       where: { id: menuItemId }
     })
 
@@ -45,7 +45,7 @@ export const createBOMItem = async (req, res) => {
       })
     }
 
-    const existingBOMItem = await prisma.menuItemBOM.findFirst({
+    const existingBOMItem = await prisma.menuitembom.findFirst({
       where: {
         menuItemId,
         ingredientId
@@ -59,14 +59,14 @@ export const createBOMItem = async (req, res) => {
       })
     }
 
-    const bomItem = await prisma.menuItemBOM.create({
+    const bomItem = await prisma.menuitembom.create({
       data: {
         menuItemId,
         ingredientId,
         quantityRequired
       },
       include: {
-        menuItem: {
+        menuitem: {
           select: {
             id: true,
             name: true
@@ -100,9 +100,9 @@ export const createBOMItem = async (req, res) => {
 // GET ALL BOM ITEMS
 export const getAllBOMItems = async (req, res) => {
   try {
-    const bomItems = await prisma.menuItemBOM.findMany({
+    const bomItems = await prisma.menuitembom.findMany({
       include: {
-        menuItem: {
+        menuitem: {
           select: {
             id: true,
             name: true
@@ -151,7 +151,7 @@ export const getBOMByMenuItem = async (req, res) => {
       })
     }
 
-    const menuItem = await prisma.menuItem.findUnique({
+    const menuItem = await prisma.menuitem.findUnique({
       where: { id: parsedMenuItemId }
     })
 
@@ -162,7 +162,7 @@ export const getBOMByMenuItem = async (req, res) => {
       })
     }
 
-    const bomItems = await prisma.menuItemBOM.findMany({
+    const bomItems = await prisma.menuitembom.findMany({
       where: {
         menuItemId: parsedMenuItemId
       },
@@ -224,7 +224,7 @@ export const updateBOMItem = async (req, res) => {
       })
     }
 
-    const existingBOMItem = await prisma.menuItemBOM.findUnique({
+    const existingBOMItem = await prisma.menuitembom.findUnique({
       where: { id: bomItemId }
     })
 
@@ -235,13 +235,13 @@ export const updateBOMItem = async (req, res) => {
       })
     }
 
-    const updatedBOMItem = await prisma.menuItemBOM.update({
+    const updatedBOMItem = await prisma.menuitembom.update({
       where: { id: bomItemId },
       data: {
         quantityRequired
       },
       include: {
-        menuItem: {
+        menuitem: {
           select: {
             id: true,
             name: true
@@ -285,7 +285,7 @@ export const deleteBOMItem = async (req, res) => {
       })
     }
 
-    const existingBOMItem = await prisma.menuItemBOM.findUnique({
+    const existingBOMItem = await prisma.menuitembom.findUnique({
       where: { id: bomItemId }
     })
 
@@ -296,7 +296,7 @@ export const deleteBOMItem = async (req, res) => {
       })
     }
 
-    await prisma.menuItemBOM.delete({
+    await prisma.menuitembom.delete({
       where: { id: bomItemId }
     })
 
