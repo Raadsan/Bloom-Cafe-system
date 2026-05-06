@@ -20,7 +20,9 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Container(
-          height: MediaQuery.of(context).size.height,
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height,
+          ),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -60,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   "Login to Your Account",
                   style: TextStyle(
                     fontSize: 26,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w500,
                     fontFamily: "Poppins",
                     color: Color(0xFF1B3022),
                   ),
@@ -122,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w500,
                         fontFamily: "Poppins",
                       ),
                     ),
@@ -150,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     _buildSocialBtn(Icons.facebook, Colors.blue),
                   ],
                 ),
-                const Spacer(),
+                const SizedBox(height: 40),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -164,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                       child: const Text(
                         "Sign Up",
-                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontFamily: "Poppins"),
+                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500, fontFamily: "Poppins"),
                       ),
                     ),
                   ],

@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/colors.dart';
+import 'package:shimmer/shimmer.dart';
 
-class PizzaCard extends StatelessWidget {
+class FoodCard extends StatelessWidget {
   final String title;
   final String desc;
-  final String discount;
+  final String? discount;
   final String image;
   final double price;
-  final double oldPrice;
+  final double? oldPrice;
   final VoidCallback? onTap;
 
-  const PizzaCard({
+  const FoodCard({
     super.key,
     required this.title,
     required this.desc,
-    required this.discount,
+    this.discount,
     required this.image,
     required this.price,
-    required this.oldPrice,
+    this.oldPrice,
     this.onTap,
   });
 
@@ -44,17 +44,34 @@ class PizzaCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.horizontal(left: Radius.circular(15)),
-                  child: Image.asset(image, width: 110, height: 110, fit: BoxFit.cover),
+                  child: image.startsWith('http')
+                      ? Image.network(
+                          image,
+                          width: 110,
+                          height: 110,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Shimmer.fromColors(
+                              baseColor: Colors.grey[300]!,
+                              highlightColor: Colors.grey[100]!,
+                              child: Container(width: 110, height: 110, color: Colors.white),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) => Container(width: 110, height: 110, color: Colors.grey[200], child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+                        )
+                      : Image.asset(image, width: 110, height: 110, fit: BoxFit.cover),
                 ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(color: const Color(0xFFFFD54F), borderRadius: BorderRadius.circular(5)),
-                    child: Text(discount, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                if (discount != null)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(color: const Color(0xFFFFD54F), borderRadius: BorderRadius.circular(5)),
+                      child: Text(discount!, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                    ),
                   ),
-                ),
               ],
             ),
             Expanded(
@@ -81,7 +98,8 @@ class PizzaCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text("\$${price.toStringAsFixed(2)}", style: const TextStyle(color: Color(0xFFFBC02D), fontWeight: FontWeight.bold, fontSize: 14)),
-                      Text("\$${oldPrice.toStringAsFixed(2)}", style: TextStyle(color: Colors.grey[400], fontSize: 10, decoration: TextDecoration.lineThrough)),
+                      if (oldPrice != null)
+                        Text("\$${oldPrice!.toStringAsFixed(2)}", style: TextStyle(color: Colors.grey[400], fontSize: 10, decoration: TextDecoration.lineThrough)),
                     ],
                   ),
                   Container(

@@ -20,7 +20,7 @@ class CartScreen extends StatelessWidget {
           "My Cart",
           style: TextStyle(
             color: Color(0xFF2D3E2D),
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             fontFamily: "Poppins",
           ),
         ),
@@ -75,7 +75,7 @@ class CartScreen extends StatelessWidget {
       title,
       style: const TextStyle(
         fontSize: 16,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w500,
         color: Color(0xFF2D3E2D),
       ),
     );
@@ -119,7 +119,7 @@ class CartScreen extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -132,7 +132,7 @@ class CartScreen extends StatelessWidget {
                   price,
                   style: TextStyle(
                     color: AppColors.primaryColor,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w500,
                     fontSize: 15,
                   ),
                 ),
@@ -146,7 +146,7 @@ class CartScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text(
                   qty.toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
               _buildQtyBtn(Icons.remove),
@@ -192,7 +192,7 @@ class CartScreen extends StatelessWidget {
               children: [
                 const Text(
                   "Home Address",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
                 ),
                 Text(
                   "Mogadishu, Somalia - Sector 4",
@@ -228,7 +228,7 @@ class CartScreen extends StatelessWidget {
           const Expanded(
             child: Text(
               "EVC Plus / Sahal",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
             ),
           ),
           const Icon(Icons.check_circle, color: Colors.green, size: 18),
@@ -275,7 +275,7 @@ class CartScreen extends StatelessWidget {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -294,7 +294,7 @@ class CartScreen extends StatelessWidget {
           style: TextStyle(
             color: isTotal ? const Color(0xFF2D3E2D) : Colors.grey[500],
             fontSize: isTotal ? 16 : 14,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            fontWeight: isTotal ? FontWeight.w500 : FontWeight.normal,
           ),
         ),
         Text(
@@ -302,7 +302,7 @@ class CartScreen extends StatelessWidget {
           style: TextStyle(
             color: isTotal ? AppColors.primaryColor : const Color(0xFF2D3E2D),
             fontSize: isTotal ? 18 : 14,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            fontWeight: isTotal ? FontWeight.w500 : FontWeight.normal,
           ),
         ),
       ],

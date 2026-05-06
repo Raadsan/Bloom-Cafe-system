@@ -18,7 +18,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Container(
-          height: MediaQuery.of(context).size.height,
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height,
+          ),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -58,7 +60,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   "Create New Account",
                   style: TextStyle(
                     fontSize: 26,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w500,
                     fontFamily: "Poppins",
                     color: Color(0xFF1B3022),
                   ),
@@ -106,13 +108,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w500,
                         fontFamily: "Poppins",
                       ),
                     ),
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(height: 40),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -121,7 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       onPressed: () => Navigator.pop(context),
                       child: const Text(
                         "Login",
-                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontFamily: "Poppins"),
+                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500, fontFamily: "Poppins"),
                       ),
                     ),
                   ],

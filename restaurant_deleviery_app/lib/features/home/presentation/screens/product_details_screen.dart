@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../../../core/theme/colors.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
@@ -49,7 +50,28 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         child: Center(
                           child: Padding(
                             padding: const EdgeInsets.all(40),
-                            child: Image.asset(widget.image, fit: BoxFit.contain),
+                            child: widget.image.startsWith('http')
+                                ? Image.network(
+                                    widget.image,
+                                    fit: BoxFit.contain,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Shimmer.fromColors(
+                                        baseColor: Colors.grey[300]!,
+                                        highlightColor: Colors.grey[100]!,
+                                        child: Container(
+                                          width: 200, // Reasonable fallback size
+                                          height: 200,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+                                  )
+                                : Image.asset(widget.image, fit: BoxFit.contain),
                           ),
                         ),
                       ),
@@ -81,7 +103,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               widget.title,
                               style: const TextStyle(
                                 fontSize: 24,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w500,
                                 fontFamily: "Poppins",
                                 color: Color(0xFF1B3022),
                               ),
@@ -91,7 +113,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             widget.price,
                             style: TextStyle(
                               fontSize: 22,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w500,
                               color: AppColors.primaryColor,
                               fontFamily: "Poppins",
                             ),
@@ -105,7 +127,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           const SizedBox(width: 5),
                           const Text(
                             "4.8",
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
                           ),
                           const SizedBox(width: 5),
                           Text(
@@ -128,7 +150,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         "Description",
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                           fontFamily: "Poppins",
                         ),
                       ),
@@ -182,7 +204,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 15),
                           child: Text(
                             _quantity.toString(),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
                           ),
                         ),
                         _buildQtyBtn(Icons.add, () => setState(() => _quantity++)),
@@ -205,7 +227,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w500,
                             fontFamily: "Poppins",
                           ),
                         ),

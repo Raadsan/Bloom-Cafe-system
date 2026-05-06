@@ -5,6 +5,7 @@ import 'package:restaurant_delivery_app/features/home/presentation/screens/home_
 import 'package:restaurant_delivery_app/features/orders/presentation/screens/order_tracking_screen.dart';
 import 'package:restaurant_delivery_app/features/settings/presentation/screens/settings_screen.dart';
 import 'package:restaurant_delivery_app/features/scan/presentation/screens/scan_payment_screen.dart';
+import 'package:restaurant_delivery_app/features/orders/presentation/screens/orders_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -18,7 +19,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const OrderTrackingScreen(), // Stores (Placeholder)
+    const OrdersScreen(), // Orders Screen
     const CartScreen(), // Carts
     const SettingsScreen(), // Profile
   ];
@@ -63,7 +64,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(IconlyBold.home, IconlyLight.home, 'Home', 0),
-              _buildNavItem(IconlyBold.category, IconlyLight.category, 'Stores', 1),
+              _buildNavItem(IconlyBold.document, IconlyLight.document, 'Orders', 1),
               const SizedBox(width: 40), // Space for FAB
               _buildNavItem(IconlyBold.buy, IconlyLight.buy, 'Carts', 2),
               _buildNavItem(IconlyBold.profile, IconlyLight.profile, 'Profile', 3),

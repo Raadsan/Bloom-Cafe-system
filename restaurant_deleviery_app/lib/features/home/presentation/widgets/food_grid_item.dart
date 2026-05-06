@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../../../core/theme/colors.dart';
 
-class PizzaGridItem extends StatelessWidget {
+class FoodGridItem extends StatelessWidget {
   final String title;
   final String desc;
   final String image;
   final double price;
   final VoidCallback? onTap;
 
-  const PizzaGridItem({
+  const FoodGridItem({
     super.key,
     required this.title,
     required this.desc,
@@ -39,7 +40,22 @@ class PizzaGridItem extends StatelessWidget {
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                child: Image.asset(image, width: double.infinity, fit: BoxFit.cover),
+                child: image.startsWith('http')
+                    ? Image.network(
+                        image,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Shimmer.fromColors(
+                            baseColor: Colors.grey[300]!,
+                            highlightColor: Colors.grey[100]!,
+                            child: Container(width: double.infinity, color: Colors.white),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) => Container(width: double.infinity, color: Colors.grey[200], child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+                      )
+                    : Image.asset(image, width: double.infinity, fit: BoxFit.cover),
               ),
             ),
             Padding(
