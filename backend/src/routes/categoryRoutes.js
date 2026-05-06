@@ -41,13 +41,13 @@ const router = express.Router()
 router.post('/', protect, authorize('admin', 'manager'), createCategory)
 
 // Get all categories
-router.get('/all', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getAllCategories)
+router.get('/all', getAllCategories)
 
 // Get categories with items
-router.get('/with-items', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getCategoriesWithItems)
+router.get('/with-items', getCategoriesWithItems)
 
 // Get category by id with items
-router.get('/:id/with-items', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getCategoryByIdWithItems)
+router.get('/:id/with-items', getCategoryByIdWithItems)
 
 // Update category
 router.patch('/:id', protect, authorize('admin', 'manager'), updateCategory)

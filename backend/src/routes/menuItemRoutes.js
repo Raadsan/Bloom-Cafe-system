@@ -38,10 +38,10 @@ const router = express.Router()
 router.post('/', protect, authorize('admin', 'manager'), createMenuItem)
 
 // Get all menu items
-router.get('/all', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getAllMenuItems)
+router.get('/all', getAllMenuItems)
 
 // Get menu items by category
-router.get('/category/:categoryId', protect, authorize('admin', 'manager', 'kitchen', 'waiter'), getMenuItemsByCategory)
+router.get('/category/:categoryId', getMenuItemsByCategory)
 
 // Update menu item
 router.patch('/:id', protect, authorize('admin', 'manager'), updateMenuItem)

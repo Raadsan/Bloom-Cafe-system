@@ -23,7 +23,7 @@ export const createMenuItem = async (req, res) => {
       })
     }
 
-    const item = await prisma.menuItem.create({
+    const item = await prisma.menuitem.create({
       data: {
         name: name.trim(),
         description: description || null,
@@ -55,7 +55,7 @@ export const createMenuItem = async (req, res) => {
 // GET ALL MENU ITEMS
 export const getAllMenuItems = async (req, res) => {
   try {
-    const items = await prisma.menuItem.findMany({
+    const items = await prisma.menuitem.findMany({
       include: {
         category: {
           select: { id: true, name: true }
@@ -84,7 +84,7 @@ export const getMenuItemsByCategory = async (req, res) => {
   try {
     const { categoryId } = req.params
 
-    const items = await prisma.menuItem.findMany({
+    const items = await prisma.menuitem.findMany({
       where: { categoryId: Number(categoryId) },
       include: {
         category: { select: { id: true, name: true } }
@@ -118,7 +118,7 @@ export const updateMenuItem = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid menu item id' })
     }
 
-    const existing = await prisma.menuItem.findUnique({ where: { id: itemId } })
+    const existing = await prisma.menuitem.findUnique({ where: { id: itemId } })
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Menu item not found' })
     }
@@ -130,7 +130,7 @@ export const updateMenuItem = async (req, res) => {
       }
     }
 
-    const updated = await prisma.menuItem.update({
+    const updated = await prisma.menuitem.update({
       where: { id: itemId },
       data: {
         name: name ?? existing.name,
@@ -170,12 +170,12 @@ export const deleteMenuItem = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid menu item id' })
     }
 
-    const existing = await prisma.menuItem.findUnique({ where: { id: itemId } })
+    const existing = await prisma.menuitem.findUnique({ where: { id: itemId } })
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Menu item not found' })
     }
 
-    await prisma.menuItem.delete({ where: { id: itemId } })
+    await prisma.menuitem.delete({ where: { id: itemId } })
 
     res.status(200).json({
       success: true,
