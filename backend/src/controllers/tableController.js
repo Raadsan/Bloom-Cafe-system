@@ -190,3 +190,40 @@ export const getAllTables = async (req, res) => {
     });
   }
 };
+
+// GET TABLE BY QR CODE
+export const getTableByQrCode = async (req, res) => {
+  try {
+    const { qrCode } = req.params;
+
+    if (!qrCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'QR code is required',
+      });
+    }
+
+    const table = await prisma.table.findFirst({
+      where: { qrCode: qrCode },
+    });
+
+    if (!table) {
+      return res.status(404).json({
+        success: false,
+        message: 'Table not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: table,
+    });
+  } catch (error) {
+    console.error('Get Table By QR Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch table details',
+      error: error.message,
+    });
+  }
+};

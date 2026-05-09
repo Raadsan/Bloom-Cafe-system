@@ -7,7 +7,8 @@ import {
   getPaymentById,
   getPaymentByOrderId,
   updatePaymentStatus,
-  deletePayment
+  deletePayment,
+  getPaymentMethods
   
 } from '../controllers/paymentController.js'
 import { protect, authorize } from '../middlewares/authMiddleware.js'
@@ -15,6 +16,7 @@ import { protect, authorize } from '../middlewares/authMiddleware.js'
 const router = express.Router()
 
 // PUBLIC ROUTES
+router.get('/methods', getPaymentMethods)
 router.post('/pay', createPublicPayment)
 router.patch('/pay/:id/confirm', confirmPublicPayment)
 

@@ -18,11 +18,15 @@ import {
   createTable,
   updateTable,
   deleteTable,
-  getAllTables
+  getAllTables,
+  getTableByQrCode
 } from '../controllers/tableController.js'
 import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
+
+// Get table by QR Code (Public or protected? User needs it to order)
+router.get('/qr/:qrCode', getTableByQrCode)
 
 // Create table
 router.post('/', protect, checkPermission('/tables', 'canAdd'), createTable)
