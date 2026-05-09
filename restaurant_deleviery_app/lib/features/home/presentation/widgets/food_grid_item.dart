@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:restaurant_delivery_app/features/cart/presentation/controllers/cart_controller.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/colors.dart';
 
 class FoodGridItem extends StatelessWidget {
+  final int id;
   final String title;
   final String desc;
   final String image;
@@ -11,6 +14,7 @@ class FoodGridItem extends StatelessWidget {
 
   const FoodGridItem({
     super.key,
+    required this.id,
     required this.title,
     required this.desc,
     required this.image,
@@ -71,10 +75,43 @@ class FoodGridItem extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text("\$${price.toStringAsFixed(2)}", style: TextStyle(color: AppColors.primaryColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(color: AppColors.primaryColor, borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.add, color: Colors.white, size: 16),
+                      Consumer<CartController>(
+                        builder: (context, cart, child) {
+                          final isAdded = cart.isItemInCart(id);
+                          return GestureDetector(
+                            onTap: () async {
+                              if (isAdded) {
+                                cart.removeCartItem(id);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Removed from cart"), duration: Duration(seconds: 1)),
+                                );
+                              } else {
+                                bool success = await cart.addToCart(id);
+                                if (success && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("$title added to cart!"),
+                                      backgroundColor: Colors.green,
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: isAdded ? Colors.green.shade100 : AppColors.primaryColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                isAdded ? Icons.check : Icons.add,
+                                color: isAdded ? Colors.green : Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

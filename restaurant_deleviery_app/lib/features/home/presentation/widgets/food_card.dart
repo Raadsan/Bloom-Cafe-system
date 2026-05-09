@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../../../features/cart/presentation/controllers/cart_controller.dart';
 
-class FoodCard extends StatelessWidget {
+class FoodCard extends StatefulWidget {
+  final int id;
   final String title;
   final String desc;
   final String? discount;
@@ -12,6 +15,7 @@ class FoodCard extends StatelessWidget {
 
   const FoodCard({
     super.key,
+    required this.id,
     required this.title,
     required this.desc,
     this.discount,
@@ -22,9 +26,14 @@ class FoodCard extends StatelessWidget {
   });
 
   @override
+  State<FoodCard> createState() => _FoodCardState();
+}
+
+class _FoodCardState extends State<FoodCard> {
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
         height: 110,
         decoration: BoxDecoration(
@@ -44,9 +53,9 @@ class FoodCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.horizontal(left: Radius.circular(15)),
-                  child: image.startsWith('http')
+                  child: widget.image.startsWith('http')
                       ? Image.network(
-                          image,
+                          widget.image,
                           width: 110,
                           height: 110,
                           fit: BoxFit.cover,
@@ -60,18 +69,19 @@ class FoodCard extends StatelessWidget {
                           },
                           errorBuilder: (context, error, stackTrace) => Container(width: 110, height: 110, color: Colors.grey[200], child: const Icon(Icons.image_not_supported, color: Colors.grey)),
                         )
-                      : Image.asset(image, width: 110, height: 110, fit: BoxFit.cover),
+                      : Image.asset(widget.image, width: 110, height: 110, fit: BoxFit.cover),
                 ),
-                if (discount != null)
+                if (widget.discount != null)
                   Positioned(
                     top: 8,
                     left: 8,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(color: const Color(0xFFFFD54F), borderRadius: BorderRadius.circular(5)),
-                      child: Text(discount!, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                      child: Text(widget.discount!, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
                     ),
                   ),
+
               ],
             ),
             Expanded(
@@ -81,9 +91,9 @@ class FoodCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
+                    Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
                     const SizedBox(height: 4),
-                    Text(desc, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                    Text(widget.desc, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                   ],
                 ),
               ),
@@ -97,15 +107,48 @@ class FoodCard extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text("\$${price.toStringAsFixed(2)}", style: const TextStyle(color: Color(0xFFFBC02D), fontWeight: FontWeight.bold, fontSize: 14)),
-                      if (oldPrice != null)
-                        Text("\$${oldPrice!.toStringAsFixed(2)}", style: TextStyle(color: Colors.grey[400], fontSize: 10, decoration: TextDecoration.lineThrough)),
+                      Text("\$${widget.price.toStringAsFixed(2)}", style: const TextStyle(color: Color(0xFFFBC02D), fontWeight: FontWeight.bold, fontSize: 14)),
+                      if (widget.oldPrice != null)
+                        Text("\$${widget.oldPrice!.toStringAsFixed(2)}", style: TextStyle(color: Colors.grey[400], fontSize: 10, decoration: TextDecoration.lineThrough)),
                     ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(color: Color(0xFFA5D6A7), shape: BoxShape.circle),
-                    child: const Icon(Icons.add, color: Color(0xFF2E7D32), size: 18),
+                  Consumer<CartController>(
+                    builder: (context, cart, child) {
+                      final isAdded = cart.isItemInCart(widget.id);
+                      return GestureDetector(
+                        onTap: () async {
+                          if (isAdded) {
+                            cart.removeCartItem(widget.id);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Removed from cart"), duration: Duration(seconds: 1)),
+                            );
+                          } else {
+                            bool success = await cart.addToCart(widget.id);
+                            if (success && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("${widget.title} added to cart!"), 
+                                  backgroundColor: Colors.green,
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: isAdded ? Colors.green.shade100 : const Color(0xFFA5D6A7), 
+                            shape: BoxShape.circle
+                          ),
+                          child: Icon(
+                            isAdded ? Icons.check : Icons.add, 
+                            color: isAdded ? Colors.green : const Color(0xFF2E7D32), 
+                            size: 18
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

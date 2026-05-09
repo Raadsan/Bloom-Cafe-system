@@ -53,6 +53,7 @@ class AllFoodScreen extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 15),
                 child: FoodCard(
+                  id: item.id,
                   title: item.name,
                   desc: item.description ?? "Delicious ${item.name}",
                   image: image,
@@ -62,6 +63,7 @@ class AllFoodScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => ProductDetailsScreen(
+                          id: item.id,
                           title: item.name,
                           image: image,
                           price: "\$${item.price.toStringAsFixed(2)}",

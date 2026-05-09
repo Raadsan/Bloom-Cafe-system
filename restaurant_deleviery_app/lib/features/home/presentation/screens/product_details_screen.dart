@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../../core/theme/colors.dart';
+import '../../../../features/cart/presentation/controllers/cart_controller.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
+  final int id;
   final String title;
   final String image;
   final String price;
@@ -11,6 +14,7 @@ class ProductDetailsScreen extends StatefulWidget {
 
   const ProductDetailsScreen({
     super.key,
+    required this.id,
     required this.title,
     required this.image,
     required this.price,
@@ -43,7 +47,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: AppColors.bgColor,
-                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(50)),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(50),
+                        ),
                       ),
                       child: Hero(
                         tag: widget.title,
@@ -54,35 +60,54 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                 ? Image.network(
                                     widget.image,
                                     fit: BoxFit.contain,
-                                    loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Shimmer.fromColors(
-                                        baseColor: Colors.grey[300]!,
-                                        highlightColor: Colors.grey[100]!,
-                                        child: Container(
-                                          width: 200, // Reasonable fallback size
-                                          height: 200,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
+                                          if (loadingProgress == null)
+                                            return child;
+                                          return Shimmer.fromColors(
+                                            baseColor: Colors.grey[300]!,
+                                            highlightColor: Colors.grey[100]!,
+                                            child: Container(
+                                              width:
+                                                  200, // Reasonable fallback size
+                                              height: 200,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            const Icon(
+                                              Icons.image_not_supported,
+                                              size: 50,
+                                              color: Colors.grey,
+                                            ),
                                   )
-                                : Image.asset(widget.image, fit: BoxFit.contain),
+                                : Image.asset(
+                                    widget.image,
+                                    fit: BoxFit.contain,
+                                  ),
                           ),
                         ),
                       ),
                     ),
                     SafeArea(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            _buildCircleBtn(IconlyLight.arrow_left, () => Navigator.pop(context)),
+                            _buildCircleBtn(
+                              IconlyLight.arrow_left,
+                              () => Navigator.pop(context),
+                            ),
                             _buildCircleBtn(IconlyLight.heart, () {}),
                           ],
                         ),
@@ -123,16 +148,26 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          const Icon(Icons.star, color: Colors.orange, size: 18),
+                          const Icon(
+                            Icons.star,
+                            color: Colors.orange,
+                            size: 18,
+                          ),
                           const SizedBox(width: 5),
                           const Text(
                             "4.8",
-                            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                            ),
                           ),
                           const SizedBox(width: 5),
                           Text(
                             "(120+ Reviews)",
-                            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -178,7 +213,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               padding: const EdgeInsets.all(25),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(35),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
@@ -190,7 +227,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F8F1),
                       borderRadius: BorderRadius.circular(20),
@@ -204,34 +244,76 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 15),
                           child: Text(
                             _quantity.toString(),
-                            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
-                        _buildQtyBtn(Icons.add, () => setState(() => _quantity++)),
+                        _buildQtyBtn(
+                          Icons.add,
+                          () => setState(() => _quantity++),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 20),
                   Expanded(
-                    child: SizedBox(
-                      height: 55,
-                      child: ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryColor,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          "Add to Cart",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            fontFamily: "Poppins",
+                    child: Consumer<CartController>(
+                      builder: (context, cart, child) {
+                        final isAdded = cart.isItemInCart(widget.id);
+                        return SizedBox(
+                          height: 55,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              if (isAdded) {
+                                cart.removeCartItem(widget.id);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Removed from cart"),
+                                    backgroundColor: Colors.red,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              } else {
+                                bool success = await cart.addToCart(
+                                  widget.id,
+                                  quantity: _quantity,
+                                );
+                                if (success && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        "${widget.title} added to cart!",
+                                      ),
+                                      backgroundColor: Colors.green,
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isAdded
+                                  ? Colors.red
+                                  : AppColors.primaryColor,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              isAdded ? "Remove from Cart" : "Add to Cart",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                fontFamily: "Poppins",
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ),
                 ],

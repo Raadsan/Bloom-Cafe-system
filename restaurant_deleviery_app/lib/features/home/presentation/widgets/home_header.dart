@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
+import 'package:provider/provider.dart';
+import 'package:restaurant_delivery_app/features/cart/presentation/controllers/cart_controller.dart';
+
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 
 class HomeHeader extends StatelessWidget {
@@ -45,32 +48,46 @@ class HomeHeader extends StatelessWidget {
                     color: Color(0xFF2D3E2D),
                   ),
                 ),
-                Row(
-                  children: [
-                    Icon(
-                      IconlyLight.location,
-                      size: 14,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        "Somalia, Mogadishu",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
+                Consumer<CartController>(
+                  builder: (context, cart, child) {
+                    final table = cart.currentTable;
+                    return Row(
+                      children: [
+                        Icon(
+                          table != null ? Icons.table_restaurant : IconlyLight.location,
+                          size: 14,
                           color: Colors.grey[600],
-                          fontFamily: "Poppins",
                         ),
-                      ),
-                    ),
-                    Icon(
-                      Icons.keyboard_arrow_down,
-                      size: 16,
-                      color: Colors.grey[600],
-                    ),
-                  ],
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            table != null ? "Dining at ${table['name']}" : "Somalia, Mogadishu",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontFamily: "Poppins",
+                            ),
+                          ),
+                        ),
+                        if (table == null)
+                          Icon(
+                            Icons.keyboard_arrow_down,
+                            size: 16,
+                            color: Colors.grey[600],
+                          ),
+                        if (table != null)
+                          GestureDetector(
+                            onTap: () => cart.clearTable(),
+                            child: const Padding(
+                              padding: EdgeInsets.only(left: 8),
+                              child: Icon(Icons.close, size: 14, color: Colors.red),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),

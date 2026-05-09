@@ -12,6 +12,7 @@ import '../widgets/recommended_card.dart';
 import '../widgets/section_header.dart';
 import 'all_food_screen.dart';
 import 'product_details_screen.dart';
+import '../widgets/bonus_card.dart';
 import '../widgets/food_card_shimmer.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -34,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigateToDetails(
+    int id,
     String title,
     String image,
     String price,
@@ -43,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => ProductDetailsScreen(
+          id: id,
           title: title,
           image: image,
           price: price,
@@ -94,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 10),
                     const HomeHeader(),
                     const SizedBox(height: 10),
-                    const HomeSearchBar(),
+                    const BonusCard(),
                     const SizedBox(height: 25),
                     SectionHeader(
                       title: "Search By Categories",
@@ -280,11 +283,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? item.imageUrl!
                     : defaultImage;
                 return FoodGridItem(
+                  id: item.id,
                   title: item.name,
                   desc: item.description ?? "Delicious ${item.name}",
                   image: image,
                   price: item.price,
                   onTap: () => _navigateToDetails(
+                    item.id,
                     item.name,
                     image,
                     "\$${item.price.toStringAsFixed(2)}",
@@ -306,11 +311,13 @@ class _HomeScreenState extends State<HomeScreen> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 15),
                 child: FoodCard(
+                  id: item.id,
                   title: item.name,
                   desc: item.description ?? "Delicious ${item.name}",
                   image: image,
                   price: item.price,
                   onTap: () => _navigateToDetails(
+                    item.id,
                     item.name,
                     image,
                     "\$${item.price.toStringAsFixed(2)}",
@@ -366,6 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     image: "assets/images/pizza_cheese.png",
                     discount: "15% OFF",
                     onTap: () => _navigateToDetails(
+                      1, // Mock ID for recommended
                       "Gourmet Cheese Pizza",
                       "assets/images/pizza_cheese.png",
                       "₹299",
@@ -380,6 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     image: "assets/images/pizza_bbq.png",
                     discount: "HOT",
                     onTap: () => _navigateToDetails(
+                      2, // Mock ID for recommended
                       "BBQ Feast Pizza",
                       "assets/images/pizza_bbq.png",
                       "₹450",
@@ -394,6 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     image: "assets/images/pizza_pepperoni.png",
                     discount: "POPULAR",
                     onTap: () => _navigateToDetails(
+                      3, // Mock ID for recommended
                       "Spicy Pepperoni",
                       "assets/images/pizza_pepperoni.png",
                       "₹399",
@@ -408,6 +418,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     image: "assets/images/pizza_cheese.png",
                     discount: "VEG",
                     onTap: () => _navigateToDetails(
+                      4, // Mock ID for recommended
                       "Veggie Paradise",
                       "assets/images/pizza_cheese.png",
                       "₹349",
