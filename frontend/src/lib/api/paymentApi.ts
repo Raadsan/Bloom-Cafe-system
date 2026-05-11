@@ -1,15 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  paymentApi.ts
-//  POST   /api/payments/pay              (PUBLIC)
-//  PATCH  /api/payments/pay/:id/confirm  (PUBLIC)
-//  POST   /api/payments                  (admin, manager, cashier)
-//  GET    /api/payments                  (admin, manager, cashier)
-//  GET    /api/payments/order/:orderId   (admin, manager, cashier)
-//  GET    /api/payments/:id              (admin, manager, cashier)
-//  PATCH  /api/payments/:id/status       (admin, manager)
-//  DELETE /api/payments/:id              (admin)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export type PaymentMethod = 'cash' | 'card' | 'online';

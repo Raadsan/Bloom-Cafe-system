@@ -1,10 +1,3 @@
-/**
- * ─────────────────────────────────────────────────────────────────
- *  src/lib/api/axios.ts
- *  Axios instance – JWT injection + global 401 auto-logout
- * ─────────────────────────────────────────────────────────────────
- */
-
 import axios from 'axios';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';

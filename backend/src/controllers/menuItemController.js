@@ -1,4 +1,5 @@
 import prisma from '../config/db.js'
+import { logAudit } from '../utils/auditHelper.js'
 
 // CREATE MENU ITEM
 export const createMenuItem = async (req, res) => {
@@ -37,7 +38,9 @@ export const createMenuItem = async (req, res) => {
       }
     })
 
-    res.status(201).json({
+    logAudit({ userId: req.user?.id, action: 'Created', entity: 'MenuItem', entityId: item.id, description: `Created menu item "${item.name}"` })
+
+    return res.status(201).json({
       success: true,
       message: 'Menu item created successfully',
       data: item
@@ -145,7 +148,9 @@ export const updateMenuItem = async (req, res) => {
       }
     })
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Updated', entity: 'MenuItem', entityId: updated.id, description: `Updated menu item "${updated.name}"` })
+
+    return res.status(200).json({
       success: true,
       message: 'Menu item updated successfully',
       data: updated
@@ -177,7 +182,9 @@ export const deleteMenuItem = async (req, res) => {
 
     await prisma.menuitem.delete({ where: { id: itemId } })
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'MenuItem', entityId: itemId, description: `Deleted menu item "${existing.name}"` })
+
+    return res.status(200).json({
       success: true,
       message: 'Menu item deleted successfully'
     })

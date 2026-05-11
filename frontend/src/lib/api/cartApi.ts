@@ -1,13 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  cartApi.ts  (PUBLIC – QR Customer Flow, no auth needed)
-//  POST   /api/cart/create          → get or create cart by tableId
-//  POST   /api/cart/add             → add item to cart
-//  GET    /api/cart/:id             → get cart by ID
-//  DELETE /api/cart/item/:id        → remove one cart item
-//  DELETE /api/cart/clear/:cartId   → clear entire cart
-//  POST   /api/cart/checkout        → checkout → creates order
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface CartItem {

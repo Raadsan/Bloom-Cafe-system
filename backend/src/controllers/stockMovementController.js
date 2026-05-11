@@ -1,4 +1,5 @@
 import prisma from '../config/db.js'
+import { logAudit } from '../utils/auditHelper.js'
 
 // CREATE STOCK MOVEMENT
 export const createStockMovement = async (req, res) => {
@@ -80,6 +81,8 @@ export const createStockMovement = async (req, res) => {
 
       return { movement, updatedIngredient }
     })
+
+    await logAudit({ userId: req.user?.id, action: 'Created', entity: 'StockMovement', entityId: result.movement.id, description: `Stock ${type} of ${quantity} for "${ingredient.name}"` })
 
     return res.status(201).json({
       success: true,
@@ -243,6 +246,8 @@ export const deleteStockMovement = async (req, res) => {
     await prisma.stockmovement.delete({
       where: { id: movementId }
     })
+
+    await logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'StockMovement', entityId: movementId, description: `Deleted stock movement #${movementId}` })
 
     return res.status(200).json({
       success: true,

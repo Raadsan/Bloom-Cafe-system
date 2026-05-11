@@ -16,7 +16,7 @@
 // router.get('/category/:categoryId', getMenuItemsByCategory)
 // // Update Menu Item
 // router.patch('/:id', updateMenuItem)
-// // Delete Menu Item
+// // Delete Menu Item 
 // router.delete('/:id', deleteMenuItem)
 
 // export default router

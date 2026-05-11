@@ -1,11 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  roleApi.ts
-//  POST   /api/roles      (admin)
-//  GET    /api/roles      (admin)
-//  PATCH  /api/roles/:id  (admin)
-//  DELETE /api/roles/:id  (admin)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface Role {

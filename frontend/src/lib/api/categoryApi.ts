@@ -1,13 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  categoryApi.ts
-//  POST   /api/categories                 (admin, manager)
-//  GET    /api/categories/all             (admin, manager, kitchen, waiter)
-//  GET    /api/categories/with-items      (admin, manager, kitchen, waiter)
-//  GET    /api/categories/:id/with-items  (admin, manager, kitchen, waiter)
-//  PATCH  /api/categories/:id             (admin, manager)
-//  DELETE /api/categories/:id             (admin)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface Category {

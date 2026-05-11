@@ -64,7 +64,11 @@ model ingredient {
   costPerUnit   Float           @default(0)
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
+<<<<<<< HEAD
   updatedAt     DateTime        @default(now())
+=======
+  updatedAt     DateTime @default(now()) @updatedAt
+>>>>>>> 78bbf106faf5c8d898099204f2668a9fd7f5aa56
   menuitembom   menuitembom[]
   stockmovement stockmovement[]
 }
@@ -77,7 +81,11 @@ model menu {
   order          Int              @default(0)
   isActive       Boolean          @default(true)
   createdAt      DateTime         @default(now())
+<<<<<<< HEAD
   updatedAt      DateTime         @default(now())
+=======
+  updatedAt      DateTime @default(now()) @updatedAt
+>>>>>>> 78bbf106faf5c8d898099204f2668a9fd7f5aa56
   roleMenuAccess roleMenuAccess[]
   submenu        submenu[]
 }

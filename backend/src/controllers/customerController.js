@@ -1,4 +1,5 @@
 import prisma from '../config/db.js'
+import { logAudit } from '../utils/auditHelper.js'
 
 // CREATE CUSTOMER
 export const createCustomer = async (req, res) => {
@@ -29,6 +30,8 @@ export const createCustomer = async (req, res) => {
     const customer = await prisma.customer.create({
       data: { fullName, phone }
     })
+
+    await logAudit({ userId: req.user?.id, action: 'Created', entity: 'Customer', entityId: customer.id, description: `Created customer "${customer.fullName}"` })
 
     return res.status(201).json({
       success: true,
@@ -170,6 +173,8 @@ export const updateCustomer = async (req, res) => {
       }
     })
 
+    await logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Customer', entityId: updatedCustomer.id, description: `Updated customer "${updatedCustomer.fullName}"` })
+
     return res.status(200).json({
       success: true,
       message: 'Customer updated successfully',
@@ -220,6 +225,8 @@ export const deleteCustomer = async (req, res) => {
     await prisma.customer.delete({
       where: { id: customerId }
     })
+
+    await logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Customer', entityId: customerId, description: `Deleted customer "${existingCustomer.fullName}"` })
 
     return res.status(200).json({
       success: true,

@@ -1,12 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  bomApi.ts  (Bill of Materials)
-//  POST   /api/bom                        (admin, manager)
-//  GET    /api/bom                        (admin, manager, kitchen)
-//  GET    /api/bom/menu-item/:menuItemId  (admin, manager, kitchen)
-//  PATCH  /api/bom/:id                    (admin, manager)
-//  DELETE /api/bom/:id                    (admin)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface BOMItem {

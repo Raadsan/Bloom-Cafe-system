@@ -1,15 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  notificationApi.ts
-//  GET    /api/notifications                            (admin, manager)
-//  GET    /api/notifications/kitchen                    (kitchen)
-//  GET    /api/notifications/waiter                     (waiter)
-//  PATCH  /api/notifications/:id/read                   (authenticated)
-//  GET    /api/notifications/customer/:customerId        (PUBLIC)
-//  GET    /api/notifications/customer/order/:orderId     (PUBLIC)
-//  PATCH  /api/notifications/customer/:id/read-all      (PUBLIC)
-//  GET    /api/notifications/customer/:id/unread-count  (PUBLIC)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface Notification {

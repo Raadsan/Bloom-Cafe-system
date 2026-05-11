@@ -1,4 +1,5 @@
 import prisma from '../config/db.js'
+import { logAudit } from '../utils/auditHelper.js'
 
 // CREATE INGREDIENT
 export const createIngredient = async (req, res) => {
@@ -36,6 +37,8 @@ export const createIngredient = async (req, res) => {
         isActive: typeof isActive === 'boolean' ? isActive : true
       }
     })
+
+    await logAudit({ userId: req.user?.id, action: 'Created', entity: 'Ingredient', entityId: ingredient.id, description: `Created ingredient "${ingredient.name}"` })
 
     return res.status(201).json({
       success: true,
@@ -170,6 +173,8 @@ export const updateIngredient = async (req, res) => {
       }
     })
 
+    await logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Ingredient', entityId: updatedIngredient.id, description: `Updated ingredient "${updatedIngredient.name}"` })
+
     return res.status(200).json({
       success: true,
       message: 'Ingredient updated successfully',
@@ -201,8 +206,8 @@ export const deleteIngredient = async (req, res) => {
     const existingIngredient = await prisma.ingredient.findUnique({
       where: { id: ingredientId },
       include: {
-        bomItems: true,
-        movements: true
+        menuitembom: true,
+        stockmovement: true
       }
     })
 
@@ -213,20 +218,22 @@ export const deleteIngredient = async (req, res) => {
       })
     }
 
-    if (existingIngredient.bomItems.length > 0) {
+    if (existingIngredient.menuitembom.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Cannot delete ingredient because it is linked to menu item BOM'
       })
     }
 
-    await prisma.stockMovement.deleteMany({
+    await prisma.stockmovement.deleteMany({
       where: { ingredientId }
     })
 
     await prisma.ingredient.delete({
       where: { id: ingredientId }
     })
+
+    await logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Ingredient', entityId: ingredientId, description: `Deleted ingredient "${existingIngredient.name}"` })
 
     return res.status(200).json({
       success: true,

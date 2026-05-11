@@ -1,5 +1,6 @@
 import prisma from '../config/db.js';
 import bcrypt from 'bcryptjs';
+import { logAudit } from '../utils/auditHelper.js';
 
 // CREATE USER
 export const createUser = async (req, res) => {
@@ -86,7 +87,9 @@ export const createUser = async (req, res) => {
 
     const { password: _, ...userWithoutPassword } = user
 
-    res.status(201).json({
+    logAudit({ userId: req.user?.id, action: 'Created', entity: 'User', entityId: user.id, description: `Created user "${user.fullName}"` })
+
+    return res.status(201).json({
       success: true,
       message: 'User created successfully',
       data: userWithoutPassword
@@ -214,7 +217,9 @@ export const updateUser = async (req, res) => {
 
     const { password: _, ...userWithoutPassword } = updatedUser
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Updated', entity: 'User', entityId: updatedUser.id, description: `Updated user "${updatedUser.fullName}"` })
+
+    return res.status(200).json({
       success: true,
       message: 'User updated successfully',
       data: userWithoutPassword
@@ -286,7 +291,9 @@ export const deleteUser = async (req, res) => {
       where: { id: userId }
     })
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'User', entityId: userId, description: `Deleted user "${existingUser.fullName}"` })
+
+    return res.status(200).json({
       success: true,
       message: 'User deleted successfully'
     })

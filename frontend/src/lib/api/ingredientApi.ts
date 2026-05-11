@@ -1,12 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  ingredientApi.ts
-//  POST   /api/ingredients      (admin, manager)
-//  GET    /api/ingredients       (admin, manager, kitchen)
-//  GET    /api/ingredients/:id   (admin, manager, kitchen)
-//  PUT    /api/ingredients/:id   (admin, manager)
-//  DELETE /api/ingredients/:id   (admin)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface Ingredient {

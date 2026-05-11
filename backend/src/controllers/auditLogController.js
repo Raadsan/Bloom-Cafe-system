@@ -42,7 +42,7 @@ export const createAuditLog = async (req, res) => {
       }
     }
 
-    const auditLog = await prisma.auditLog.create({
+    const auditLog = await prisma.auditlog.create({
       data: {
         userId,
         action: action.trim(),
@@ -79,7 +79,7 @@ export const createAuditLog = async (req, res) => {
 // GET ALL AUDIT LOGS
 export const getAllAuditLogs = async (req, res) => {
   try {
-    const auditLogs = await prisma.auditLog.findMany({
+    const auditLogs = await prisma.auditlog.findMany({
       include: {
         user: {
           select: {
@@ -128,7 +128,7 @@ export const getAuditLogById = async (req, res) => {
       })
     }
 
-    const auditLog = await prisma.auditLog.findUnique({
+    const auditLog = await prisma.auditlog.findUnique({
       where: { id: auditLogId },
       include: {
         user: {
@@ -195,7 +195,7 @@ export const getAuditLogsByUser = async (req, res) => {
       })
     }
 
-    const auditLogs = await prisma.auditLog.findMany({
+    const auditLogs = await prisma.auditlog.findMany({
       where: {
         userId: parsedUserId
       },
@@ -239,7 +239,7 @@ export const getAuditLogsByEntity = async (req, res) => {
   try {
     const { entity } = req.params
 
-    const auditLogs = await prisma.auditLog.findMany({
+    const auditLogs = await prisma.auditlog.findMany({
       where: {
         entity: entity.trim()
       },
@@ -286,7 +286,7 @@ export const deleteAuditLog = async (req, res) => {
       })
     }
 
-    const existingAuditLog = await prisma.auditLog.findUnique({
+    const existingAuditLog = await prisma.auditlog.findUnique({
       where: { id: auditLogId }
     })
 
@@ -297,7 +297,7 @@ export const deleteAuditLog = async (req, res) => {
       })
     }
 
-    await prisma.auditLog.delete({
+    await prisma.auditlog.delete({
       where: { id: auditLogId }
     })
 

@@ -1,4 +1,5 @@
 import prisma from '../config/db.js'
+import { logAudit } from '../utils/auditHelper.js'
 
 // CREATE CATEGORY
 export const createCategory = async (req, res) => {
@@ -30,7 +31,9 @@ export const createCategory = async (req, res) => {
       }
     })
 
-    res.status(201).json({
+    logAudit({ userId: req.user?.id, action: 'Created', entity: 'Category', entityId: category.id, description: `Created category "${category.name}"` })
+
+    return res.status(201).json({
       success: true,
       message: 'Category created successfully',
       data: category
@@ -97,7 +100,9 @@ export const updateCategory = async (req, res) => {
       }
     })
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Category', entityId: updatedCategory.id, description: `Updated category "${updatedCategory.name}"` })
+
+    return res.status(200).json({
       success: true,
       message: 'Category updated successfully',
       data: updatedCategory
@@ -151,7 +156,9 @@ export const deleteCategory = async (req, res) => {
       where: { id: categoryId }
     })
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Category', entityId: categoryId, description: `Deleted category "${existingCategory.name}"` })
+
+    return res.status(200).json({
       success: true,
       message: 'Category deleted successfully'
     })

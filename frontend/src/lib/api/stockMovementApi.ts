@@ -1,12 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  stockMovementApi.ts
-//  POST   /api/stock-movements                           (admin, manager)
-//  GET    /api/stock-movements/all                       (admin, manager, kitchen)
-//  GET    /api/stock-movements/ingredient/:ingredientId  (admin, manager, kitchen)
-//  GET    /api/stock-movements/:id                       (admin, manager, kitchen)
-//  DELETE /api/stock-movements/:id                       (admin)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export type MovementType = 'in' | 'out' | 'adjustment';
