@@ -686,6 +686,28 @@
 import prisma from '../config/db.js'
 import { emitNewOrder, emitPaymentSuccess } from '../utils/socketEvents.js'
 
+// GET AVAILABLE PAYMENT METHODS
+export const getPaymentMethods = async (req, res) => {
+  try {
+    // You can also fetch this from DB if you create a model
+    // For now, let's return the standard ones as per the user's screenshot
+    const methods = [
+      { id: 'evc_plus', name: 'EVC Plus', icon: 'E', color: '#FFEBEE', textColor: '#D32F2F' },
+      { id: 'edahab', name: 'eDahab', icon: 'e', color: '#F1F8E9', textColor: '#388E3C' },
+      { id: 'zaad', name: 'ZAAD', icon: 'Z', color: '#E8EAF6', textColor: '#303F9F' },
+      { id: 'waafi', name: 'WAAFI', icon: 'W', color: '#E8EAF6', textColor: '#3F51B5' },
+      { id: 'sahal', name: 'SAHAL', icon: 'S', color: '#E0F2F1', textColor: '#00796B' },
+    ]
+
+    res.status(200).json({
+      success: true,
+      data: methods
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
 const generateInternalRef = () => {
   const random = Math.floor(1000 + Math.random() * 9000)
   return `PAY-${Date.now()}-${random}`

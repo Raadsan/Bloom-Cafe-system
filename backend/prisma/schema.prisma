@@ -36,6 +36,22 @@ model customer {
   createdAt DateTime  @default(now())
   updatedAt DateTime?
   order     order[]
+  addresses address[]
+}
+
+model address {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  name       String
+  district   String
+  street     String
+  phone      String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
 }
 
 model ingredient {
@@ -52,6 +68,20 @@ model ingredient {
   stockmovement stockmovement[]
 }
 
+
+model menu {
+  id             Int              @id @default(autoincrement())
+  title          String
+  url            String
+  icon           String
+  order          Int              @default(0)
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  roleMenuAccess roleMenuAccess[]
+  submenu        submenu[]
+}
+
 model menuitem {
   id          Int           @id @default(autoincrement())
   name        String
@@ -61,7 +91,7 @@ model menuitem {
   isAvailable Boolean       @default(true)
   categoryId  Int
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime
+  updatedAt   DateTime      @updatedAt
   category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
   menuitembom menuitembom[]
   orderitem   orderitem[]
@@ -75,7 +105,7 @@ model menuitembom {
   ingredientId     Int
   quantityRequired Float
   createdAt        DateTime   @default(now())
-  updatedAt        DateTime
+  updatedAt        DateTime   @updatedAt
   ingredient       ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
   menuitem         menuitem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
@@ -100,7 +130,7 @@ model order {
   total         Float       @default(0)
   tableId       Int
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime    @updatedAt
   customerName  String?
   notes         String?
   customerPhone String?
@@ -135,7 +165,7 @@ model payment {
   status       String    @default("pending")
   paidAt       DateTime?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime
+  updatedAt    DateTime  @updatedAt
   internalRef  String?   @unique
   phone        String?
   providerName String?
@@ -148,9 +178,44 @@ model role {
   name           String           @unique
   description    String?
   createdAt      DateTime         @default(now())
-  updatedAt      DateTime
-  user           user[]
+  updatedAt      DateTime         @updatedAt
   roleMenuAccess roleMenuAccess[]
+  user           user[]
+}
+
+model roleMenuAccess {
+  id                Int                 @id @default(autoincrement())
+  roleId            Int
+  menuId            Int
+  canView           Boolean             @default(true)
+  canAdd            Boolean             @default(false)
+  canEdit           Boolean             @default(false)
+  canDelete         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  role              role                @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleSubMenuAccess roleSubMenuAccess[]
+
+  @@unique([roleId, menuId])
+  @@index([menuId], map: "roleMenuAccess_menuId_fkey")
+}
+
+model roleSubMenuAccess {
+  id               Int            @id @default(autoincrement())
+  roleMenuAccessId Int
+  subMenuId        Int
+  canView          Boolean        @default(true)
+  canAdd           Boolean        @default(false)
+  canEdit          Boolean        @default(false)
+  canDelete        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  roleMenuAccess   roleMenuAccess @relation(fields: [roleMenuAccessId], references: [id], onDelete: Cascade)
+  submenu          submenu        @relation(fields: [subMenuId], references: [id], onDelete: Cascade)
+
+  @@unique([roleMenuAccessId, subMenuId])
+  @@index([subMenuId], map: "roleSubMenuAccess_subMenuId_fkey")
 }
 
 model stockmovement {
@@ -173,7 +238,7 @@ model submenu {
   order             Int                 @default(0)
   isActive          Boolean             @default(true)
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime
+  updatedAt         DateTime            @updatedAt
   roleSubMenuAccess roleSubMenuAccess[]
   menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
 
@@ -187,7 +252,7 @@ model table {
   createdAt DateTime  @default(now())
   name      String?
   qrCode    String    @unique
-  updatedAt DateTime?
+  updatedAt DateTime? @updatedAt
   order     order[]
 }
 
@@ -199,10 +264,11 @@ model user {
   fullName  String
   isActive  Boolean    @default(true)
   phone     String?    @unique
-  updatedAt DateTime
+  updatedAt DateTime   @updatedAt
   roleId    Int
   auditlog  auditlog[]
   role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
 
   @@index([roleId], map: "User_roleId_fkey")
 }
+

@@ -38,7 +38,7 @@ const router = express.Router()
 router.post('/', protect, checkPermission('/menu/items', 'canAdd'), createMenuItem)
 
 // Get all menu items
-router.get('/all', protect, checkPermission('/menu/items', 'canView'), getAllMenuItems)
+router.get('/all', getAllMenuItems)
 
 // Get menu items by category
 router.get('/category/:categoryId', protect, checkPermission('/menu/items', 'canView'), getMenuItemsByCategory)

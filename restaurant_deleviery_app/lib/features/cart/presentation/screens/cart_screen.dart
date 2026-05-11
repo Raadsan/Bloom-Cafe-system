@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/colors.dart';
+import '../controllers/cart_controller.dart';
+import 'checkout_screen.dart';
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
@@ -12,15 +15,11 @@ class CartScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(IconlyLight.arrow_left, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: const Text(
           "My Cart",
           style: TextStyle(
             color: Color(0xFF2D3E2D),
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             fontFamily: "Poppins",
           ),
         ),
@@ -28,60 +27,98 @@ class CartScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(IconlyLight.delete, color: Colors.redAccent),
-            onPressed: () {},
+            onPressed: () {
+              Provider.of<CartController>(context, listen: false).clearCart();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Cart cleared"),
+                  backgroundColor: Colors.redAccent,
+                ),
+              );
+            },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                _buildCartItem(
-                  "Chili BBQ Chicken Pizza",
-                  "Extra cheese, No onions",
-                  "\$6.28",
-                  "assets/images/pizza_bbq.png",
-                  1,
+      body: Consumer<CartController>(
+        builder: (context, cart, child) {
+          if (cart.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (cart.error != null) {
+            return Center(child: Text('Error: ${cart.error}'));
+          }
+
+          final cartItems = cart.cartItems;
+
+          return Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    if (cartItems.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Text(
+                            "Your cart is empty",
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                        ),
+                      )
+                    else
+                      ...cartItems.map((item) {
+                        final menuItem = item['menuItem'];
+                        final title = menuItem['name'];
+                        final price = menuItem['price'].toString();
+                        final qty = item['quantity'];
+                        final image =
+                            (menuItem['imageUrl'] != null &&
+                                menuItem['imageUrl'].isNotEmpty)
+                            ? menuItem['imageUrl']
+                            : "assets/images/pizza_cheese.png"; // Default image
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 15),
+                          child: _buildCartItem(
+                            title,
+                            "Delicious $title", // Or map a description if available
+                            "\$$price",
+                            image,
+                            qty,
+                            () => cart.updateQuantity(
+                              item['menuItemId'],
+                              qty + 1,
+                            ),
+                            () => cart.updateQuantity(
+                              item['menuItemId'],
+                              qty - 1,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    const SizedBox(height: 25),
+                  ],
                 ),
-                const SizedBox(height: 15),
-                _buildCartItem(
-                  "Pepperoni Pizza",
-                  "Standard size",
-                  "\$5.08",
-                  "assets/images/pizza_pepperoni.png",
-                  2,
-                ),
-                const SizedBox(height: 25),
-                _buildSectionTitle("Delivery Address"),
-                const SizedBox(height: 10),
-                _buildAddressCard(),
-                const SizedBox(height: 25),
-                _buildSectionTitle("Payment Method"),
-                const SizedBox(height: 10),
-                _buildPaymentCard(),
-              ],
-            ),
-          ),
-          _buildOrderSummary(),
-        ],
+              ),
+              _buildOrderSummary(context, cartItems),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF2D3E2D),
-      ),
-    );
-  }
-
-  Widget _buildCartItem(String title, String desc, String price, String image, int qty) {
+  Widget _buildCartItem(
+    String title,
+    String desc,
+    String price,
+    String image,
+    int qty,
+    VoidCallback onAdd,
+    VoidCallback onRemove,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -99,18 +136,31 @@ class CartScreen extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(15),
-            child: Image.asset(
-              image,
-              width: 80,
-              height: 80,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                width: 80,
-                height: 80,
-                color: Colors.grey[200],
-                child: const Icon(Icons.fastfood, color: Colors.grey),
-              ),
-            ),
+            child: image.startsWith('http')
+                ? Image.network(
+                    image,
+                    width: 80,
+                    height: 80,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 80,
+                      height: 80,
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.fastfood, color: Colors.grey),
+                    ),
+                  )
+                : Image.asset(
+                    image,
+                    width: 80,
+                    height: 80,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 80,
+                      height: 80,
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.fastfood, color: Colors.grey),
+                    ),
+                  ),
           ),
           const SizedBox(width: 15),
           Expanded(
@@ -119,7 +169,10 @@ class CartScreen extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -132,7 +185,7 @@ class CartScreen extends StatelessWidget {
                   price,
                   style: TextStyle(
                     color: AppColors.primaryColor,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w500,
                     fontSize: 15,
                   ),
                 ),
@@ -141,15 +194,18 @@ class CartScreen extends StatelessWidget {
           ),
           Column(
             children: [
-              _buildQtyBtn(Icons.add),
+              GestureDetector(onTap: onAdd, child: _buildQtyBtn(Icons.add)),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text(
                   qty.toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
-              _buildQtyBtn(Icons.remove),
+              GestureDetector(
+                onTap: onRemove,
+                child: _buildQtyBtn(Icons.remove),
+              ),
             ],
           ),
         ],
@@ -168,76 +224,15 @@ class CartScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAddressCard() {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F8F1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(IconlyLight.location, color: Colors.green, size: 20),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Home Address",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                Text(
-                  "Mogadishu, Somalia - Sector 4",
-                  style: TextStyle(color: Colors.grey[600], fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Icon(IconlyLight.edit, size: 18, color: Colors.grey[400]),
-        ],
-      ),
-    );
-  }
+  Widget _buildOrderSummary(BuildContext context, List cartItems) {
+    double subtotal = 0;
+    for (var item in cartItems) {
+      final menuItem = item['menuItem'];
+      subtotal += (menuItem['price'] * item['quantity']);
+    }
+    double deliveryFee = subtotal > 0 ? 2.0 : 0;
+    double total = subtotal + deliveryFee;
 
-  Widget _buildPaymentCard() {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F8F1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.wallet, color: Colors.green, size: 20),
-          ),
-          const SizedBox(width: 15),
-          const Expanded(
-            child: Text(
-              "EVC Plus / Sahal",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-          ),
-          const Icon(Icons.check_circle, color: Colors.green, size: 18),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderSummary() {
     return Container(
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
@@ -253,20 +248,45 @@ class CartScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _buildSummaryRow("Subtotal", "\$16.44"),
+          _buildSummaryRow("Subtotal", "\$${subtotal.toStringAsFixed(2)}"),
           const SizedBox(height: 10),
-          _buildSummaryRow("Delivery Fee", "\$2.00"),
+          _buildSummaryRow(
+            "Delivery Fee",
+            "\$${deliveryFee.toStringAsFixed(2)}",
+          ),
           const Divider(height: 30),
-          _buildSummaryRow("Total", "\$18.44", isTotal: true),
+          _buildSummaryRow(
+            "Total",
+            "\$${total.toStringAsFixed(2)}",
+            isTotal: true,
+          ),
           const SizedBox(height: 25),
           SizedBox(
             width: double.infinity,
             height: 60,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                if (cartItems.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CheckoutScreen(),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Cart is empty"),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryColor,
-                shape: RoundedRectangleWidget(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleWidget(
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 elevation: 5,
                 shadowColor: AppColors.primaryColor.withOpacity(0.4),
               ),
@@ -275,7 +295,7 @@ class CartScreen extends StatelessWidget {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -294,7 +314,7 @@ class CartScreen extends StatelessWidget {
           style: TextStyle(
             color: isTotal ? const Color(0xFF2D3E2D) : Colors.grey[500],
             fontSize: isTotal ? 16 : 14,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            fontWeight: isTotal ? FontWeight.w500 : FontWeight.normal,
           ),
         ),
         Text(
@@ -302,7 +322,7 @@ class CartScreen extends StatelessWidget {
           style: TextStyle(
             color: isTotal ? AppColors.primaryColor : const Color(0xFF2D3E2D),
             fontSize: isTotal ? 18 : 14,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            fontWeight: isTotal ? FontWeight.w500 : FontWeight.normal,
           ),
         ),
       ],
@@ -312,5 +332,6 @@ class CartScreen extends StatelessWidget {
 
 // Fixed a small syntax issue in the ElevatedButton style
 class RoundedRectangleWidget extends RoundedRectangleBorder {
-  RoundedRectangleWidget({required BorderRadius borderRadius}) : super(borderRadius: borderRadius);
+  RoundedRectangleWidget({required BorderRadius borderRadius})
+    : super(borderRadius: borderRadius);
 }

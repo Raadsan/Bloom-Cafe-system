@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../../../core/theme/colors.dart';
 
 class RecommendedCard extends StatelessWidget {
@@ -45,7 +46,22 @@ class RecommendedCard extends StatelessWidget {
                   Positioned.fill(
                     child: ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-                      child: Image.asset(image, width: double.infinity, fit: BoxFit.cover),
+                      child: image.startsWith('http')
+                          ? Image.network(
+                              image,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Shimmer.fromColors(
+                                  baseColor: Colors.grey[300]!,
+                                  highlightColor: Colors.grey[100]!,
+                                  child: Container(width: double.infinity, color: Colors.white),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) => Container(width: double.infinity, color: Colors.grey[200], child: const Icon(Icons.image_not_supported, color: Colors.grey)),
+                            )
+                          : Image.asset(image, width: double.infinity, fit: BoxFit.cover),
                     ),
                   ),
                   if (discount != null)
@@ -55,7 +71,7 @@ class RecommendedCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(12)),
-                        child: Text(discount!, style: TextStyle(color: AppColors.primaryColor, fontSize: 9, fontWeight: FontWeight.bold)),
+                        child: Text(discount!, style: TextStyle(color: AppColors.primaryColor, fontSize: 9, fontWeight: FontWeight.w500)),
                       ),
                     ),
                 ],
@@ -66,14 +82,14 @@ class RecommendedCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1B3022)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15, color: Color(0xFF1B3022)), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 5),
                   Text(desc, style: TextStyle(color: Colors.grey[500], fontSize: 11, height: 1.2), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(price, style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryColor, fontSize: 16)),
+                      Text(price, style: TextStyle(fontWeight: FontWeight.w500, color: AppColors.primaryColor, fontSize: 16)),
                       Container(
                         height: 30,
                         width: 30,

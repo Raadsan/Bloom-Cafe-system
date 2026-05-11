@@ -74,6 +74,108 @@ export const login = async (req, res) => {
   }
 }
 
+// REGISTER
+export const register = async (req, res) => {
+  try {
+    let { fullName, email, password, phone } = req.body
+
+    email = email?.trim().toLowerCase()
+
+    if (!fullName || !email || !password) {
+      return res.status(400).json({ success: false, message: 'All fields are required' })
+    }
+
+    const userExists = await prisma.user.findUnique({ where: { email } })
+    if (userExists) {
+      return res.status(400).json({ success: false, message: 'User already exists' })
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    // Find default 'user' role (case-insensitive check or fallback)
+    let role = await prisma.role.findFirst({ 
+      where: { 
+        name: { equals: 'user' } 
+      } 
+    })
+    
+    if (!role) {
+      role = await prisma.role.findFirst({ 
+        where: { 
+          name: { equals: 'User' } 
+        } 
+      })
+    }
+
+    if (!role) {
+      return res.status(500).json({ success: false, message: 'Default User role not found in system' })
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        fullName,
+        email,
+        password: hashedPassword,
+        phone,
+        roleId: role.id,
+        updatedAt: new Date() // Manual set as fallback
+      },
+      include: { role: true }
+    })
+
+    const token = generateToken(user)
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful',
+      token,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role.name
+      }
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// UPDATE PROFILE
+export const updateProfile = async (req, res) => {
+  try {
+    const { fullName, email, phone, password } = req.body
+    const userId = req.user.id
+
+    const updateData = { fullName, email, phone }
+
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10)
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      include: { role: true }
+    })
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated',
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role.name
+      }
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
 // GET CURRENT LOGGED-IN USER
 export const getMe = async (req, res) => {
   try {
@@ -107,5 +209,38 @@ export const getMe = async (req, res) => {
       message: 'Failed to fetch current user',
       error: error.message
     })
+  }
+}
+
+// FORGOT PASSWORD (CHECK EMAIL)
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'No account found with this email' })
+    }
+
+    res.status(200).json({ success: true, message: 'Email verified' })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// RESET PASSWORD
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, newPassword } = req.body
+    const hashedPassword = await bcrypt.hash(newPassword, 10)
+
+    await prisma.user.update({
+      where: { email: email.toLowerCase() },
+      data: { password: hashedPassword }
+    })
+
+    res.status(200).json({ success: true, message: 'Password reset successful' })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
   }
 }
