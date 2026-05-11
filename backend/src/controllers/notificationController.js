@@ -188,7 +188,10 @@ export const getCustomerNotifications = async (req, res) => {
 
     const notifications = await prisma.notification.findMany({
       where: {
-        customerId: id
+        OR: [
+          { customerId: id },
+          { role: "customer", customerId: null }
+        ]
       },
       orderBy: {
         createdAt: "desc"
@@ -336,8 +339,10 @@ export const markAllCustomerNotificationsRead = async (req, res) => {
 
     await prisma.notification.updateMany({
       where: {
-        customerId: id,
-        role: "customer",
+        OR: [
+          { customerId: id },
+          { role: "customer", customerId: null }
+        ],
         isRead: false
       },
       data: {
@@ -374,8 +379,10 @@ export const getCustomerUnreadCount = async (req, res) => {
 
     const unread = await prisma.notification.count({
       where: {
-        customerId: id,
-        role: "customer",
+        OR: [
+          { customerId: id },
+          { role: "customer", customerId: null }
+        ],
         isRead: false
       }
     })

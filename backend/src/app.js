@@ -20,6 +20,7 @@ import cartRoutes from './routes/cartRoutes.js'
 import menuRoutes from './routes/menuRoutes.js'
 import customerRoutes from './routes/customerRoutes.js'
 import addressRoutes from './routes/addressRoutes.js'
+import reviewRoutes from './routes/reviewRoutes.js'
 
 const app = express();
 app.use(express.json())
@@ -45,6 +46,7 @@ app.use('/api/cart', cartRoutes)
 app.use('/api/menus', menuRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/addresses', addressRoutes)
+app.use('/api/reviews', reviewRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');

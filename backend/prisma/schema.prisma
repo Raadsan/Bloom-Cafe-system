@@ -35,8 +35,8 @@ model customer {
   phone     String    @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime?
-  order     order[]
   addresses address[]
+  order     order[]
 }
 
 model address {
@@ -50,6 +50,7 @@ model address {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   customer   customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order      order[]
 
   @@index([customerId])
 }
@@ -63,11 +64,10 @@ model ingredient {
   costPerUnit   Float           @default(0)
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime        @default(now())
   menuitembom   menuitembom[]
   stockmovement stockmovement[]
 }
-
 
 model menu {
   id             Int              @id @default(autoincrement())
@@ -77,7 +77,7 @@ model menu {
   order          Int              @default(0)
   isActive       Boolean          @default(true)
   createdAt      DateTime         @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime         @default(now())
   roleMenuAccess roleMenuAccess[]
   submenu        submenu[]
 }
@@ -91,10 +91,11 @@ model menuitem {
   isAvailable Boolean       @default(true)
   categoryId  Int
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  updatedAt   DateTime      @default(now()) @updatedAt
   category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
   menuitembom menuitembom[]
   orderitem   orderitem[]
+  reviews     review[]
 
   @@index([categoryId], map: "MenuItem_categoryId_fkey")
 }
@@ -105,7 +106,7 @@ model menuitembom {
   ingredientId     Int
   quantityRequired Float
   createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  updatedAt        DateTime   @default(now()) @updatedAt
   ingredient       ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
   menuitem         menuitem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
@@ -121,24 +122,34 @@ model notification {
   orderId    Int?
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
+  userId     Int?
   customerId Int?
+  user       user?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model order {
   id            Int         @id @default(autoincrement())
   status        String      @default("pending")
   total         Float       @default(0)
-  tableId       Int
+  tableId       Int?
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  updatedAt     DateTime    @default(now()) @updatedAt
   customerName  String?
   notes         String?
   customerPhone String?
   customerId    Int?
+  orderType     String      @default("dine-in")
+  source        String      @default("pos")
+  addressId     Int?
   customer      customer?   @relation(fields: [customerId], references: [id])
-  table         table       @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  table         table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  address       address?    @relation(fields: [addressId], references: [id], onDelete: NoAction)
   orderitem     orderitem[]
   payment       payment?
+
+  @@index([addressId])
 
   @@index([tableId], map: "Order_tableId_fkey")
   @@index([customerId], map: "order_customerId_fkey")
@@ -165,7 +176,7 @@ model payment {
   status       String    @default("pending")
   paidAt       DateTime?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    DateTime  @default(now()) @updatedAt
   internalRef  String?   @unique
   phone        String?
   providerName String?
@@ -178,7 +189,7 @@ model role {
   name           String           @unique
   description    String?
   createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  updatedAt      DateTime         @default(now()) @updatedAt
   roleMenuAccess roleMenuAccess[]
   user           user[]
 }
@@ -192,7 +203,7 @@ model roleMenuAccess {
   canEdit           Boolean             @default(false)
   canDelete         Boolean             @default(false)
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  updatedAt         DateTime            @default(now()) @updatedAt
   menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
   role              role                @relation(fields: [roleId], references: [id], onDelete: Cascade)
   roleSubMenuAccess roleSubMenuAccess[]
@@ -210,7 +221,7 @@ model roleSubMenuAccess {
   canEdit          Boolean        @default(false)
   canDelete        Boolean        @default(false)
   createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  updatedAt        DateTime       @default(now()) @updatedAt
   roleMenuAccess   roleMenuAccess @relation(fields: [roleMenuAccessId], references: [id], onDelete: Cascade)
   submenu          submenu        @relation(fields: [subMenuId], references: [id], onDelete: Cascade)
 
@@ -238,7 +249,7 @@ model submenu {
   order             Int                 @default(0)
   isActive          Boolean             @default(true)
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  updatedAt         DateTime            @default(now()) @updatedAt
   roleSubMenuAccess roleSubMenuAccess[]
   menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
 
@@ -264,11 +275,27 @@ model user {
   fullName  String
   isActive  Boolean    @default(true)
   phone     String?    @unique
-  updatedAt DateTime   @updatedAt
+  updatedAt DateTime   @default(now()) @updatedAt
   roleId    Int
   auditlog  auditlog[]
-  role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
+  reviews   review[]
+  role          role           @relation(fields: [roleId], references: [id], onDelete: NoAction)
+  notifications notification[]
 
   @@index([roleId], map: "User_roleId_fkey")
 }
 
+model review {
+  id         Int      @id @default(autoincrement())
+  rating     Int      @default(5)
+  comment    String?
+  userId     Int
+  menuItemId Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menuitem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([menuItemId])
+}
