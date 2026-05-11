@@ -1,13 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  menuItemApi.ts
-//  POST   /api/menu-items                       (admin, manager)
-//  GET    /api/menu-items/all                   (admin, manager, kitchen, waiter)
-//  GET    /api/menu-items/category/:categoryId  (admin, manager, kitchen, waiter)
-//  PATCH  /api/menu-items/:id                   (admin, manager)
-//  DELETE /api/menu-items/:id                   (admin)
-//  GET    /api/menu-items/menu/:qrCode          (PUBLIC)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface MenuItem {

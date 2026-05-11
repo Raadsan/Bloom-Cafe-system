@@ -1,13 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  orderApi.ts
-//  POST   /api/orders                  (admin, manager, waiter)
-//  GET    /api/orders/all              (admin, manager, kitchen, waiter)
-//  GET    /api/orders/table/:tableId   (admin, manager, kitchen, waiter)
-//  GET    /api/orders/:id              (admin, manager, kitchen, waiter)
-//  PATCH  /api/orders/:id/status       (admin, manager, kitchen, waiter)
-//  DELETE /api/orders/:id              (admin, manager)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled';

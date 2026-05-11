@@ -1,9 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  authApi.ts
-//  POST /api/auth/login
-//  GET  /api/auth/me
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface LoginCredentials {

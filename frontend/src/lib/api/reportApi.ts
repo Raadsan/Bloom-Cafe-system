@@ -1,14 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  reportApi.ts
-//  GET /api/reports/summary            (admin, manager)
-//  GET /api/reports/revenue            (admin, manager)
-//  GET /api/reports/top-items          (admin, manager)
-//  GET /api/reports/table-performance  (admin, manager)
-//  GET /api/reports/daily              (admin, manager)
-//  GET /api/reports/monthly            (admin, manager)
-//  GET /api/reports/staff-performance  (admin, manager)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export const reportApi = {

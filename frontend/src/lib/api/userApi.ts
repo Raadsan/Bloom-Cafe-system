@@ -1,12 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  userApi.ts
-//  POST   /api/users             (admin)
-//  GET    /api/users             (admin, manager)
-//  GET    /api/users/role/:id    (admin, manager)
-//  PATCH  /api/users/:id         (admin, manager)
-//  DELETE /api/users/:id         (admin)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export interface User {

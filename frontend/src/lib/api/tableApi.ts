@@ -1,11 +1,3 @@
-// ─────────────────────────────────────────────────────────────────
-//  tableApi.ts
-//  POST   /api/tables       (admin, manager)
-//  GET    /api/tables/all   (admin, manager, waiter)
-//  PATCH  /api/tables/:id   (admin, manager)
-//  DELETE /api/tables/:id   (admin)
-// ─────────────────────────────────────────────────────────────────
-
 import api from './axios';
 
 export type TableStatus = 'available' | 'occupied' | 'reserved';
