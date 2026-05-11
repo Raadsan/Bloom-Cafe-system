@@ -741,6 +741,7 @@
 
 import prisma from '../config/db.js'
 import { emitNewOrder, emitOrderUpdate } from '../utils/socketEvents.js'
+import { logAudit } from '../utils/auditHelper.js'
 
 /**
  * 🔥 CREATE ORDER (STAFF)
@@ -844,6 +845,8 @@ export const createOrder = async (req, res) => {
     // 🔥 SOCKET → KITCHEN
     emitNewOrder(order)
 
+    logAudit({ userId: req.user?.id, action: 'Created', entity: 'Order', entityId: order.id, description: `Created order #${order.id} for table ${table.number}` })
+
     res.status(201).json({
       success: true,
       data: order
@@ -913,6 +916,8 @@ export const updateOrderStatus = async (req, res) => {
 
     // 🔥 SOCKET → WAITER/KITCHEN
     emitOrderUpdate(updatedOrder)
+
+    logAudit({ userId: req.user?.id, action: 'Status Changed', entity: 'Order', entityId: updatedOrder.id, description: `Order #${updatedOrder.id} status changed to "${status}"` })
 
     res.status(200).json({
       success: true,
@@ -1012,6 +1017,8 @@ export const updateOrder = async (req, res) => {
 
     emitOrderUpdate(updatedOrder)
 
+    logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Order', entityId: updatedOrder.id, description: `Updated order #${updatedOrder.id}` })
+
     res.status(200).json({
       success: true,
       data: updatedOrder
@@ -1070,6 +1077,8 @@ export const deleteOrder = async (req, res) => {
 
   await prisma.orderitem.deleteMany({ where: { orderId: id } })
   await prisma.order.delete({ where: { id } })
+
+  logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Order', entityId: id, description: `Deleted order #${id}` })
 
   res.json({ success: true })
 }

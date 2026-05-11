@@ -63,7 +63,7 @@ model ingredient {
   costPerUnit   Float           @default(0)
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime @default(now()) @updatedAt
   menuitembom   menuitembom[]
   stockmovement stockmovement[]
 }
@@ -77,7 +77,7 @@ model menu {
   order          Int              @default(0)
   isActive       Boolean          @default(true)
   createdAt      DateTime         @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime @default(now()) @updatedAt
   roleMenuAccess roleMenuAccess[]
   submenu        submenu[]
 }
@@ -91,7 +91,7 @@ model menuitem {
   isAvailable Boolean       @default(true)
   categoryId  Int
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  updatedAt   DateTime      @default(now()) @updatedAt
   category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
   menuitembom menuitembom[]
   orderitem   orderitem[]
@@ -105,7 +105,7 @@ model menuitembom {
   ingredientId     Int
   quantityRequired Float
   createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  updatedAt        DateTime   @default(now()) @updatedAt
   ingredient       ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
   menuitem         menuitem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
@@ -130,7 +130,7 @@ model order {
   total         Float       @default(0)
   tableId       Int
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  updatedAt     DateTime    @default(now()) @updatedAt
   customerName  String?
   notes         String?
   customerPhone String?
@@ -165,7 +165,7 @@ model payment {
   status       String    @default("pending")
   paidAt       DateTime?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    DateTime  @default(now()) @updatedAt
   internalRef  String?   @unique
   phone        String?
   providerName String?
@@ -178,7 +178,7 @@ model role {
   name           String           @unique
   description    String?
   createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  updatedAt      DateTime         @default(now()) @updatedAt
   roleMenuAccess roleMenuAccess[]
   user           user[]
 }
@@ -192,7 +192,7 @@ model roleMenuAccess {
   canEdit           Boolean             @default(false)
   canDelete         Boolean             @default(false)
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  updatedAt         DateTime            @default(now()) @updatedAt
   menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
   role              role                @relation(fields: [roleId], references: [id], onDelete: Cascade)
   roleSubMenuAccess roleSubMenuAccess[]
@@ -210,7 +210,7 @@ model roleSubMenuAccess {
   canEdit          Boolean        @default(false)
   canDelete        Boolean        @default(false)
   createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  updatedAt        DateTime       @default(now()) @updatedAt
   roleMenuAccess   roleMenuAccess @relation(fields: [roleMenuAccessId], references: [id], onDelete: Cascade)
   submenu          submenu        @relation(fields: [subMenuId], references: [id], onDelete: Cascade)
 
@@ -238,7 +238,7 @@ model submenu {
   order             Int                 @default(0)
   isActive          Boolean             @default(true)
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  updatedAt         DateTime            @default(now()) @updatedAt
   roleSubMenuAccess roleSubMenuAccess[]
   menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
 
@@ -264,7 +264,7 @@ model user {
   fullName  String
   isActive  Boolean    @default(true)
   phone     String?    @unique
-  updatedAt DateTime   @updatedAt
+  updatedAt DateTime   @default(now()) @updatedAt
   roleId    Int
   auditlog  auditlog[]
   role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)

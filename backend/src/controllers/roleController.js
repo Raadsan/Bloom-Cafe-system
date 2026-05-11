@@ -1,4 +1,5 @@
 import prisma from '../config/db.js'
+import { logAudit } from '../utils/auditHelper.js'
 
 // CREATE ROLE
 export const createRole = async (req, res) => {
@@ -33,7 +34,9 @@ export const createRole = async (req, res) => {
       }
     })
 
-    res.status(201).json({
+    logAudit({ userId: req.user?.id, action: 'Created', entity: 'Role', entityId: role.id, description: `Created role "${role.name}"` })
+
+    return res.status(201).json({
       success: true,
       message: 'Role created successfully',
       data: role
@@ -125,7 +128,9 @@ export const updateRole = async (req, res) => {
       }
     })
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Role', entityId: updatedRole.id, description: `Updated role "${updatedRole.name}"` })
+
+    return res.status(200).json({
       success: true,
       message: 'Role updated successfully',
       data: updatedRole
@@ -156,7 +161,7 @@ export const deleteRole = async (req, res) => {
     const existingRole = await prisma.role.findUnique({
       where: { id: roleId },
       include: {
-        users: true
+        user: true
       }
     })
 
@@ -167,7 +172,7 @@ export const deleteRole = async (req, res) => {
       })
     }
 
-    if (existingRole.users.length > 0) {
+    if (existingRole.user.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Cannot delete role because it is assigned to one or more users'
@@ -178,7 +183,9 @@ export const deleteRole = async (req, res) => {
       where: { id: roleId }
     })
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Role', entityId: roleId, description: `Deleted role "${existingRole.name}"` })
+
+    return res.status(200).json({
       success: true,
       message: 'Role deleted successfully'
     })

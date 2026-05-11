@@ -1,5 +1,6 @@
 import prisma from '../config/db.js';
 import { v4 as uuidv4 } from 'uuid';
+import { logAudit } from '../utils/auditHelper.js';
 
 // CREATE TABLE
 export const createTable = async (req, res) => {
@@ -35,7 +36,9 @@ export const createTable = async (req, res) => {
       },
     });
 
-    res.status(201).json({
+    logAudit({ userId: req.user?.id, action: 'Created', entity: 'Table', entityId: table.id, description: `Created table #${table.number}` });
+
+    return res.status(201).json({
       success: true,
       message: 'Table created successfully',
       data: table,
@@ -98,7 +101,9 @@ export const updateTable = async (req, res) => {
       },
     });
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Table', entityId: updatedTable.id, description: `Updated table #${updatedTable.number}` });
+
+    return res.status(200).json({
       success: true,
       message: 'Table updated successfully',
       data: updatedTable,
@@ -129,7 +134,7 @@ export const deleteTable = async (req, res) => {
     const existingTable = await prisma.table.findUnique({
       where: { id: tableId },
       include: {
-        orders: true,
+        order: true,
       },
     });
 
@@ -140,7 +145,7 @@ export const deleteTable = async (req, res) => {
       });
     }
 
-    if (existingTable.orders.length > 0) {
+    if (existingTable.order.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Cannot delete table because it has related orders',
@@ -151,7 +156,9 @@ export const deleteTable = async (req, res) => {
       where: { id: tableId },
     });
 
-    res.status(200).json({
+    logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Table', entityId: tableId, description: `Deleted table #${existingTable.number}` });
+
+    return res.status(200).json({
       success: true,
       message: 'Table deleted successfully',
     });
