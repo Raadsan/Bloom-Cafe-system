@@ -805,7 +805,7 @@ export const confirmPublicPayment = async (req, res) => {
       // 🔥 UPDATE TABLE
       await prisma.table.update({
         where: { id: payment.order.tableId },
-        data: { status: 'occupied' }
+        data: { status: 'inactive' }
       })
 
       // 🔥 NOTIFICATIONS
@@ -871,7 +871,7 @@ export const createPayment = async (req, res) => {
     // 🔥 UPDATE TABLE
     await prisma.table.update({
       where: { id: order.tableId },
-      data: { status: 'occupied' }
+      data: { status: 'inactive' }
     })
 
     // 🔥 SOCKET

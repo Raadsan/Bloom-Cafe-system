@@ -6,7 +6,10 @@ import {
   getTablePerformanceReport,
   getDailyReport,
   getMonthlyReport,
-  getStaffPerformanceReport
+  getStaffPerformanceReport,
+  getFinanceReport,
+  getOrdersReport,
+  getClientsReport
 } from '../controllers/reportController.js'
 import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
@@ -19,5 +22,8 @@ router.get('/table-performance', protect, checkPermission('/reports', 'canView')
 router.get('/daily', protect, checkPermission('/reports', 'canView'), getDailyReport)
 router.get('/monthly', protect, checkPermission('/reports', 'canView'), getMonthlyReport)
 router.get('/staff-performance', protect, checkPermission('/reports', 'canView'), getStaffPerformanceReport)
+router.get('/finance', protect, checkPermission('/reports', 'canView'), getFinanceReport)
+router.get('/orders', protect, checkPermission('/reports', 'canView'), getOrdersReport)
+router.get('/clients', protect, checkPermission('/reports', 'canView'), getClientsReport)
 
 export default router

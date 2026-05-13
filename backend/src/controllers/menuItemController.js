@@ -4,7 +4,7 @@ import { logAudit } from '../utils/auditHelper.js'
 // CREATE MENU ITEM
 export const createMenuItem = async (req, res) => {
   try {
-    const { name, description, price, imageUrl, categoryId, isAvailable } = req.body
+    const { name, description, costPrice, price, imageUrl, categoryId, isAvailable } = req.body
 
     if (!name || price === undefined || !categoryId) {
       return res.status(400).json({
@@ -28,6 +28,7 @@ export const createMenuItem = async (req, res) => {
       data: {
         name: name.trim(),
         description: description || null,
+        costPrice: costPrice !== undefined ? Number(costPrice) : null,
         price: Number(price),
         imageUrl: imageUrl || null,
         categoryId: Number(categoryId),
@@ -114,7 +115,7 @@ export const getMenuItemsByCategory = async (req, res) => {
 export const updateMenuItem = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, description, price, imageUrl, categoryId, isAvailable } = req.body
+    const { name, description, costPrice, price, imageUrl, categoryId, isAvailable } = req.body
 
     const itemId = Number(id)
     if (isNaN(itemId)) {
@@ -138,6 +139,7 @@ export const updateMenuItem = async (req, res) => {
       data: {
         name: name ?? existing.name,
         description: description !== undefined ? description : existing.description,
+        costPrice: costPrice !== undefined ? Number(costPrice) : existing.costPrice,
         price: price !== undefined ? Number(price) : existing.price,
         imageUrl: imageUrl !== undefined ? imageUrl : existing.imageUrl,
         categoryId: categoryId ? Number(categoryId) : existing.categoryId,

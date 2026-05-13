@@ -25,6 +25,7 @@ model category {
   name        String     @unique
   createdAt   DateTime   @default(now())
   description String?
+  imageUrl    String?    @db.Text
   updatedAt   DateTime?
   menuitem    menuitem[]
 }
@@ -86,8 +87,9 @@ model menuitem {
   id          Int           @id @default(autoincrement())
   name        String
   description String?
+  costPrice   Float?
   price       Float
-  imageUrl    String?
+  imageUrl    String?       @db.Text
   isAvailable Boolean       @default(true)
   categoryId  Int
   createdAt   DateTime      @default(now())
@@ -128,7 +130,7 @@ model order {
   id            Int         @id @default(autoincrement())
   status        String      @default("pending")
   total         Float       @default(0)
-  tableId       Int
+  tableId       Int?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @default(now()) @updatedAt
   customerName  String?
@@ -136,8 +138,10 @@ model order {
   customerPhone String?
   customerId    Int?
   customer      customer?   @relation(fields: [customerId], references: [id])
-  table         table       @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  table         table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
   orderitem     orderitem[]
+  orderType     String      @default("dine-in")
+  source        String      @default("pos")
   payment       payment?
 
   @@index([tableId], map: "Order_tableId_fkey")
@@ -248,7 +252,7 @@ model submenu {
 model table {
   id        Int       @id @default(autoincrement())
   number    Int       @unique
-  status    String    @default("available")
+  status    String    @default("active")
   createdAt DateTime  @default(now())
   name      String?
   qrCode    String    @unique
@@ -267,8 +271,23 @@ model user {
   updatedAt DateTime   @default(now()) @updatedAt
   roleId    Int
   auditlog  auditlog[]
+  expenses  expense[]  @relation("ExpenseCreator")
   role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
 
   @@index([roleId], map: "User_roleId_fkey")
 }
 
+model expense {
+  id            Int      @id @default(autoincrement())
+  title         String
+  amount        Float
+  category      String
+  receiver      String?   // Company or Individual
+  date          DateTime @default(now())
+  description   String?
+  paymentMethod String?
+  createdById   Int?
+  createdBy     user?     @relation("ExpenseCreator", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+}

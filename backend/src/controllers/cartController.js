@@ -179,7 +179,9 @@ export const checkoutCart = async (req, res) => {
         tableId: cart.tableId,
         total,
         status: 'pending',
-        items: {
+        source: req.body.source || 'mobile',
+        orderType: req.body.orderType || 'dine-in',
+        orderitem: {
           create: orderItems
         }
       }

@@ -817,6 +817,8 @@ export const createOrder = async (req, res) => {
         notes,
         total,
         status: 'pending',
+        orderType: req.body.orderType || 'dine-in',
+        source: req.body.source || 'pos',
         orderitem: {
           create: orderItemsData
         }
@@ -830,7 +832,7 @@ export const createOrder = async (req, res) => {
     // 🔥 TABLE OCCUPIED
     await prisma.table.update({
       where: { id: Number(tableId) },
-      data: { status: 'occupied' }
+      data: { status: 'inactive' }
     })
 
     /* 
@@ -910,7 +912,7 @@ export const updateOrderStatus = async (req, res) => {
     if (status === 'served' || status === 'cancelled') {
       await prisma.table.update({
         where: { id: order.tableId },
-        data: { status: 'available' }
+        data: { status: 'active' }
       })
     }
 

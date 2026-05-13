@@ -46,6 +46,16 @@ export const login = async (req, res) => {
 
     const token = generateToken(user)
 
+    // Log Login Activity
+    await prisma.auditlog.create({
+      data: {
+        userId: user.id,
+        action: 'LOGIN',
+        entity: 'AUTH',
+        description: `Staff ${user.fullName} logged into the system.`
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -242,5 +252,33 @@ export const resetPassword = async (req, res) => {
     res.status(200).json({ success: true, message: 'Password reset successful' })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// LOGOUT
+export const logout = async (req, res) => {
+  try {
+    // Log Logout Activity
+    if (req.user) {
+      await prisma.auditlog.create({
+        data: {
+          userId: req.user.id,
+          action: 'LOGOUT',
+          entity: 'AUTH',
+          description: `Staff ${req.user.fullName} logged out of the system.`
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    console.error('Logout Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to logout'
+    });
   }
 }
