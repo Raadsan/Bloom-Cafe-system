@@ -1,14 +1,14 @@
 import express from "express"
 
 import {
-  getAllNotifications,
-  getKitchenNotifications,
-  getWaiterNotifications,
-  markNotificationRead,
-  getCustomerNotifications,
-  getCustomerNotificationsByOrder,
-  markAllCustomerNotificationsRead,
-  getCustomerUnreadCount
+    getAllNotifications,
+    getKitchenNotifications,
+    getWaiterNotifications,
+    markNotificationRead,
+    getCustomerNotifications,
+    getCustomerNotificationsByOrder,
+    markAllCustomerNotificationsRead,
+    getCustomerUnreadCount
 } from "../controllers/notificationController.js"
 
 import { protect, authorize } from "../middlewares/authMiddleware.js"

@@ -36,8 +36,8 @@ model customer {
   phone     String    @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime?
-  order     order[]
   addresses address[]
+  order     order[]
 }
 
 model address {
@@ -51,6 +51,7 @@ model address {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   customer   customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order      order[]
 
   @@index([customerId])
 }
@@ -64,11 +65,14 @@ model ingredient {
   costPerUnit   Float           @default(0)
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
+<<<<<<< HEAD
+  updatedAt     DateTime        @default(now())
+=======
   updatedAt     DateTime @default(now()) @updatedAt
+>>>>>>> 78bbf106faf5c8d898099204f2668a9fd7f5aa56
   menuitembom   menuitembom[]
   stockmovement stockmovement[]
 }
-
 
 model menu {
   id             Int              @id @default(autoincrement())
@@ -78,7 +82,11 @@ model menu {
   order          Int              @default(0)
   isActive       Boolean          @default(true)
   createdAt      DateTime         @default(now())
+<<<<<<< HEAD
+  updatedAt      DateTime         @default(now())
+=======
   updatedAt      DateTime @default(now()) @updatedAt
+>>>>>>> 78bbf106faf5c8d898099204f2668a9fd7f5aa56
   roleMenuAccess roleMenuAccess[]
   submenu        submenu[]
 }
@@ -97,6 +105,7 @@ model menuitem {
   category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
   menuitembom menuitembom[]
   orderitem   orderitem[]
+  reviews     review[]
 
   @@index([categoryId], map: "MenuItem_categoryId_fkey")
 }
@@ -123,7 +132,11 @@ model notification {
   orderId    Int?
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
+  userId     Int?
   customerId Int?
+  user       user?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model order {
@@ -137,12 +150,17 @@ model order {
   notes         String?
   customerPhone String?
   customerId    Int?
+  orderType     String      @default("dine-in")
+  source        String      @default("pos")
+  addressId     Int?
   customer      customer?   @relation(fields: [customerId], references: [id])
-  table         table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  table         table       @relation(fields: [tableId], references: [id], onDelete: NoAction)
   orderitem     orderitem[]
   orderType     String      @default("dine-in")
   source        String      @default("pos")
   payment       payment?
+
+  @@index([addressId])
 
   @@index([tableId], map: "Order_tableId_fkey")
   @@index([customerId], map: "order_customerId_fkey")
@@ -271,23 +289,8 @@ model user {
   updatedAt DateTime   @default(now()) @updatedAt
   roleId    Int
   auditlog  auditlog[]
-  expenses  expense[]  @relation("ExpenseCreator")
   role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
 
   @@index([roleId], map: "User_roleId_fkey")
 }
 
-model expense {
-  id            Int      @id @default(autoincrement())
-  title         String
-  amount        Float
-  category      String
-  receiver      String?   // Company or Individual
-  date          DateTime @default(now())
-  description   String?
-  paymentMethod String?
-  createdById   Int?
-  createdBy     user?     @relation("ExpenseCreator", fields: [createdById], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
-}

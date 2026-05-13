@@ -748,24 +748,34 @@ import { logAudit } from '../utils/auditHelper.js'
  */
 export const createOrder = async (req, res) => {
   try {
-    const { tableId, customerName, customerPhone, notes, items } = req.body
+    const { tableId, addressId, type, customerName, customerPhone, notes, items } = req.body
 
-    if (!tableId || !items || !Array.isArray(items) || items.length === 0) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'tableId and items are required'
+        message: 'items are required'
       })
     }
 
-    const table = await prisma.table.findUnique({
-      where: { id: Number(tableId) }
-    })
+    // Validation based on type
+    if (type === 'eating' && !tableId) {
+      return res.status(400).json({ success: false, message: 'tableId is required for eating orders' })
+    }
+    if (type === 'delivery' && !addressId) {
+      return res.status(400).json({ success: false, message: 'addressId is required for delivery orders' })
+    }
 
-    if (!table) {
-      return res.status(404).json({
-        success: false,
-        message: 'Table not found'
+    if (tableId) {
+      const table = await prisma.table.findUnique({
+        where: { id: Number(tableId) }
       })
+
+      if (!table) {
+        return res.status(404).json({
+          success: false,
+          message: 'Table not found'
+        })
+      }
     }
 
     let total = 0
@@ -810,7 +820,9 @@ export const createOrder = async (req, res) => {
 
     const order = await prisma.order.create({
       data: {
-        tableId: Number(tableId),
+        type: type || 'delivery',
+        tableId: tableId ? Number(tableId) : null,
+        addressId: addressId ? Number(addressId) : null,
         customerId: customer?.id || null,
         customerName,
         customerPhone,
@@ -825,15 +837,18 @@ export const createOrder = async (req, res) => {
       },
       include: {
         table: true,
+        address: true,
         orderitem: { include: { menuitem: true } }
       }
     })
 
     // 🔥 TABLE OCCUPIED
-    await prisma.table.update({
-      where: { id: Number(tableId) },
-      data: { status: 'inactive' }
-    })
+    if (type === 'eating' && tableId) {
+      await prisma.table.update({
+        where: { id: Number(tableId) },
+        data: { status: 'occupied' }
+      })
+    }
 
     /* 
     await prisma.orderStatusHistory.create({
@@ -936,15 +951,15 @@ export const updateOrderStatus = async (req, res) => {
 export const updateOrder = async (req, res) => {
   try {
     const { id } = req.params
-    const { tableId, customerName, customerPhone, notes, items } = req.body
+    const { tableId, addressId, type, customerName, customerPhone, notes, items } = req.body
 
     const orderId = Number(id)
     if (isNaN(orderId)) {
       return res.status(400).json({ success: false, message: 'Invalid order id' })
     }
 
-    if (!tableId || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'tableId and items are required' })
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'items are required' })
     }
 
     const existingOrder = await prisma.order.findUnique({
@@ -1001,7 +1016,9 @@ export const updateOrder = async (req, res) => {
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: {
-        tableId: Number(tableId),
+        type: type || existingOrder.type,
+        tableId: tableId ? Number(tableId) : existingOrder.tableId,
+        addressId: addressId ? Number(addressId) : existingOrder.addressId,
         customerId: customer?.id || existingOrder.customerId,
         customerName: customerName || existingOrder.customerName,
         customerPhone: customerPhone || existingOrder.customerPhone,
@@ -1013,6 +1030,7 @@ export const updateOrder = async (req, res) => {
       },
       include: {
         table: true,
+        address: true,
         orderitem: { include: { menuitem: true } }
       }
     })
