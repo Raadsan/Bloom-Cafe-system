@@ -1,6 +1,6 @@
 import { getIO } from '../socket.js'
 
-// NEW ORDER → KITCHEN
+// NEW ORDER → KITCHEN + EVERYONE
 export const emitNewOrder = (order) => {
   const io = getIO()
 
@@ -10,15 +10,20 @@ export const emitNewOrder = (order) => {
     items: order.items,
     total: order.total
   })
+
+  // Global refresh event for all dashboards and POS
+  io.emit('refresh_orders')
 }
 
-// ORDER UPDATE → WAITER + CUSTOMER
+// ORDER UPDATE → WAITER + CUSTOMER + EVERYONE
 export const emitOrderUpdate = (order) => {
   const io = getIO()
 
   io.to('waiter').emit('order_update', order)
-
   io.to(`order_${order.id}`).emit('order_update', order)
+
+  // Global refresh event for all dashboards and POS
+  io.emit('refresh_orders')
 }
 
 // PAYMENT SUCCESS → CUSTOMER

@@ -155,13 +155,26 @@ export const register = async (req, res) => {
 // UPDATE PROFILE
 export const updateProfile = async (req, res) => {
   try {
-    const { fullName, email, phone, password } = req.body
+    const { fullName, email, phone, currentPassword, newPassword, address, dateOfBirth, gender, avatarUrl } = req.body
     const userId = req.user.id
 
     const updateData = { fullName, email, phone }
 
-    if (password) {
-      updateData.password = await bcrypt.hash(password, 10)
+    if (address !== undefined) updateData.address = address;
+    if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+    if (gender !== undefined) updateData.gender = gender;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+
+    if (currentPassword && newPassword) {
+      // Find the user to verify current password
+      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      const isMatch = await bcrypt.compare(currentPassword, existingUser.password);
+      
+      if (!isMatch) {
+        return res.status(400).json({ success: false, message: 'Incorrect current password' });
+      }
+      
+      updateData.password = await bcrypt.hash(newPassword, 10);
     }
 
     const user = await prisma.user.update({

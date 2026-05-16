@@ -758,15 +758,14 @@ export const createOrder = async (req, res) => {
     }
 
     // Validation based on type
-    if (type === 'eating' && !tableId) {
-      return res.status(400).json({ success: false, message: 'tableId is required for eating orders' })
-    }
+    /* Relaxed table requirement for POS flexibility */
     if (type === 'delivery' && !addressId) {
       return res.status(400).json({ success: false, message: 'addressId is required for delivery orders' })
     }
 
+    let table = null
     if (tableId) {
-      const table = await prisma.table.findUnique({
+      table = await prisma.table.findUnique({
         where: { id: Number(tableId) }
       })
 
@@ -778,7 +777,8 @@ export const createOrder = async (req, res) => {
       }
     }
 
-    let total = 0
+    let subTotal = 0
+    let taxAmount = 0
     const orderItemsData = []
 
     for (const item of items) {
@@ -795,13 +795,19 @@ export const createOrder = async (req, res) => {
 
       const quantity = Number(item.quantity) || 1
       const unitPrice = menuItem.price
+      const itemTaxRate = menuItem.tax || 0
 
-      total += quantity * unitPrice
+      const itemSubtotal = quantity * unitPrice
+      const itemTaxAmount = itemSubtotal * (itemTaxRate / 100)
+
+      subTotal += itemSubtotal
+      taxAmount += itemTaxAmount
 
       orderItemsData.push({
         menuItemId: menuItem.id,
         quantity,
-        unitPrice
+        unitPrice,
+        tax: itemTaxRate
       })
     }
 
@@ -820,16 +826,18 @@ export const createOrder = async (req, res) => {
 
     const order = await prisma.order.create({
       data: {
-        type: type || 'delivery',
+        orderType: type || 'dine-in',
         tableId: tableId ? Number(tableId) : null,
         addressId: addressId ? Number(addressId) : null,
         customerId: customer?.id || null,
+        userId: req.user?.id || null,
         customerName,
         customerPhone,
         notes,
-        total,
-        status: 'pending',
-        orderType: req.body.orderType || 'dine-in',
+        subTotal,
+        taxAmount,
+        total: subTotal + taxAmount,
+        status: req.body.status || 'pending',
         source: req.body.source || 'pos',
         orderitem: {
           create: orderItemsData
@@ -842,8 +850,8 @@ export const createOrder = async (req, res) => {
       }
     })
 
-    // 🔥 TABLE OCCUPIED
-    if (type === 'eating' && tableId) {
+    // 🔥 TABLE OCCUPIED (Only if NOT a 'held' order)
+    if ((type === 'eating' || type === 'dine-in') && tableId && req.body.status !== 'held') {
       await prisma.table.update({
         where: { id: Number(tableId) },
         data: { status: 'occupied' }
@@ -862,7 +870,7 @@ export const createOrder = async (req, res) => {
     // 🔥 SOCKET → KITCHEN
     emitNewOrder(order)
 
-    logAudit({ userId: req.user?.id, action: 'Created', entity: 'Order', entityId: order.id, description: `Created order #${order.id} for table ${table.number}` })
+    logAudit({ userId: req.user?.id, action: 'Created', entity: 'Order', entityId: order.id, description: `Created order #${order.id} for table ${table?.number || 'N/A'}` })
 
     res.status(201).json({
       success: true,
@@ -1016,7 +1024,7 @@ export const updateOrder = async (req, res) => {
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: {
-        type: type || existingOrder.type,
+        orderType: type || existingOrder.orderType,
         tableId: tableId ? Number(tableId) : existingOrder.tableId,
         addressId: addressId ? Number(addressId) : existingOrder.addressId,
         customerId: customer?.id || existingOrder.customerId,
@@ -1057,7 +1065,14 @@ export const updateOrder = async (req, res) => {
  */
 export const getAllOrders = async (req, res) => {
   try {
+    const { status, onlyMine } = req.query
+
+    const where = {}
+    if (status) where.status = status
+    if (onlyMine === 'true' && req.user?.id) where.userId = req.user.id
+
     const orders = await prisma.order.findMany({
+      where,
       include: {
         table: true,
         orderitem: { include: { menuitem: true } }

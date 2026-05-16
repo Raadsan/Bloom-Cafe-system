@@ -37,11 +37,11 @@ import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
-// Create order
-router.post('/', protect, checkPermission('/orders', 'canAdd'), createOrder)
+// Create order — accessible to any logged-in user (needed by POS)
+router.post('/', protect, createOrder)
 
-// Get all orders
-router.get('/all', protect, checkPermission('/orders', 'canView'), getAllOrders)
+// Get all orders (Accessible to any logged-in user for POS retrieval)
+router.get('/all', protect, getAllOrders)
 
 // Get orders by table
 router.get('/table/:tableId', protect, checkPermission('/orders', 'canView'), getOrdersByTable)
@@ -55,7 +55,7 @@ router.patch('/:id/status', protect, checkPermission('/orders', 'canEdit'), upda
 // Update full order
 router.put('/:id', protect, checkPermission('/orders', 'canEdit'), updateOrder)
 
-// Delete order
-router.delete('/:id', protect, checkPermission('/orders', 'canDelete'), deleteOrder)
+// Delete order (Accessible to any logged-in user to allow resuming held orders)
+router.delete('/:id', protect, deleteOrder)
 
 export default router

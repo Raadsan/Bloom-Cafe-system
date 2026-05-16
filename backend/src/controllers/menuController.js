@@ -400,6 +400,17 @@ export const updatePermissions = async (req, res) => {
 
     await prisma.$transaction(async (tx) => {
       // 1. Clear existing permissions for this role
+      const existingMenuAccess = await tx.roleMenuAccess.findMany({
+        where: { roleId }
+      });
+      const existingIds = existingMenuAccess.map(m => m.id);
+
+      if (existingIds.length > 0) {
+        await tx.roleSubMenuAccess.deleteMany({
+          where: { roleMenuAccessId: { in: existingIds } }
+        });
+      }
+
       await tx.roleMenuAccess.deleteMany({
         where: { roleId }
       });
@@ -438,6 +449,9 @@ export const updatePermissions = async (req, res) => {
           }
         }
       }
+    }, {
+      maxWait: 5000,
+      timeout: 15000
     });
 
     // Log the action
@@ -458,6 +472,7 @@ export const updatePermissions = async (req, res) => {
     res.json({ success: true, message: "Permissions updated successfully" });
   } catch (error) {
     console.error("CRITICAL: Error updating permissions:", error);
+    import('fs').then(fs => fs.writeFileSync('error.log', error.stack || error.message));
     res.status(500).json({ 
       success: false, 
       message: "Server error during permission update",

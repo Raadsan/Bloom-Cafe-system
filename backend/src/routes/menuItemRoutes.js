@@ -35,19 +35,19 @@ import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 const router = express.Router()
 
 // Create menu item
-router.post('/', protect, checkPermission('/menu/items', 'canAdd'), createMenuItem)
+router.post('/', protect, checkPermission('/menus', 'canAdd'), createMenuItem)
 
 // Get all menu items
 router.get('/all', getAllMenuItems)
 
 // Get menu items by category
-router.get('/category/:categoryId', protect, checkPermission('/menu/items', 'canView'), getMenuItemsByCategory)
+router.get('/category/:categoryId', protect, checkPermission('/menus', 'canView'), getMenuItemsByCategory)
 
 // Update menu item
-router.patch('/:id', protect, checkPermission('/menu/items', 'canEdit'), updateMenuItem)
+router.patch('/:id', protect, checkPermission('/menus', 'canEdit'), updateMenuItem)
 
 // Delete menu item
-router.delete('/:id', protect, checkPermission('/menu/items', 'canDelete'), deleteMenuItem)
+router.delete('/:id', protect, checkPermission('/menus', 'canDelete'), deleteMenuItem)
 
 // Customer scans QR and gets menu (public, no auth needed)
 router.get('/menu/:qrCode', getPublicMenuByQrCode)
