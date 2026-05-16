@@ -1,33 +1,34 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Users, 
-  Phone, 
+import { cn } from "@/lib/utils";
+import {
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Users,
+  Phone,
   Calendar,
   MoreHorizontal,
   RefreshCw,
   UserCheck
 } from "lucide-react";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription, 
-  DialogFooter 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { customerApi, Customer } from "@/lib/api/customerApi";
@@ -45,6 +46,10 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Modal states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -75,11 +80,21 @@ export default function ClientsPage() {
 
   const filteredCustomers = useMemo(() => {
     return customers.filter((c) => {
-      const matchesSearch = c.fullName.toLowerCase().includes(search.toLowerCase()) || 
-                           c.phone.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = c.fullName.toLowerCase().includes(search.toLowerCase()) ||
+        c.phone.toLowerCase().includes(search.toLowerCase());
       return matchesSearch;
     });
   }, [customers, search]);
+
+  const totalPages = Math.ceil(filteredCustomers.length / pageSize);
+  const paginatedCustomers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCustomers.slice(start, start + pageSize);
+  }, [filteredCustomers, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, pageSize]);
 
   const openAddModal = () => {
     setFormName("");
@@ -148,157 +163,194 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-700">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground uppercase">Client Management</h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-3">
-            Maintain customer relationships and track order history.
-          </p>
-        </div>
+    <div className="animate-in fade-in duration-700 font-sans mx-1 pt-0 pb-8">
+      {/* Page Header: Outside the box */}
+      <div className="mb-6 px-4">
+        <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Client Management</h1>
+        <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">View and manage customer data, loyalty points, and purchase history.</p>
       </div>
 
-      {/* Main Table Card */}
-      <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
-        <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-50/30">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">Client Directory Feed</h3>
-            <p className="text-[12px] font-medium text-muted-foreground mt-1">Real-time customer database</p>
+      {/* Main Container Box */}
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+        {/* Controls Row: Inside the box */}
+        <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+              <span>Show</span>
+              <select 
+                value={pageSize} 
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
           </div>
-          
-          <div className="flex flex-col md:flex-row items-center gap-3">
-            <div className="relative group w-full md:w-80">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-[#605DFF] transition-colors" />
-              <input
-                type="text"
-                placeholder="Search name or phone..."
+
+          <div className="flex-1"></div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative w-64 group">
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <input 
+                type="text" 
+                placeholder="Search clients..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-[14.5px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all shadow-sm"
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
 
             {canAdd && (
-              <Button onClick={openAddModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
-                <Plus className="mr-2 size-4" /> New Client
+              <Button 
+                onClick={openAddModal}
+                className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
+              >
+                <Plus className="size-4" />
+                Add Client
               </Button>
             )}
           </div>
         </div>
 
-        <div className="border-t border-zinc-100">
-          <Table>
-            <TableHeader className="bg-zinc-50/50">
-              <TableRow className="border-zinc-100 hover:bg-transparent">
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Client ID</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Full Name</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Contact Info</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B] text-center">Total Orders</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Last Visit</TableHead>
-                <TableHead className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[#64748B] w-32">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                [...Array(5)].map((_, i) => (
-                  <TableRow key={i} className="h-16 animate-pulse">
-                    {[...Array(6)].map((_, j) => (
-                      <TableCell key={j} className="px-6 py-4">
-                        <div className="h-4 bg-zinc-50 rounded w-full"></div>
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : filteredCustomers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="px-6 py-20 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <Users className="size-12 text-zinc-200 mb-4" />
-                      <p className="text-[#64748B] font-bold uppercase text-[11px] tracking-widest">No clients found in database</p>
-                    </div>
-                  </TableCell>
+        {/* Table - Flush to sides */}
+        <div className="border-t border-zinc-100 overflow-hidden bg-white">
+          <div className="overflow-x-auto">
+            <Table className="w-full">
+              <TableHeader className="bg-[#605DFF]">
+                <TableRow className="hover:bg-transparent border-none">
+                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">#</TableHead>
+                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Client Name</TableHead>
+                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Phone Number</TableHead>
+                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Orders & Activity</TableHead>
+                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Actions</TableHead>
                 </TableRow>
-              ) : (
-                filteredCustomers.map((c) => (
-                  <TableRow key={c.id} className="border-zinc-50 hover:bg-zinc-50/30 transition-colors group">
-                    <TableCell className="px-6 py-5 text-[13px] font-medium text-[#1E293B]">
-                      #{c.id}
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  [...Array(5)].map((_, i) => (
+                    <TableRow key={i} className="h-14 animate-pulse">
+                      {[...Array(6)].map((_, j) => (
+                        <TableCell key={j} className="px-6 py-4">
+                          <div className="h-4 bg-zinc-100 rounded w-full"></div>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : paginatedCustomers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="px-6 py-10 text-center text-zinc-500">
+                      No clients found
                     </TableCell>
-                    <TableCell className="px-6 py-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#F3F4FF] flex items-center justify-center text-[#605DFF] font-bold text-xs shadow-sm">
-                          {c.fullName.charAt(0).toUpperCase()}
-                        </div>
-                        <p className="font-bold text-[14.5px] text-[#1E293B] uppercase tracking-tight">{c.fullName}</p>
-                      </div>
+                  </TableRow>
+                ) : (
+                  paginatedCustomers.map((c) => (
+                    <TableRow key={c.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
+                    <TableCell className="px-6 py-3 text-[13px] text-zinc-500 font-medium">#{c.id}</TableCell>
+                    <TableCell className="px-6 py-3">
+                      <p className="text-[13px] font-medium text-zinc-700">{c.fullName}</p>
+                      <p className="text-[10px] text-zinc-400">{c.email}</p>
                     </TableCell>
-                    <TableCell className="px-6 py-5">
-                      <div className="flex items-center gap-2 text-[13.5px] font-medium text-[#64748B]">
+                    <TableCell className="px-6 py-3">
+                      <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-500">
                         <Phone className="size-3.5 opacity-60" /> {c.phone}
                       </div>
                     </TableCell>
-                    <TableCell className="px-6 py-5 text-center">
-                      <span className="px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest bg-zinc-100 text-[#1E293B]">
-                        {c.totalOrders || 0} Orders
-                      </span>
-                    </TableCell>
-                    <TableCell className="px-6 py-5">
-                      <div className="flex flex-col gap-0.5">
-                        <p className="text-[12px] font-semibold text-[#1E293B]">
-                          {c.lastOrderDate ? new Date(c.lastOrderDate).toLocaleDateString() : "No orders yet"}
-                        </p>
-                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                          {c.lastOrderDate ? "Recent Activity" : "New Client"}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-6 py-5 text-right">
-                      <div className="flex justify-end gap-2">
-                        {canEdit && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => openEditModal(c)} 
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                    <TableCell className="px-6 py-3 text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="px-3 py-1 rounded-full bg-zinc-100 text-zinc-600 text-[10px] font-semibold uppercase border border-zinc-200">
+                            {c.totalOrders || 0} Orders
+                          </span>
+                          <p className="text-[10px] text-zinc-400 mt-1">
+                            {c.lastOrderDate ? `Last: ${new Date(c.lastOrderDate).toLocaleDateString()}` : "New Client"}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-6 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                           >
-                            <Edit className="size-4" />
+                            <Eye className="size-4" />
                           </Button>
-                        )}
-                        {canDelete && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => openDeleteModal(c)} 
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditModal(c)}
+                              className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Edit className="size-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openDeleteModal(c)}
+                              className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        {/* Table Footer / Pagination */}
+        <div className="py-2 px-8 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-zinc-400 border-t border-zinc-100 bg-zinc-50/30">
+          <div>
+            {Math.min(filteredCustomers.length, (currentPage - 1) * pageSize + 1)}-{Math.min(filteredCustomers.length, currentPage * pageSize)} of {filteredCustomers.length}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2 py-1 border border-zinc-200 rounded-md hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              &lt;
+            </button>
+            <div className="px-3 py-1 border border-zinc-200 rounded-md text-zinc-400">
+              {currentPage} of {totalPages || 1}
+            </div>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-2 py-1 border border-zinc-200 rounded-md hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              &gt;
+            </button>
+          </div>
         </div>
       </div>
 
       {/* ADD / EDIT MODAL */}
-      <Dialog open={isAddOpen || isEditOpen} onOpenChange={(open) => { if(!open) { setIsAddOpen(false); setIsEditOpen(false); } }}>
-        <DialogContent className="sm:max-w-[440px] bg-white border-zinc-100 p-0 overflow-hidden">
+      <Dialog open={isAddOpen || isEditOpen} onOpenChange={(open) => { if (!open) { setIsAddOpen(false); setIsEditOpen(false); } }}>
+        <DialogContent className="sm:max-w-[640px] bg-white border-zinc-100 p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Client Registration Form</DialogTitle>
           <div className="p-6 border-b border-zinc-100">
-            <DialogTitle className="text-xl font-bold">
+            <DialogTitle className="text-xl font-bold text-[#1e293b]">
               {isEditOpen ? "Update Client Profile" : "Register New Client"}
             </DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground mt-1">
+            <DialogDescription className="text-sm text-zinc-500 mt-1">
               {isEditOpen ? "Modify customer contact details and information." : "Create a new customer profile for order tracking and loyalty."}
             </DialogDescription>
           </div>
-          
-          <div className="p-6 space-y-5">
-            <div className="space-y-2">
+
+          <div className="p-8 grid grid-cols-2 gap-x-8 gap-y-6">
+            <div className="col-span-2 space-y-2">
               <label className="text-sm font-bold text-[#1E293B]">Full Name *</label>
               <input
                 type="text"
@@ -308,7 +360,18 @@ export default function ClientsPage() {
                 className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
               />
             </div>
-            
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-[#1E293B]">Email Address</label>
+              <input
+                type="email"
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+                placeholder="client@example.com"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+              />
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-bold text-[#1E293B]">Phone Number *</label>
               <input
@@ -333,24 +396,26 @@ export default function ClientsPage() {
       </Dialog>
 
       {/* DELETE MODAL */}
-      <Dialog open={isDeleteOpen} onOpenChange={(open) => { if(!open) setIsDeleteOpen(false); }}>
-        <DialogContent className="sm:max-w-[420px] bg-white border-zinc-100">
-          <DialogTitle className="sr-only">Delete Client Record</DialogTitle>
-          <div className="p-6 flex flex-col items-center text-center pt-10">
-            <div className="w-16 h-16 rounded-full bg-rose-50 flex items-center justify-center mb-4 border border-rose-100">
-              <Trash2 className="size-8 text-rose-600" />
+      <Dialog open={isDeleteOpen} onOpenChange={(open) => { if (!open) setIsDeleteOpen(false); }}>
+        <DialogContent className="sm:max-w-[500px] bg-white border-zinc-100 p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Delete Client Confirmation</DialogTitle>
+          <div className="p-8 flex items-start gap-6">
+            <div className="w-14 h-14 shrink-0 rounded-full bg-rose-50 flex items-center justify-center border border-rose-100">
+              <Trash2 className="size-6 text-rose-600" />
             </div>
-            <h3 className="text-xl font-bold text-[#1E293B] mb-2">Delete Client Record?</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Are you sure you want to remove <span className="font-bold text-[#1E293B]">"{selectedCustomer?.fullName}"</span> from the database? 
-              This action will remove their profile and history.
-            </p>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-[#1E293B] mb-2">Delete Client Record?</h3>
+              <p className="text-sm text-zinc-500 leading-relaxed">
+                Are you sure you want to remove <span className="font-bold text-[#1E293B]">"{selectedCustomer?.fullName}"</span> from the database?
+                This action will remove their profile and history.
+              </p>
+            </div>
           </div>
-          <DialogFooter className="p-6 pt-0 gap-3">
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11 flex-1" disabled={saving}>
+          <DialogFooter className="p-6 bg-zinc-50/50 border-t border-zinc-100 gap-3">
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-6 h-11 flex-1" disabled={saving}>
+            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={saving}>
               {saving ? "Deleting..." : "Yes, Delete Record"}
             </Button>
           </DialogFooter>

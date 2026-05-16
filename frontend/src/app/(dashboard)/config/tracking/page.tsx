@@ -1,49 +1,60 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
-  Activity, 
+  History, 
   Search, 
-  Filter, 
+  User, 
+  Activity, 
   Calendar,
-  LayoutGrid,
-  Trash2,
-  Eye
+  Clock,
+  Filter,
+  RefreshCcw,
+  ArrowDownCircle,
+  Database,
+  Shield,
+  Key
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { auditLogApi, AuditLog } from "@/lib/api/auditLogApi";
+import { trackingApi, AuditLog } from "@/lib/api/trackingApi";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+
+const ACTION_COLORS: Record<string, { bg: string; text: string }> = {
+  LOGIN: { bg: "bg-emerald-50", text: "text-emerald-600" },
+  LOGOUT: { bg: "bg-rose-50", text: "text-rose-600" },
+  CREATE: { bg: "bg-blue-50", text: "text-blue-600" },
+  UPDATE: { bg: "bg-amber-50", text: "text-amber-600" },
+  DELETE: { bg: "bg-rose-50", text: "text-rose-600" },
+  AUTH: { bg: "bg-indigo-50", text: "text-indigo-600" }
+};
 
 export default function TrackingPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isViewOpen, setIsViewOpen] = useState(false);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState(25);
+  const [dateFilter, setDateFilter] = useState({
+    start: "",
+    end: ""
+  });
   const { showToast } = useToast();
 
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const data = await auditLogApi.getAllLogs();
+      const data = await trackingApi.getAllLogs();
       setLogs(data || []);
     } catch (error) {
-      console.error("Failed to fetch audit logs:", error);
-      showToast("Failed to load audit logs", "error");
+      console.error("Failed to fetch logs", error);
+      showToast("Error loading activity logs", "error");
     } finally {
       setLoading(false);
     }
@@ -51,250 +62,218 @@ export default function TrackingPage() {
 
   useEffect(() => {
     fetchLogs();
+    // Auto refresh every 60 seconds
+    const interval = setInterval(fetchLogs, 60000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleDelete = async () => {
-    if (!selectedLog) return;
-    try {
-      await auditLogApi.deleteLog(selectedLog.id);
-      showToast("Audit log deleted successfully", "success");
-      setIsDeleteOpen(false);
-      setSelectedLog(null);
-      fetchLogs();
-    } catch (error: any) {
-      showToast(error.response?.data?.message || "Failed to delete log", "error");
-    }
-  };
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      const matchesSearch = 
+        log.action.toLowerCase().includes(search.toLowerCase()) ||
+        log.entity.toLowerCase().includes(search.toLowerCase()) ||
+        log.description.toLowerCase().includes(search.toLowerCase()) ||
+        log.user?.fullName.toLowerCase().includes(search.toLowerCase());
+      
+      let matchesDate = true;
+      if (dateFilter.start || dateFilter.end) {
+        const logDate = new Date(log.createdAt).toISOString().split('T')[0];
+        if (dateFilter.start && logDate < dateFilter.start) matchesDate = false;
+        if (dateFilter.end && logDate > dateFilter.end) matchesDate = false;
+      }
 
-  const filteredLogs = (logs || []).filter(log =>
-    (log.user?.fullName || "System").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    log.entity.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (log.description || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      return matchesSearch && matchesDate;
+    }).slice(0, pageSize);
+  }, [logs, search, pageSize, dateFilter]);
 
-  const formatTimeAgo = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHrs = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
-    if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return date.toLocaleDateString([], { dateStyle: 'medium' });
+  const getActionStyle = (action: string) => {
+    const act = action.toUpperCase();
+    if (act.includes('CREATE')) return ACTION_COLORS.CREATE;
+    if (act.includes('UPDATE')) return ACTION_COLORS.UPDATE;
+    if (act.includes('DELETE')) return ACTION_COLORS.DELETE;
+    if (act.includes('LOGIN')) return ACTION_COLORS.LOGIN;
+    if (act.includes('LOGOUT')) return ACTION_COLORS.LOGOUT;
+    return { bg: "bg-zinc-100", text: "text-zinc-600" };
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <div className="animate-in fade-in duration-500 font-sans mx-1">
+      {/* Header */}
+      <div className="mb-8 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground uppercase flex items-center gap-2">
-            <Activity className="size-6 text-[#605DFF]" />
-            Activity Tracking
+          <h1 className="text-2xl font-black text-[#1e293b] uppercase tracking-tight flex items-center gap-2">
+          
+            System Tracking
           </h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-3">
-            Monitor all system changes and user actions in real-time.
-          </p>
+          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium italic">Monitor every click, login, and change happening in the system in real-time.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="text-[14.5px] font-bold h-10 rounded-lg bg-white border border-zinc-100 text-[#64748B] hover:bg-zinc-50 hover:text-[#605DFF] transition-all shadow-sm px-4">
-            <Filter className="mr-2 size-4" />
-            Filter
-          </Button>
-        </div>
+        <button 
+          onClick={fetchLogs}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 h-10 rounded-xl bg-white border border-zinc-100 text-[#64748B] hover:text-[#605DFF] hover:bg-zinc-50 transition-all shadow-sm text-xs font-black uppercase tracking-widest"
+        >
+          <RefreshCcw className={cn("size-3.5", loading && "animate-spin")} />
+          Refresh Log
+        </button>
       </div>
 
-      {/* Main Table Card */}
-      <div className="trezo-card overflow-hidden">
-        {/* Card Header with Search */}
-        <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-50/30">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">Audit Logs</h3>
-            <p className="text-[12px] font-medium text-muted-foreground mt-1">{filteredLogs.length} tracked actions in system</p>
+      {/* Main Table Box */}
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+        {/* Controls Row */}
+        <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50 bg-zinc-50/10">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+                <span>Show</span>
+                <select 
+                    value={pageSize} 
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="w-16 h-[38px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                </select>
+            </div>
           </div>
-          <div className="flex flex-col md:flex-row items-center gap-3">
-            <div className="relative group w-full md:w-72">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-[#605DFF] transition-colors" />
-              <input 
-                type="text" 
-                placeholder="Search logs..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-[14.5px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all shadow-sm"
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-zinc-200 rounded-md shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">From:</span>
+                <input 
+                    type="date" 
+                    value={dateFilter.start}
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
+                    className="bg-transparent text-[11px] font-bold text-zinc-600 outline-none cursor-pointer"
+                />
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-zinc-200 rounded-md shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">To:</span>
+                <input 
+                    type="date" 
+                    value={dateFilter.end}
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
+                    className="bg-transparent text-[11px] font-bold text-zinc-600 outline-none cursor-pointer"
+                />
+            </div>
+            {(dateFilter.start || dateFilter.end) && (
+                <button 
+                    onClick={() => setDateFilter({ start: "", end: "" })}
+                    className="text-[10px] font-bold text-rose-500 uppercase hover:underline ml-1"
+                >
+                    Clear
+                </button>
+            )}
+          </div>
+
+          <div className="flex-1"></div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative w-72 group">
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search who or what..."
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
           </div>
         </div>
 
         {/* Table Content */}
-        <div className="border-t border-zinc-100">
-          <Table>
-            <TableHeader className="bg-zinc-50/50">
-              <TableRow className="border-zinc-100 hover:bg-transparent">
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B] w-[80px]">#</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">User</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Action</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Entity</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Description</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Time</TableHead>
-                <TableHead className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[#64748B] w-24">Actions</TableHead>
+        <div className="overflow-x-auto">
+          <Table className="w-full">
+            <TableHeader className="bg-[#605DFF]">
+              <TableRow className="hover:bg-transparent border-none">
+                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Actor (Who)</TableHead>
+                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-center">Event</TableHead>
+                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Description</TableHead>
+                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Module</TableHead>
+                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Date/Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i} className="h-16 animate-pulse bg-muted/10">
-                    <TableCell colSpan={7} />
-                  </TableRow>
+              {loading && logs.length === 0 ? (
+                Array.from({ length: 10 }).map((_, i) => (
+                  <TableRow key={i} className="h-16 animate-pulse bg-muted/5"><TableCell colSpan={5} /></TableRow>
                 ))
-              ) : filteredLogs.length === 0 ? (
+              ) : filteredLogs.length > 0 ? (
+                filteredLogs.map((log) => {
+                  const style = getActionStyle(log.action);
+                  return (
+                    <TableRow key={log.id} className="border-zinc-50 hover:bg-zinc-50/50 transition-colors">
+                      <TableCell className="px-6 py-4">
+                        <div>
+                          <p className="text-[13px] font-normal text-zinc-800 leading-tight uppercase tracking-tight">{log.user?.fullName || "System"}</p>
+                          <p className="text-[10px] text-zinc-400 font-medium lowercase italic">{log.user?.email || "automated"}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-6 py-4 text-center">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+                          style.text
+                        )}>
+                          {log.action}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-6 py-4">
+                        <p className="text-[12px] font-normal text-zinc-600 leading-relaxed max-w-sm">
+                          {log.description}
+                        </p>
+                      </TableCell>
+                      <TableCell className="px-6 py-4">
+                        <span className="text-[11px] font-normal uppercase tracking-widest text-zinc-500">
+                          {log.entity}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-6 py-4 text-right">
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[11px] font-normal text-zinc-800">
+                            {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-[9px] font-normal text-zinc-400 uppercase">
+                            {new Date(log.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="px-6 py-24 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <LayoutGrid className="size-12 text-zinc-200" />
-                      <p className="text-[#64748B] font-bold uppercase text-[11px] tracking-widest">No activity logs found</p>
+                  <TableCell colSpan={5} className="px-6 py-32 text-center">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="size-16 rounded-full bg-zinc-50 flex items-center justify-center shadow-inner">
+                        <Activity className="size-8 text-zinc-100" />
+                      </div>
+                      <p className="text-zinc-400 font-black uppercase text-[11px] tracking-widest">No activity logs recorded yet</p>
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : (
-                filteredLogs.map((log) => (
-                  <TableRow key={log.id} className="border-zinc-50 hover:bg-zinc-50/30 transition-colors group">
-                    <TableCell className="px-6 py-5">
-                      <span className="text-[14px] font-medium text-[#605DFF]">#{log.id}</span>
-                    </TableCell>
-                    <TableCell className="px-6 py-5">
-                      <span className="text-[14px] font-medium text-[#1E293B]">{log.user?.fullName || "System"}</span>
-                    </TableCell>
-                    <TableCell className="px-6 py-5">
-                      <span className="text-[13px] font-medium text-muted-foreground">{log.action}</span>
-                    </TableCell>
-                    <TableCell className="px-6 py-5">
-                      <span className="text-[13px] font-medium text-muted-foreground">{log.entity}</span>
-                    </TableCell>
-                    <TableCell className="px-6 py-5">
-                      <p className="text-[13px] font-medium text-muted-foreground max-w-[200px] truncate">
-                        {log.description || "—"}
-                      </p>
-                    </TableCell>
-                    <TableCell className="px-6 py-5">
-                      <div className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-500">
-                        <Calendar className="size-3.5 text-zinc-400" />
-                        {formatTimeAgo(log.createdAt)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-6 py-5 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => { setSelectedLog(log); setIsViewOpen(true); }} className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors">
-                          <Eye className="size-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => { setSelectedLog(log); setIsDeleteOpen(true); }} className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors">
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
               )}
             </TableBody>
           </Table>
         </div>
-      </div>
 
-      {/* VIEW MODAL */}
-      <Dialog open={isViewOpen} onOpenChange={(open) => { if(!open) setIsViewOpen(false); }}>
-        <DialogContent className="sm:max-w-[540px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl">
-          <DialogTitle className="sr-only">Audit Log Details</DialogTitle>
-          {selectedLog && (
-            <>
-              <div className="p-8 pb-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-2xl font-black text-[#1E293B] uppercase tracking-tight flex items-center gap-2">
-                      <Activity className="size-6 text-[#605DFF]" />
-                      {selectedLog.action}
-                    </h2>
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">
-                      Log ID: #{selectedLog.id}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-8 py-8 bg-zinc-50/50 border-y border-zinc-100 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1.5">User</label>
-                    <p className="text-[15px] font-medium text-[#1E293B]">{selectedLog.user?.fullName || "System"}</p>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1.5">Entity</label>
-                    <p className="text-[15px] font-medium text-[#1E293B]">{selectedLog.entity}</p>
-                  </div>
-                </div>
-                {selectedLog.description && (
-                  <div>
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1.5">Description</label>
-                    <p className="text-[15px] font-medium text-[#1E293B] leading-relaxed">{selectedLog.description}</p>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div>
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1.5">Entity ID</label>
-                    <p className="text-[14px] font-medium text-[#1E293B]">{selectedLog.entityId ?? "—"}</p>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1.5">Date & Time</label>
-                    <div className="flex items-center gap-2 text-[14px] font-medium text-[#1E293B]">
-                      <Calendar className="size-4 text-[#605DFF]" />
-                      {new Date(selectedLog.createdAt).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-white flex justify-end gap-3">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setIsViewOpen(false)} 
-                  className="rounded-xl font-bold border-zinc-200 px-6 h-12 text-[11px] uppercase tracking-widest hover:bg-zinc-50"
-                >
-                  Close
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* DELETE MODAL */}
-      <Dialog open={isDeleteOpen} onOpenChange={(open) => { if(!open) setIsDeleteOpen(false); }}>
-        <DialogContent className="sm:max-w-[440px] bg-white border-zinc-100 rounded-xl p-0 overflow-hidden">
-          <DialogTitle className="sr-only">Delete Log</DialogTitle>
-          <div className="p-8 flex flex-col items-center text-center pt-10">
-            <div className="w-16 h-16 rounded-full bg-rose-100 flex items-center justify-center mb-4">
-              <Trash2 className="size-8 text-rose-600" />
-            </div>
-            <h3 className="text-xl font-bold text-foreground mb-2">Delete Log?</h3>
-            <p className="text-sm text-muted-foreground px-4">
-              Are you sure you want to delete audit log <span className="font-bold text-foreground">#{selectedLog?.id}</span>?
-              This action cannot be undone.
+        {/* Footer info */}
+        <div className="px-8 py-4 bg-zinc-50/50 border-t border-zinc-100 flex justify-between items-center">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                End of Activity stream
             </p>
-          </div>
-          <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold border-zinc-200 px-6 h-11">
-              Cancel
-            </Button>
-            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none shadow-sm px-6 h-11">
-              Yes, Delete
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
+                <div className="flex items-center gap-1.5">
+                    <div className="size-2 rounded-full bg-emerald-500" />
+                    <span className="text-zinc-500">Log Live</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <Database className="size-3 text-zinc-400" />
+                    <span className="text-zinc-500">Synced</span>
+                </div>
+            </div>
+        </div>
+      </div>
     </div>
   );
 }

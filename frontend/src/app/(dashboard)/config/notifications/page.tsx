@@ -33,7 +33,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl mx-auto">
+    <div className="space-y-6 animate-in fade-in duration-500 w-full">
       <div className="flex items-center justify-between border-b border-border pb-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight uppercase">SYSTEM NOTIFICATIONS</h1>

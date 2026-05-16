@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { cn } from "@/lib/utils";
 import { 
   Search, 
   Plus, 
@@ -47,6 +48,10 @@ export default function InventoryPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [saving, setSaving] = useState(false);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   // Modal states
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -91,6 +96,16 @@ export default function InventoryPage() {
       return matchesSearch && matchesStatus;
     });
   }, [ingredients, search, statusFilter]);
+
+  const totalPages = Math.ceil(filteredIngredients.length / pageSize);
+  const paginatedIngredients = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredIngredients.slice(start, start + pageSize);
+  }, [filteredIngredients, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, pageSize]);
 
   const openAddModal = () => {
     setFormName("");
@@ -171,140 +186,129 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-700">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground uppercase">Current Stock</h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-3">
-            Monitor and manage your restaurant inventory levels.
-          </p>
+    <div className="animate-in fade-in duration-700 font-sans pt-2 pb-8">
+      {/* Main Container */}
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden w-full">
+        {/* Box Header */}
+        <div className="px-8 pt-6 pb-0">
+          <h1 className="text-2xl font-semibold text-[#1e293b]">Current Stock</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/inventory/movements">
-            <Button variant="outline" className="h-[42px] px-4 rounded-lg font-bold border-zinc-100 hover:bg-zinc-50 shadow-sm text-[#64748B]">
-              <History className="mr-2 size-4 text-[#605DFF]" /> Stock Movements
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* Main Table Card */}
-      <div className="bg-white rounded-xl border border-zinc-100 shadow-sm overflow-hidden">
-        <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-50/30">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">Stock Inventory Feed</h3>
-            <p className="text-[12px] font-medium text-muted-foreground mt-1">Real-time inventory levels</p>
+        {/* Table Controls Row */}
+        <div className="px-10 py-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-12">
+            <div className="flex items-center gap-3 text-[13px] text-zinc-500 font-medium">
+              <span>Show</span>
+              <select 
+                value={pageSize} 
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="w-24 px-3 py-1.5 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer shadow-sm"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span>entries</span>
+            </div>
           </div>
-          
-          <div className="flex flex-col md:flex-row items-center gap-3">
-            <div className="relative group w-full md:w-64">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-[#605DFF] transition-colors" />
-              <input
-                type="text"
-                placeholder="Search ingredients..."
+
+          <div className="flex items-center gap-4 flex-1 md:flex-none justify-end">
+            <div className="relative group w-full md:w-80">
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <input 
+                type="text" 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-[14.5px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all shadow-sm"
+                placeholder="Search..." 
+                className="w-full pl-10 pr-4 py-2.5 text-[13px] bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/20 transition-all placeholder:text-zinc-400 shadow-sm" 
               />
             </div>
-            
-            <div className="relative">
-              <Filter className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none pl-9 pr-9 py-2.5 text-[14px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-[#605DFF]/30 shadow-sm cursor-pointer min-w-[140px]"
-              >
-                <option value="all">All Status</option>
-                <option value="normal">In Stock</option>
-                <option value="low">Low Stock</option>
-                <option value="out">Out of Stock</option>
-              </select>
-              <ChevronDown className="size-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <div className="flex items-center gap-3">
+              <Link href="/inventory/movements">
+                <Button variant="outline" className="h-10 px-6 rounded-md border-zinc-200 hover:bg-zinc-50 text-[11px] font-black uppercase tracking-widest text-[#64748B] shadow-sm">
+                  <History className="mr-2 size-4 text-[#605DFF]" /> Movements
+                </Button>
+              </Link>
+              {canAdd && (
+                <Button onClick={openAddModal} className="h-10 px-8 rounded-md bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-medium border-none flex items-center gap-2 transition-all active:scale-95 shrink-0">
+                  <Plus className="size-4" /> Add New Item
+                </Button>
+              )}
             </div>
-
-            {canAdd && (
-              <Button onClick={openAddModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
-                <Plus className="mr-2 size-4" /> Add Ingredient
-              </Button>
-            )}
           </div>
         </div>
 
-        <div className="border-t border-zinc-100">
-          <Table>
-            <TableHeader className="bg-zinc-50/50">
-              <TableRow className="border-zinc-100 hover:bg-transparent">
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Item ID</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Ingredient Name</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Current Stock</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Min. Level</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B] text-center">Status</TableHead>
-                <TableHead className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[#64748B] w-32">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+        <div className="mx-4 mb-6 border border-zinc-100 rounded-xl overflow-hidden shadow-sm bg-white">
+          <div className="overflow-x-auto">
+            <Table className="w-full">
+              <TableHeader className="bg-[#605DFF]">
+                <TableRow className="hover:bg-transparent border-none">
+                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none">#</TableHead>
+                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none">Ingredient</TableHead>
+                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none text-right">Qty & Unit</TableHead>
+                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none">Min Level</TableHead>
+                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none text-right pr-20">Status</TableHead>
+                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {loading ? (
                 [...Array(5)].map((_, i) => (
-                  <TableRow key={i} className="h-16 animate-pulse">
+                  <TableRow key={i} className="h-14 animate-pulse">
                     {[...Array(6)].map((_, j) => (
                       <TableCell key={j} className="px-6 py-4">
-                        <div className="h-4 bg-zinc-50 rounded w-full"></div>
+                        <div className="h-4 bg-zinc-100 rounded w-full"></div>
                       </TableCell>
                     ))}
                   </TableRow>
                 ))
-              ) : filteredIngredients.length === 0 ? (
+              ) : paginatedIngredients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="px-6 py-20 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <Package className="size-12 text-zinc-200 mb-4" />
-                      <p className="text-[#64748B] font-bold uppercase text-[11px] tracking-widest">No ingredients found</p>
-                    </div>
+                  <TableCell colSpan={6} className="px-6 py-10 text-center text-zinc-500">
+                    No ingredients found
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredIngredients.map((ing) => {
+                paginatedIngredients.map((ing) => {
                   const isOut = ing.stockQuantity <= 0;
                   const isLow = ing.stockQuantity <= ing.minStockLevel;
 
                   return (
-                    <TableRow key={ing.id} className="border-zinc-50 hover:bg-zinc-50/30 transition-colors group">
-                      <TableCell className="px-6 py-5 text-[13px] font-medium text-[#1E293B]">
-                        #{ing.id}
+                    <TableRow key={ing.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
+                      <TableCell className="px-10 py-3 text-sm text-zinc-500 font-normal">#{ing.id}</TableCell>
+                      <TableCell className="px-10 py-3 text-sm text-zinc-700">{ing.name}</TableCell>
+                      <TableCell className="px-10 py-3 text-sm text-zinc-700 text-right">
+                        {ing.stockQuantity} <span className="text-[11px] text-zinc-400 uppercase">{ing.unit}</span>
                       </TableCell>
-                      <TableCell className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center text-[#64748B]">
-                            <Package className="size-4" />
-                          </div>
-                          <p className="font-bold text-[14px] text-[#1E293B] uppercase tracking-tight">{ing.name}</p>
-                        </div>
+                      <TableCell className="px-10 py-3 text-sm text-zinc-400">
+                        {ing.minStockLevel} <span className="text-[11px] uppercase">{ing.unit}</span>
                       </TableCell>
-                      <TableCell className="px-6 py-5 text-[13px] font-bold text-[#1E293B]">
-                        {ing.stockQuantity} <span className="text-[10px] text-muted-foreground uppercase ml-1 font-medium">{ing.unit}</span>
-                      </TableCell>
-                      <TableCell className="px-6 py-5 text-[13px] text-[#64748B]">
-                        {ing.minStockLevel} <span className="text-[10px] text-zinc-400 uppercase ml-1">{ing.unit}</span>
-                      </TableCell>
-                      <TableCell className="px-6 py-5 text-center">
-                        <span className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-widest inline-flex items-center gap-1.5 ${
-                          isOut ? "bg-rose-100 text-rose-700" : 
-                          isLow ? "bg-amber-100 text-amber-700" : 
-                          "bg-emerald-100 text-emerald-700"
-                        }`}>
+                      <TableCell className="px-10 py-3 text-right pr-20">
+                        <span className={cn(
+                          "px-3 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider border",
+                          isOut ? "bg-rose-50 text-rose-600 border-rose-100" :
+                          isLow ? "bg-amber-50 text-amber-600 border-amber-100" :
+                          "bg-emerald-50 text-emerald-600 border-emerald-100"
+                        )}>
                           {isOut ? "Out of Stock" : isLow ? "Low Stock" : "In Stock"}
                         </span>
                       </TableCell>
-                      <TableCell className="px-6 py-5 text-right">
+                      <TableCell className="px-10 py-3 text-right">
                         <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => openViewModal(ing)}
+                            className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                          >
+                            <Eye className="size-4" />
+                          </Button>
                           {canEdit && (
                             <Button 
                               variant="ghost" 
-                              size="sm" 
+                              size="sm"
                               onClick={() => openEditModal(ing)} 
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             >
                               <Edit className="size-4" />
                             </Button>
@@ -312,9 +316,9 @@ export default function InventoryPage() {
                           {canDelete && (
                             <Button 
                               variant="ghost" 
-                              size="sm" 
+                              size="sm"
                               onClick={() => openDeleteModal(ing)} 
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                              className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -327,6 +331,34 @@ export default function InventoryPage() {
               )}
             </TableBody>
           </Table>
+        </div>
+      </div>
+
+        {/* Table Footer / Pagination */}
+        <div className="py-4 px-10 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-zinc-400">
+          <div>
+            {Math.min(filteredIngredients.length, (currentPage - 1) * pageSize + 1)}-{Math.min(filteredIngredients.length, currentPage * pageSize)} of {filteredIngredients.length}
+          </div>
+          
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2 py-1 border border-zinc-200 rounded-md hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              &lt;
+            </button>
+            <div className="px-3 py-1 border border-zinc-200 rounded-md text-zinc-400">
+              {currentPage} of {totalPages || 1}
+            </div>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-2 py-1 border border-zinc-200 rounded-md hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              &gt;
+            </button>
+          </div>
         </div>
       </div>
 

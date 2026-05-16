@@ -9,8 +9,26 @@ export interface AuthUser {
   id: number;
   fullName: string;
   email: string;
+  phone?: string;
+  address?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  avatarUrl?: string;
   role: string;
   roleId?: number;
+  createdAt?: string;
+}
+
+export interface UpdateProfileData {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  currentPassword?: string;
+  newPassword?: string;
+  avatarUrl?: string;
 }
 
 export interface LoginResponse {
@@ -38,11 +56,23 @@ export const authApi = {
     };
   },
 
+  /** Update profile. */
+  updateProfile: async (payload: UpdateProfileData): Promise<AuthUser> => {
+    const { data } = await api.patch<any>('/auth/update-profile', payload);
+    return data.user || data.data || data;
+  },
+
   /** Clear token and redirect to login. */
-  logout: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+  logout: async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (err) {
+      console.error('Failed to log out from server', err);
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
     }
   },
 };
