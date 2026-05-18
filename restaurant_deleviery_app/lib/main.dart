@@ -8,7 +8,8 @@ import 'features/scan/presentation/controllers/scan_controller.dart';
 import 'features/payment/presentation/controllers/payment_controller.dart';
 import 'features/address/presentation/controllers/address_controller.dart';
 import 'features/auth/presentation/controllers/auth_controller.dart';
-import 'features/auth/presentation/screens/login_screen.dart';
+import 'features/home/presentation/controllers/review_controller.dart';
+import 'features/notifications/presentation/controllers/notification_controller.dart';
 
 import 'package:get_storage/get_storage.dart';
 
@@ -25,6 +26,8 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ScanController()),
         ChangeNotifierProvider(create: (_) => PaymentController()),
         ChangeNotifierProvider(create: (_) => AddressController()),
+        ChangeNotifierProvider(create: (_) => ReviewController()),
+        ChangeNotifierProvider(create: (_) => NotificationController()),
       ],
       child: const MyApp(),
     ),

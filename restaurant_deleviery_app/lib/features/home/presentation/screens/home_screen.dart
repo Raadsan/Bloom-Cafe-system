@@ -5,7 +5,6 @@ import '../controllers/home_controller.dart';
 import '../widgets/category_card.dart';
 import '../widgets/category_shimmer.dart';
 import '../widgets/home_header.dart';
-import '../widgets/home_search_bar.dart';
 import '../widgets/food_card.dart';
 import '../widgets/food_grid_item.dart';
 import '../widgets/recommended_card.dart';
@@ -14,6 +13,7 @@ import 'all_food_screen.dart';
 import 'product_details_screen.dart';
 import '../widgets/bonus_card.dart';
 import '../widgets/food_card_shimmer.dart';
+import '../widgets/checkout_overlay.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -76,17 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.bgColor,
-                const Color(0xFFF1F8F1),
-                Colors.white,
-              ],
-            ),
-          ),
           child: Stack(
             children: [
               SingleChildScrollView(
@@ -178,6 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
+              const CheckoutOverlay(),
             ],
           ),
         ),

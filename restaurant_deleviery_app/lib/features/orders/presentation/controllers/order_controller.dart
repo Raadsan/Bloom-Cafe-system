@@ -12,7 +12,6 @@ class OrderController extends ChangeNotifier {
 
   OrderController() {
     _initSocket();
-    fetchOrders();
   }
 
   void _initSocket() {
@@ -44,12 +43,12 @@ class OrderController extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchOrders() async {
+  Future<void> fetchOrders(String token) async {
     isLoading = true;
     notifyListeners();
 
     try {
-      final fetchedOrders = await _dataSource.getAllOrders();
+      final fetchedOrders = await _dataSource.getAllOrders(token);
       orders = fetchedOrders;
       
       // Join rooms for each active order
@@ -60,6 +59,43 @@ class OrderController extends ChangeNotifier {
       }
     } catch (e) {
       print('Error fetching orders: $e');
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> placeOrder({
+    required String type,
+    int? tableId,
+    int? addressId,
+    required List<dynamic> items,
+    required String token,
+    String? notes,
+  }) async {
+    isLoading = true;
+    notifyListeners();
+
+    try {
+      final newOrder = await _dataSource.createOrder(
+        type: type,
+        tableId: tableId,
+        addressId: addressId,
+        items: items,
+        token: token,
+        notes: notes,
+      );
+      
+      if (newOrder != null) {
+        orders.insert(0, newOrder);
+        socket.emit('join', 'order_${newOrder['id']}');
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Place Order Error: $e');
+      return false;
     } finally {
       isLoading = false;
       notifyListeners();

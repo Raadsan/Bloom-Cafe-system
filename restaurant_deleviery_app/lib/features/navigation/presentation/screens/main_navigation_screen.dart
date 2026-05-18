@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
+import 'package:restaurant_delivery_app/core/theme/colors.dart';
 import 'package:restaurant_delivery_app/features/cart/presentation/screens/cart_screen.dart';
 import 'package:restaurant_delivery_app/features/home/presentation/screens/home_screen.dart';
 import 'package:restaurant_delivery_app/features/settings/presentation/screens/profile_screen.dart';
@@ -87,7 +88,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 height: 65,
                 width: 65,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4CAF50), // Green scan button
+                  color: AppColors.secondaryColor, // Green scan button
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -128,14 +129,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         children: [
           Icon(
             isSelected ? activeIcon : inactiveIcon,
-            color: isSelected ? const Color(0xFF4CAF50) : Colors.grey[400],
+            color: isSelected ? AppColors.primaryColor : Colors.grey[400],
             size: 24,
           ),
           const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              color: isSelected ? const Color(0xFF4CAF50) : Colors.grey[400],
+              color: isSelected ? AppColors.primaryColor : Colors.grey[400],
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               fontSize: 10,
             ),

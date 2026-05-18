@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
 import 'package:provider/provider.dart';
+import 'package:restaurant_delivery_app/core/theme/colors.dart';
 import '../controllers/address_controller.dart';
 
 class AddressSelectionSheet extends StatefulWidget {
@@ -22,7 +23,9 @@ class _AddressSelectionSheetState extends State<AddressSelectionSheet> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AddressController>().fetchAddresses(1); // Placeholder customerId
+      context.read<AddressController>().fetchAddresses(
+        1,
+      ); // Placeholder customerId
     });
   }
 
@@ -76,7 +79,11 @@ class _AddressSelectionSheetState extends State<AddressSelectionSheet> {
           children: [
             const Text(
               "My Addresses",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: "Poppins"),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: "Poppins",
+              ),
             ),
             TextButton.icon(
               onPressed: () => setState(() => _isAdding = true),
@@ -97,37 +104,52 @@ class _AddressSelectionSheetState extends State<AddressSelectionSheet> {
               margin: const EdgeInsets.only(bottom: 15),
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
-                color: isSelected ? Colors.green.withOpacity(0.05) : Colors.white,
+                color: isSelected ? AppColors.btnColor : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isSelected ? Colors.green : Colors.grey[200]!,
+                  color: isSelected ? AppColors.btnColor : Colors.grey[200]!,
                   width: 1.5,
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(IconlyLight.location, color: Colors.green),
+                  const Icon(IconlyLight.location, color: AppColors.btnColor),
                   const SizedBox(width: 15),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(addr['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          addr['name'],
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         Text(
                           "${addr['district']}, ${addr['street']}",
-                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   if (addr['isDefault'])
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
+                        color: AppColors.btnColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Text("Default", style: TextStyle(fontSize: 10, color: Colors.green)),
+                      child: Text(
+                        "Default",
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.btnColor,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -154,23 +176,51 @@ class _AddressSelectionSheetState extends State<AddressSelectionSheet> {
               ),
             const Text(
               "Add New Address",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: "Poppins"),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: "Poppins",
+              ),
             ),
           ],
         ),
         const SizedBox(height: 20),
-        _buildField("Place Name", "Home, Office", IconlyLight.location, _placeController),
+        _buildField(
+          "Place Name",
+          "Address Name",
+          IconlyLight.location,
+          _placeController,
+        ),
         const SizedBox(height: 15),
-        _buildField("District", "Hodan, Waberi", IconlyLight.discovery, _districtController),
+        _buildField(
+          "District",
+          "Address District",
+          IconlyLight.discovery,
+          _districtController,
+        ),
         const SizedBox(height: 15),
-        _buildField("Street", "Maka Al-Mukarama", IconlyLight.activity, _streetController),
+        _buildField(
+          "Street",
+          "Address Street",
+          IconlyLight.activity,
+          _streetController,
+        ),
         const SizedBox(height: 15),
-        _buildField("Phone", "061XXXXXXX", IconlyLight.call, _phoneController, isPhone: true),
+        _buildField(
+          "Phone",
+          "Address Phone",
+          IconlyLight.call,
+          _phoneController,
+          isPhone: true,
+        ),
         const SizedBox(height: 15),
         SwitchListTile(
-          title: const Text("Set as default address", style: TextStyle(fontSize: 14)),
+          title: const Text(
+            "Set as default address",
+            style: TextStyle(fontSize: 14),
+          ),
           value: _isDefault,
-          activeColor: Colors.green,
+          activeColor: AppColors.btnColor,
           onChanged: (val) => setState(() => _isDefault = val),
         ),
         const SizedBox(height: 25),
@@ -179,8 +229,10 @@ class _AddressSelectionSheetState extends State<AddressSelectionSheet> {
           height: 55,
           child: ElevatedButton(
             onPressed: () async {
-              if (_placeController.text.isEmpty || _districtController.text.isEmpty) return;
-              
+              if (_placeController.text.isEmpty ||
+                  _districtController.text.isEmpty)
+                return;
+
               final success = await controller.addAddress({
                 'customerId': 1,
                 'name': _placeController.text,
@@ -196,12 +248,20 @@ class _AddressSelectionSheetState extends State<AddressSelectionSheet> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              backgroundColor: AppColors.btnColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
             ),
-            child: controller.isLoading 
-              ? const CircularProgressIndicator(color: Colors.white)
-              : const Text("Save & Continue", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: controller.isLoading
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Text(
+                    "Save & Continue",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
         ),
       ],
@@ -211,27 +271,43 @@ class _AddressSelectionSheetState extends State<AddressSelectionSheet> {
   Widget _buildHandle() {
     return Center(
       child: Container(
-        width: 50, height: 5,
-        decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+        width: 50,
+        height: 5,
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(10),
+        ),
       ),
     );
   }
 
-  Widget _buildField(String label, String hint, IconData icon, TextEditingController controller, {bool isPhone = false}) {
+  Widget _buildField(
+    String label,
+    String hint,
+    IconData icon,
+    TextEditingController controller, {
+    bool isPhone = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+        Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           keyboardType: isPhone ? TextInputType.phone : TextInputType.text,
           decoration: InputDecoration(
             hintText: hint,
-            prefixIcon: Icon(icon, size: 20, color: Colors.green),
+            prefixIcon: Icon(icon, size: 20, color: AppColors.btnColor),
             filled: true,
             fillColor: Colors.grey[50],
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
       ],

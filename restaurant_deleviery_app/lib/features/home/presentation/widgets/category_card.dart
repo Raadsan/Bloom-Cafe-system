@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:restaurant_delivery_app/core/theme/colors.dart';
 
 class CategoryCard extends StatelessWidget {
   final String label;
@@ -22,12 +23,12 @@ class CategoryCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF4CAF50) : Colors.white,
+          color: isSelected ? AppColors.btnColor : Colors.white,
           borderRadius: BorderRadius.circular(25),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.green.withOpacity(0.3),
+                    color: AppColors.btnColor.withOpacity(0.3),
                     blurRadius: 10,
                     offset: const Offset(0, 5),
                   ),
@@ -51,18 +52,20 @@ class CategoryCard extends StatelessWidget {
                   width: 24,
                   height: 24,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => _buildFallbackIcon(),
+                  errorBuilder: (context, error, stackTrace) =>
+                      _buildFallbackIcon(),
                 ),
               )
-            else if (label.contains(' ')) // If it has an emoji at the start like "🍕 Pizza"
-              Text(
-                label.split(' ')[0],
-                style: const TextStyle(fontSize: 18),
-              ),
+            else if (label.contains(
+              ' ',
+            )) // If it has an emoji at the start like "🍕 Pizza"
+              Text(label.split(' ')[0], style: const TextStyle(fontSize: 18)),
             if (label.isNotEmpty) ...[
               const SizedBox(width: 8),
               Text(
-                label.contains(' ') ? label.split(' ').sublist(1).join(' ') : label,
+                label.contains(' ')
+                    ? label.split(' ').sublist(1).join(' ')
+                    : label,
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.grey[800],
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
@@ -81,7 +84,7 @@ class CategoryCard extends StatelessWidget {
     return Icon(
       Icons.fastfood_rounded,
       size: 20,
-      color: isSelected ? Colors.white : const Color(0xFF4CAF50),
+      color: isSelected ? Colors.white : AppColors.btnColor,
     );
   }
 }

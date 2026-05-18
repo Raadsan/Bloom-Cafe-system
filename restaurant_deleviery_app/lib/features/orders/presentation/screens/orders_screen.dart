@@ -2,14 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:restaurant_delivery_app/features/auth/presentation/controllers/auth_controller.dart';
 import '../controllers/order_controller.dart';
 import '../../../../core/theme/colors.dart';
+import './order_tracking_screen.dart';
+import '../widgets/order_receipt_widget.dart';
 
-class OrdersScreen extends StatelessWidget {
+
+class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
   @override
+  State<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends State<OrdersScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = context.read<AuthController>();
+      if (auth.token != null) {
+        context.read<OrderController>().fetchOrders(auth.token!);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final token = context.watch<AuthController>().token;
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -27,7 +48,11 @@ class OrdersScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.green),
-            onPressed: () => context.read<OrderController>().fetchOrders(),
+            onPressed: () {
+              if (token != null) {
+                context.read<OrderController>().fetchOrders(token);
+              }
+            },
           ),
         ],
       ),
@@ -54,7 +79,11 @@ class OrdersScreen extends StatelessWidget {
           }
 
           return RefreshIndicator(
-            onRefresh: () => orderController.fetchOrders(),
+            onRefresh: () async {
+              if (token != null) {
+                await orderController.fetchOrders(token);
+              }
+            },
             color: Colors.green,
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -85,121 +114,136 @@ class OrdersScreen extends StatelessWidget {
       default: statusColor = Colors.grey;
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(
-                            IconlyBold.bag_2,
-                            color: statusColor,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Order #${order['id']}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: Color(0xFF1B3022),
-                              ),
-                            ),
-                            Text(
-                              formattedDate,
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        status.toUpperCase(),
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                const Divider(height: 1, color: Color(0xFFF1F1F1)),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildOrderInfo('Items', '${order['items']?.length ?? 0} Items'),
-                    _buildOrderInfo('Total Price', '\$${double.parse(order['total'].toString()).toStringAsFixed(2)}', isPrice: true),
-                  ],
-                ),
-              ],
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Colors.transparent,
+          isScrollControlled: true,
+          builder: (context) => OrderReceiptWidget(order: order),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-          ),
-          InkWell(
-            onTap: () {
-              // Navigate to tracking or details
-            },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor,
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+          ],
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              IconlyBold.bag_2,
+                              color: statusColor,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Order #${order['id']}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Color(0xFF1B3022),
+                                ),
+                              ),
+                              Text(
+                                formattedDate,
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          status.toUpperCase(),
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(height: 1, color: Color(0xFFF1F1F1)),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildOrderInfo('Items', '${order['orderitem']?.length ?? 0} Items'),
+                      _buildOrderInfo('Total Price', '\$${double.parse(order['total'].toString()).toStringAsFixed(2)}', isPrice: true),
+                    ],
+                  ),
+                ],
               ),
-              child: const Center(
-                child: Text(
-                  'Track Order',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+            ),
+            InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OrderTrackingScreen(order: order),
+                  ),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryColor,
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                ),
+                child: const Center(
+                  child: Text(
+                    'Track Order',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

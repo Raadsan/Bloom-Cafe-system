@@ -26,18 +26,26 @@ class PaymentRemoteDataSource {
     String? providerName,
   }) async {
     try {
+      final body = json.encode({
+        'orderId': orderId,
+        'method': method,
+        'phone': phone,
+        'providerName': providerName,
+      });
+
+      print("Initiating Payment Request: ${ApiConstants.baseUrl}/payments/pay");
+      print("Payment Request Body: $body");
+
       final response = await http.post(
         Uri.parse('${ApiConstants.baseUrl}/payments/pay'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'orderId': orderId,
-          'method': method,
-          'phone': phone,
-          'providerName': providerName,
-        }),
+        body: body,
       );
 
-      if (response.statusCode == 201) {
+      print("Payment Response Status: ${response.statusCode}");
+      print("Payment Response Body: ${response.body}");
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success']) {
           return data['data'];
@@ -45,6 +53,7 @@ class PaymentRemoteDataSource {
       }
       return null;
     } catch (e) {
+      print("Payment Remote Error: $e");
       rethrow;
     }
   }

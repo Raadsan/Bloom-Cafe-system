@@ -39,15 +39,17 @@ class PaymentController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint("PaymentController: Requesting payment for Order $orderId");
       final result = await _dataSource.createPaymentRequest(
         orderId: orderId,
         method: selectedMethod!['id'],
         phone: phone,
         providerName: selectedMethod!['name'],
       );
+      debugPrint("PaymentController: Result received: $result");
       return result != null;
     } catch (e) {
-      print(e);
+      debugPrint("PaymentController Error: $e");
       return false;
     } finally {
       isLoading = false;

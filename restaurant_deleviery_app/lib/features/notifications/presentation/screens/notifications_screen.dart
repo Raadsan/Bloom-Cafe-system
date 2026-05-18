@@ -1,9 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:iconly/iconly.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/theme/colors.dart';
+import '../../presentation/controllers/notification_controller.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../orders/presentation/controllers/order_controller.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final orderController = context.read<OrderController>();
+      final notificationController = context.read<NotificationController>();
+      
+      // Try to get customerId from orders
+      if (orderController.orders.isNotEmpty) {
+        final lastOrder = orderController.orders.first;
+        if (lastOrder['customerId'] != null) {
+          notificationController.setCustomerId(lastOrder['customerId']);
+          notificationController.fetchNotifications();
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,131 +53,147 @@ class NotificationsScreen extends StatelessWidget {
           ),
         ),
         centerTitle: true,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _buildDateHeader("Today"),
-          const SizedBox(height: 15),
-          _buildNotificationItem(
-            "Order Delivered",
-            "Your order #2140 from Maria's Kitchen has been delivered successfully.",
-            "2 min ago",
-            true,
-          ),
-          const SizedBox(height: 15),
-          _buildNotificationItem(
-            "15% Discount Voucher",
-            "You just received a new discount voucher. Use it on your next order!",
-            "1 hour ago",
-            true,
-          ),
-          const SizedBox(height: 25),
-          _buildDateHeader("Yesterday"),
-          const SizedBox(height: 15),
-          _buildNotificationItem(
-            "Payment Successful",
-            "Your payment of \$18.44 for order #2139 was successful.",
-            "Yesterday, 10:30 PM",
-            false,
-          ),
-          const SizedBox(height: 15),
-          _buildNotificationItem(
-            "New Menu Added",
-            "Check out our new Spicy Pepperoni Pizza now available in the menu.",
-            "Yesterday, 02:15 PM",
-            false,
+        actions: [
+          Consumer<NotificationController>(
+            builder: (context, controller, child) {
+              if (controller.notifications.isEmpty) return const SizedBox();
+              return TextButton(
+                onPressed: () => controller.markAllAsRead(),
+                child: const Text("Read All", style: TextStyle(color: AppColors.primaryColor)),
+              );
+            },
           ),
         ],
       ),
-    );
-  }
+      body: Consumer<NotificationController>(
+        builder: (context, controller, child) {
+          if (controller.currentCustomerId == null) {
+            return const Center(child: Text("No order history found to track notifications."));
+          }
 
-  Widget _buildDateHeader(String title) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 14,
-        color: Colors.grey[600],
-        fontWeight: FontWeight.w500,
-        fontFamily: "Poppins",
+          if (controller.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (controller.notifications.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(IconlyLight.notification, size: 80, color: Colors.grey[300]),
+                  const SizedBox(height: 15),
+                  Text("No notifications yet", style: TextStyle(color: Colors.grey[500])),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: controller.notifications.length,
+            itemBuilder: (context, index) {
+              final notification = controller.notifications[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 15),
+                child: _buildNotificationItem(
+                  context,
+                  notification,
+                  controller,
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
 
   Widget _buildNotificationItem(
-    String title,
-    String desc,
-    String time,
-    bool isUnread,
+    BuildContext context,
+    dynamic notification,
+    NotificationController controller,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FBF8), // Soft off-white green tint
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.015),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    final DateTime createdAt = DateTime.parse(notification['createdAt']);
+    final String timeStr = DateFormat('MMM d, h:mm a').format(createdAt);
+    final bool isUnread = notification['isRead'] == false;
+
+    return GestureDetector(
+      onTap: () {
+        if (isUnread) {
+          controller.markAsRead(notification['id']);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isUnread ? Colors.white : const Color(0xFFF8FBF8),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isUnread ? AppColors.primaryColor.withOpacity(0.2) : Colors.white,
+            width: 1.5,
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                        fontFamily: "Poppins",
-                        color: Color(0xFF1B3022),
-                      ),
-                    ),
-                    if (isUnread)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.redAccent,
-                          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.015),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        notification['title'],
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          fontFamily: "Poppins",
+                          color: Color(0xFF1B3022),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  desc,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                    height: 1.5,
-                    fontFamily: "Poppins",
+                      if (isUnread)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  time,
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 10,
-                    fontFamily: "Poppins",
+                  const SizedBox(height: 6),
+                  Text(
+                    notification['message'],
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                      height: 1.5,
+                      fontFamily: "Poppins",
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    timeStr,
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 10,
+                      fontFamily: "Poppins",
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

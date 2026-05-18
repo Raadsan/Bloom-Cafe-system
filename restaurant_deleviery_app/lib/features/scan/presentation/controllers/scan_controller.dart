@@ -13,6 +13,13 @@ class ScanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetScanner() {
+    isScanning = true;
+    isLoading = false;
+    error = null;
+    notifyListeners();
+  }
+
   Future<Map<String, dynamic>?> processScannedCode(String code) async {
     isLoading = true;
     error = null;

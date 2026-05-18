@@ -52,7 +52,7 @@ class SectionHeader extends StatelessWidget {
                     Icon(
                       IconlyLight.arrow_right_2,
                       size: 16,
-                      color: Colors.green[800],
+                      color: AppColors.btnColor,
                     ),
                   ],
                 ),

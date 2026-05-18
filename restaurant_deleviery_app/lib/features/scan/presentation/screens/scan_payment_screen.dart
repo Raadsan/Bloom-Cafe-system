@@ -4,8 +4,21 @@ import 'package:provider/provider.dart';
 import 'package:restaurant_delivery_app/features/cart/presentation/controllers/cart_controller.dart';
 import '../controllers/scan_controller.dart';
 
-class ScanPaymentScreen extends StatelessWidget {
+class ScanPaymentScreen extends StatefulWidget {
   const ScanPaymentScreen({super.key});
+
+  @override
+  State<ScanPaymentScreen> createState() => _ScanPaymentScreenState();
+}
+
+class _ScanPaymentScreenState extends State<ScanPaymentScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ScanController>().resetScanner();
+    });
+  }
 
   Future<void> _onDetect(BuildContext context, BarcodeCapture capture) async {
     final controller = context.read<ScanController>();
