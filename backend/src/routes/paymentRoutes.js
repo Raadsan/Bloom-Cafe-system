@@ -21,10 +21,11 @@ router.post('/pay', createPublicPayment)
 router.patch('/pay/:id/confirm', confirmPublicPayment)
 
 // PROTECTED ROUTES
+// Create payment — accessible to pos role too
 router.post(
   '/',
   protect,
-  authorize('admin', 'manager', 'cashier'),
+  authorize('admin', 'manager', 'cashier', 'pos'),
   createPayment
 )
 

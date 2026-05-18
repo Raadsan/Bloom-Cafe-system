@@ -1,6 +1,6 @@
 import api from './axios';
 
-export type TableStatus = 'available' | 'occupied' | 'reserved';
+export type TableStatus = 'active' | 'inactive';
 
 export interface Table {
   id: number;

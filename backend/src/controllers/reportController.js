@@ -453,7 +453,7 @@ export const getMonthlyReport = async (req, res) => {
 // STAFF PERFORMANCE REPORT
 export const getStaffPerformanceReport = async (req, res) => {
   try {
-    const logs = await prisma.auditLog.findMany({
+    const logs = await prisma.auditlog.findMany({
       where: {
         userId: {
           not: null
@@ -512,3 +512,186 @@ export const getStaffPerformanceReport = async (req, res) => {
     })
   }
 }
+
+// FINANCE REPORT (Detailed)
+export const getFinanceReport = async (req, res) => {
+  try {
+    const dateRange = parseDateRange(req.query)
+
+    const payments = await prisma.payment.findMany({
+      where: {
+        status: 'paid',
+        ...(dateRange ? { paidAt: dateRange } : {})
+      },
+      include: {
+        order: {
+          include: {
+            orderitem: {
+              include: {
+                menuitem: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    let totalRevenue = 0
+    let totalCost = 0
+    let transactionCount = payments.length
+    
+    const itemsList = []
+    const breakdownByMethod = {}
+    const breakdownBySource = {}
+
+    payments.forEach(p => {
+      totalRevenue += p.amount
+      
+      // By Method
+      const method = p.method || 'Unknown'
+      if (!breakdownByMethod[method]) breakdownByMethod[method] = 0
+      breakdownByMethod[method] += p.amount
+
+      // By Source (from Order)
+      const source = p.order?.source || 'pos'
+      if (!breakdownBySource[source]) breakdownBySource[source] = 0
+      breakdownBySource[source] += p.amount
+
+      // Items calculation
+      if (p.order && p.order.orderitem) {
+        p.order.orderitem.forEach(item => {
+          const cost = (item.menuitem?.costPrice || 0) * item.quantity
+          const selling = item.unitPrice * item.quantity
+          totalCost += cost
+          
+          itemsList.push({
+            id: item.id,
+            orderId: p.orderId,
+            name: item.menuitem?.name || 'Unknown',
+            quantity: item.quantity,
+            costPrice: item.menuitem?.costPrice || 0,
+            sellingPrice: item.unitPrice,
+            totalCost: cost,
+            totalSelling: selling,
+            profit: selling - cost,
+            date: p.paidAt
+          })
+        })
+      }
+    })
+
+    const netProfit = totalRevenue - totalCost
+    const averageTransaction = transactionCount > 0 ? totalRevenue / transactionCount : 0
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalRevenue,
+        totalCost,
+        netProfit,
+        averageTransaction,
+        transactionCount,
+        breakdownByMethod,
+        breakdownBySource,
+        items: itemsList.sort((a, b) => new Date(b.date) - new Date(a.date))
+      }
+    })
+  } catch (error) {
+    console.error('Finance Report Error:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// ORDERS REPORT (Detailed)
+export const getOrdersReport = async (req, res) => {
+  try {
+    const dateRange = parseDateRange(req.query)
+
+    const [orders, stats] = await Promise.all([
+      prisma.order.findMany({
+        where: dateRange ? { createdAt: dateRange } : {},
+        include: { table: true, customer: true }
+      }),
+      prisma.order.aggregate({
+        where: dateRange ? { createdAt: dateRange } : {},
+        _count: { id: true },
+        _sum: { total: true }
+      })
+    ])
+
+    const breakdownByStatus = {}
+    const breakdownByType = {}
+    const breakdownBySource = {}
+
+    orders.forEach(o => {
+      breakdownByStatus[o.status] = (breakdownByStatus[o.status] || 0) + 1
+      breakdownByType[o.orderType] = (breakdownByType[o.orderType] || 0) + 1
+      breakdownBySource[o.source] = (breakdownBySource[o.source] || 0) + 1
+    })
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalOrders: stats._count.id || 0,
+        totalAmount: stats._sum.total || 0,
+        breakdownByStatus,
+        breakdownByType,
+        breakdownBySource,
+        orders: orders.slice(0, 50) // Return last 50 for preview
+      }
+    })
+  } catch (error) {
+    console.error('Orders Report Error:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// CLIENTS REPORT
+export const getClientsReport = async (req, res) => {
+  try {
+    const dateRange = parseDateRange(req.query)
+
+    // Find customers who have made orders
+    const customers = await prisma.customer.findMany({
+      include: {
+        order: {
+          where: dateRange ? { createdAt: dateRange } : {},
+          select: { total: true, source: true, createdAt: true }
+        }
+      }
+    })
+
+    const clientStats = customers.map(c => {
+      const totalSpent = c.order.reduce((sum, o) => sum + o.total, 0)
+      const orderCount = c.order.length
+      
+      // Determine primary source
+      const sources = {}
+      c.order.forEach(o => { sources[o.source] = (sources[o.source] || 0) + 1 })
+      const primarySource = Object.keys(sources).reduce((a, b) => (sources[a] || 0) > (sources[b] || 0) ? a : b, 'pos')
+
+      return {
+        id: c.id,
+        fullName: c.fullName,
+        phone: c.phone,
+        totalSpent,
+        orderCount,
+        primarySource,
+        lastOrder: c.order.length > 0 ? c.order[c.order.length - 1].createdAt : null
+      }
+    }).filter(c => c.orderCount > 0)
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalClients: clientStats.length,
+        topClients: clientStats.slice(0, 20),
+        fullStats: clientStats
+      }
+    })
+  } catch (error) {
+    console.error('Clients Report Error:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+}

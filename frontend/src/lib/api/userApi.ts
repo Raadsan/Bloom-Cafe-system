@@ -9,6 +9,7 @@ export interface User {
   roleId: number;
   role?: { id: number; name: string };
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateUserPayload {

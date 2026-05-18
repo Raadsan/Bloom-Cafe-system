@@ -1,6 +1,6 @@
 import api from './axios';
 
-export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled';
+export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled' | 'held';
 
 export interface OrderItem {
   id: number;
@@ -25,10 +25,12 @@ export interface Order {
 }
 
 export interface CreateOrderPayload {
-  tableId: number;
+  tableId?: number;
+  type?: string;
   customerName?: string;
   customerPhone?: string;
   notes?: string;
+  status?: string;
   items: { menuItemId: number; quantity: number }[];
 }
 
@@ -38,8 +40,8 @@ export const orderApi = {
     return data.data;
   },
 
-  getAllOrders: async (): Promise<Order[]> => {
-    const { data } = await api.get<{ success: boolean; data: Order[] }>('/orders/all');
+  getAllOrders: async (params?: { status?: string; onlyMine?: boolean }): Promise<Order[]> => {
+    const { data } = await api.get<{ success: boolean; data: Order[] }>('/orders/all', { params });
     return data.data;
   },
 

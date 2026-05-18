@@ -4,7 +4,7 @@ import { logAudit } from '../utils/auditHelper.js'
 // CREATE MENU ITEM
 export const createMenuItem = async (req, res) => {
   try {
-    const { name, description, price, imageUrl, categoryId, isAvailable } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable } = req.body
 
     if (!name || price === undefined || !categoryId) {
       return res.status(400).json({
@@ -28,7 +28,9 @@ export const createMenuItem = async (req, res) => {
       data: {
         name: name.trim(),
         description: description || null,
+        costPrice: costPrice !== undefined ? Number(costPrice) : null,
         price: Number(price),
+        tax: tax !== undefined ? Number(tax) : 0,
         imageUrl: imageUrl || null,
         categoryId: Number(categoryId),
         isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true
@@ -114,7 +116,7 @@ export const getMenuItemsByCategory = async (req, res) => {
 export const updateMenuItem = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, description, price, imageUrl, categoryId, isAvailable } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable } = req.body
 
     const itemId = Number(id)
     if (isNaN(itemId)) {
@@ -138,10 +140,12 @@ export const updateMenuItem = async (req, res) => {
       data: {
         name: name ?? existing.name,
         description: description !== undefined ? description : existing.description,
+        costPrice: costPrice !== undefined ? Number(costPrice) : existing.costPrice,
         price: price !== undefined ? Number(price) : existing.price,
+        tax: tax !== undefined ? Number(tax) : existing.tax,
         imageUrl: imageUrl !== undefined ? imageUrl : existing.imageUrl,
         categoryId: categoryId ? Number(categoryId) : existing.categoryId,
-        isAvailable: typeof isAvailable === 'boolean' ? isAvailable : existing.isAvailable
+        isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true
       },
       include: {
         category: { select: { id: true, name: true } }

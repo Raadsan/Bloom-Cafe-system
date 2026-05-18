@@ -65,11 +65,11 @@ async function main() {
   // 3. TABLES
   await prisma.table.createMany({
     data: [
-      { number: 1, name: 'Window Table 1', qrCode: 'T1-SECRET', status: 'available' },
-      { number: 2, name: 'Cozy Corner 2', qrCode: 'T2-SECRET', status: 'available' },
-      { number: 3, name: 'Family Booth 3', qrCode: 'T3-SECRET', status: 'available' },
-      { number: 4, name: 'Patio 4', qrCode: 'T4-SECRET', status: 'available' },
-      { number: 5, name: 'Bar Counter 5', qrCode: 'T5-SECRET', status: 'available' }
+      { number: 1, name: 'Window Table 1', qrCode: 'T1-SECRET', status: 'active' },
+      { number: 2, name: 'Cozy Corner 2', qrCode: 'T2-SECRET', status: 'active' },
+      { number: 3, name: 'Family Booth 3', qrCode: 'T3-SECRET', status: 'active' },
+      { number: 4, name: 'Patio 4', qrCode: 'T4-SECRET', status: 'active' },
+      { number: 5, name: 'Bar Counter 5', qrCode: 'T5-SECRET', status: 'active' }
     ]
   })
 

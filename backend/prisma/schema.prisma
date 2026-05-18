@@ -25,8 +25,26 @@ model category {
   name        String     @unique
   createdAt   DateTime   @default(now())
   description String?
+  imageUrl    String?    @db.Text
   updatedAt   DateTime?
   menuitem    menuitem[]
+}
+
+model expense {
+  id            Int      @id @default(autoincrement())
+  title         String
+  amount        Float
+  category      String?
+  receiver      String?
+  date          DateTime @default(now())
+  description   String?  @db.Text
+  paymentMethod String?
+  createdById   Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  createdBy     user?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
 }
 
 model customer {
@@ -37,6 +55,18 @@ model customer {
   updatedAt DateTime?
   addresses address[]
   order     order[]
+}
+
+model receiptSettings {
+  id         Int      @id @default(1)
+  name       String   @default("My Restaurant")
+  address    String?  @db.LongText
+  phone      String?  @db.LongText
+  email      String?
+  logoUrl    String?  @db.LongText
+  vatNumber  String?
+  footerText String?  @db.LongText
+  updatedAt  DateTime @updatedAt
 }
 
 model address {
@@ -64,11 +94,7 @@ model ingredient {
   costPerUnit   Float           @default(0)
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
-<<<<<<< HEAD
-  updatedAt     DateTime        @default(now())
-=======
   updatedAt     DateTime @default(now()) @updatedAt
->>>>>>> 78bbf106faf5c8d898099204f2668a9fd7f5aa56
   menuitembom   menuitembom[]
   stockmovement stockmovement[]
 }
@@ -81,11 +107,7 @@ model menu {
   order          Int              @default(0)
   isActive       Boolean          @default(true)
   createdAt      DateTime         @default(now())
-<<<<<<< HEAD
-  updatedAt      DateTime         @default(now())
-=======
   updatedAt      DateTime @default(now()) @updatedAt
->>>>>>> 78bbf106faf5c8d898099204f2668a9fd7f5aa56
   roleMenuAccess roleMenuAccess[]
   submenu        submenu[]
 }
@@ -94,8 +116,10 @@ model menuitem {
   id          Int           @id @default(autoincrement())
   name        String
   description String?
+  costPrice   Float?
   price       Float
-  imageUrl    String?
+  tax         Float         @default(0)
+  imageUrl    String?       @db.Text
   isAvailable Boolean       @default(true)
   categoryId  Int
   createdAt   DateTime      @default(now())
@@ -103,7 +127,7 @@ model menuitem {
   category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
   menuitembom menuitembom[]
   orderitem   orderitem[]
-  reviews     review[]
+
 
   @@index([categoryId], map: "MenuItem_categoryId_fkey")
 }
@@ -141,6 +165,8 @@ model order {
   id            Int         @id @default(autoincrement())
   status        String      @default("pending")
   total         Float       @default(0)
+  taxAmount     Float       @default(0)
+  subTotal      Float       @default(0)
   tableId       Int?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @default(now()) @updatedAt
@@ -148,13 +174,15 @@ model order {
   notes         String?
   customerPhone String?
   customerId    Int?
+  userId        Int?
   orderType     String      @default("dine-in")
   source        String      @default("pos")
   addressId     Int?
+  address       address?    @relation(fields: [addressId], references: [id])
   customer      customer?   @relation(fields: [customerId], references: [id])
   table         table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
-  address       address?    @relation(fields: [addressId], references: [id], onDelete: NoAction)
   orderitem     orderitem[]
+
   payment       payment?
 
   @@index([addressId])
@@ -167,6 +195,7 @@ model orderitem {
   id         Int      @id @default(autoincrement())
   quantity   Int      @default(1)
   unitPrice  Float
+  tax        Float    @default(0)
   orderId    Int
   menuItemId Int
   menuitem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: NoAction)
@@ -267,7 +296,7 @@ model submenu {
 model table {
   id        Int       @id @default(autoincrement())
   number    Int       @unique
-  status    String    @default("available")
+  status    String    @default("active")
   createdAt DateTime  @default(now())
   name      String?
   qrCode    String    @unique
@@ -283,27 +312,17 @@ model user {
   fullName  String
   isActive  Boolean    @default(true)
   phone     String?    @unique
+  address   String?    @db.Text
+  dateOfBirth DateTime?
+  gender    String?
+  avatarUrl String?    @db.LongText
   updatedAt DateTime   @default(now()) @updatedAt
   roleId    Int
   auditlog  auditlog[]
-  reviews   review[]
-  role          role           @relation(fields: [roleId], references: [id], onDelete: NoAction)
-  notifications notification[]
+  notification notification[]
+  expense   expense[]
+  role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
 
   @@index([roleId], map: "User_roleId_fkey")
 }
 
-model review {
-  id         Int      @id @default(autoincrement())
-  rating     Int      @default(5)
-  comment    String?
-  userId     Int
-  menuItemId Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  menuitem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([menuItemId])
-}

@@ -46,6 +46,16 @@ export const login = async (req, res) => {
 
     const token = generateToken(user)
 
+    // Log Login Activity
+    await prisma.auditlog.create({
+      data: {
+        userId: user.id,
+        action: 'LOGIN',
+        entity: 'AUTH',
+        description: `Staff ${user.fullName} logged into the system.`
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -145,13 +155,26 @@ export const register = async (req, res) => {
 // UPDATE PROFILE
 export const updateProfile = async (req, res) => {
   try {
-    const { fullName, email, phone, password } = req.body
+    const { fullName, email, phone, currentPassword, newPassword, address, dateOfBirth, gender, avatarUrl } = req.body
     const userId = req.user.id
 
     const updateData = { fullName, email, phone }
 
-    if (password) {
-      updateData.password = await bcrypt.hash(password, 10)
+    if (address !== undefined) updateData.address = address;
+    if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+    if (gender !== undefined) updateData.gender = gender;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+
+    if (currentPassword && newPassword) {
+      // Find the user to verify current password
+      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+      const isMatch = await bcrypt.compare(currentPassword, existingUser.password);
+      
+      if (!isMatch) {
+        return res.status(400).json({ success: false, message: 'Incorrect current password' });
+      }
+      
+      updateData.password = await bcrypt.hash(newPassword, 10);
     }
 
     const user = await prisma.user.update({
@@ -242,5 +265,33 @@ export const resetPassword = async (req, res) => {
     res.status(200).json({ success: true, message: 'Password reset successful' })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// LOGOUT
+export const logout = async (req, res) => {
+  try {
+    // Log Logout Activity
+    if (req.user) {
+      await prisma.auditlog.create({
+        data: {
+          userId: req.user.id,
+          action: 'LOGOUT',
+          entity: 'AUTH',
+          description: `Staff ${req.user.fullName} logged out of the system.`
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    console.error('Logout Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to logout'
+    });
   }
 }

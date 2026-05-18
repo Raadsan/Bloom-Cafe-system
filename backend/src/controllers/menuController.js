@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { trackingController } from "./trackingController.js";
 
 const prisma = new PrismaClient();
 
@@ -274,6 +275,16 @@ export const createMenu = async (req, res) => {
       });
     }
 
+    if (req.user) {
+      await trackingController.logAction(
+        req.user.id,
+        'CREATE',
+        'MENU',
+        menu.id,
+        `Created new main menu: ${menu.title}`
+      );
+    }
+
     res.json({ success: true, data: menu });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -288,6 +299,16 @@ export const updateMenu = async (req, res) => {
       where: { id: Number(id) },
       data: { title, url, icon, order: Number(order), isActive }
     });
+
+    if (req.user) {
+      await trackingController.logAction(
+        req.user.id,
+        'UPDATE',
+        'MENU',
+        menu.id,
+        `Updated menu configuration: ${menu.title}`
+      );
+    }
     res.json({ success: true, data: menu });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -297,7 +318,18 @@ export const updateMenu = async (req, res) => {
 export const deleteMenu = async (req, res) => {
   try {
     const { id } = req.params;
+    const menu = await prisma.menu.findUnique({ where: { id: Number(id) } });
     await prisma.menu.delete({ where: { id: Number(id) } });
+
+    if (req.user) {
+      await trackingController.logAction(
+        req.user.id,
+        'DELETE',
+        'MENU',
+        Number(id),
+        `Deleted menu module: ${menu?.title || id}`
+      );
+    }
     res.json({ success: true, message: "Menu deleted" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -366,61 +398,85 @@ export const updatePermissions = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid role ID" });
     }
 
-    for (const menuPerm of permissions) {
-      const roleMenuAccess = await prisma.roleMenuAccess.upsert({
-        where: {
-          roleId_menuId: {
-            roleId,
-            menuId: Number(menuPerm.menuId)
-          }
-        },
-        update: {
-          canView: menuPerm.canView,
-          canAdd: menuPerm.canAdd,
-          canEdit: menuPerm.canEdit,
-          canDelete: menuPerm.canDelete
-        },
-        create: {
-          roleId,
-          menuId: Number(menuPerm.menuId),
-          canView: menuPerm.canView,
-          canAdd: menuPerm.canAdd,
-          canEdit: menuPerm.canEdit,
-          canDelete: menuPerm.canDelete
-        }
+    await prisma.$transaction(async (tx) => {
+      // 1. Clear existing permissions for this role
+      const existingMenuAccess = await tx.roleMenuAccess.findMany({
+        where: { roleId }
+      });
+      const existingIds = existingMenuAccess.map(m => m.id);
+
+      if (existingIds.length > 0) {
+        await tx.roleSubMenuAccess.deleteMany({
+          where: { roleMenuAccessId: { in: existingIds } }
+        });
+      }
+
+      await tx.roleMenuAccess.deleteMany({
+        where: { roleId }
       });
 
-      if (menuPerm.submenus && Array.isArray(menuPerm.submenus)) {
-        for (const subPerm of menuPerm.submenus) {
-          await prisma.roleSubMenuAccess.upsert({
-            where: {
-              roleMenuAccessId_subMenuId: {
-                roleMenuAccessId: roleMenuAccess.id,
-                subMenuId: Number(subPerm.submenuId)
-              }
-            },
-            update: {
-              canView: subPerm.canView,
-              canAdd: subPerm.canAdd,
-              canEdit: subPerm.canEdit,
-              canDelete: subPerm.canDelete
-            },
-            create: {
+      // 2. Create new permissions
+      for (const menuPerm of permissions) {
+        if (!menuPerm.canView && !menuPerm.canAdd && !menuPerm.canEdit && !menuPerm.canDelete) continue;
+
+        const roleMenuAccess = await tx.roleMenuAccess.create({
+          data: {
+            roleId,
+            menuId: Number(menuPerm.menuId),
+            canView: !!menuPerm.canView,
+            canAdd: !!menuPerm.canAdd,
+            canEdit: !!menuPerm.canEdit,
+            canDelete: !!menuPerm.canDelete
+          }
+        });
+
+        if (menuPerm.submenus && Array.isArray(menuPerm.submenus)) {
+          const subData = menuPerm.submenus
+            .filter(sp => sp.canView || sp.canAdd || sp.canEdit || sp.canDelete)
+            .map(sp => ({
               roleMenuAccessId: roleMenuAccess.id,
-              subMenuId: Number(subPerm.submenuId),
-              canView: subPerm.canView,
-              canAdd: subPerm.canAdd,
-              canEdit: subPerm.canEdit,
-              canDelete: subPerm.canDelete
-            }
-          });
+              subMenuId: Number(sp.submenuId),
+              canView: !!sp.canView,
+              canAdd: !!sp.canAdd,
+              canEdit: !!sp.canEdit,
+              canDelete: !!sp.canDelete
+            }));
+
+          if (subData.length > 0) {
+            await tx.roleSubMenuAccess.createMany({
+              data: subData
+            });
+          }
         }
+      }
+    }, {
+      maxWait: 5000,
+      timeout: 15000
+    });
+
+    // Log the action
+    if (req.user) {
+      try {
+        await trackingController.logAction(
+          req.user.id,
+          'UPDATE',
+          'PERMISSIONS',
+          roleId,
+          `Updated system permissions for role ID: ${roleId}`
+        );
+      } catch (logError) {
+        console.error("Failed to log permission update:", logError);
       }
     }
 
     res.json({ success: true, message: "Permissions updated successfully" });
   } catch (error) {
-    console.error("Error updating permissions:", error);
-    res.status(500).json({ success: false, message: "Server error during permission update" });
+    console.error("CRITICAL: Error updating permissions:", error);
+    import('fs').then(fs => fs.writeFileSync('error.log', error.stack || error.message));
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error during permission update",
+      error: error.message 
+    });
   }
 };

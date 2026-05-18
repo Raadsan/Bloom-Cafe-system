@@ -31,8 +31,8 @@ router.get('/qr/:qrCode', getTableByQrCode)
 // Create table
 router.post('/', protect, checkPermission('/tables', 'canAdd'), createTable)
 
-// Get all tables
-router.get('/all', protect, checkPermission('/tables', 'canView'), getAllTables)
+// Get all tables — accessible to any logged-in user (needed by POS)
+router.get('/all', protect, getAllTables)
 
 // Update table
 router.patch('/:id', protect, checkPermission('/tables', 'canEdit'), updateTable)

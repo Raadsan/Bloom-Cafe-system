@@ -1,33 +1,31 @@
 import api from './axios';
+import { MenuItem } from './menuItemApi';
 
 export interface Category {
   id: number;
   name: string;
   description?: string;
+  imageUrl?: string;
   createdAt?: string;
   updatedAt?: string;
+  isActive?: boolean;
 }
 
 export interface CategoryWithItems extends Category {
-  menuitem: {
-    id: number;
-    name: string;
-    description?: string;
-    price: number;
-    imageUrl?: string;
-    isAvailable: boolean;
-    categoryId: number;
-  }[];
+  menuitem: MenuItem[];
 }
+
 
 export interface CreateCategoryPayload {
   name: string;
   description?: string;
+  imageUrl?: string;
 }
 
 export interface UpdateCategoryPayload {
   name?: string;
   description?: string;
+  imageUrl?: string;
 }
 
 export const categoryApi = {

@@ -32,7 +32,7 @@ export const createTable = async (req, res) => {
         number: Number(number),
         name: name || `Table ${number}`,
         qrCode,
-        status: status || 'available',
+        status: status || 'active',
       },
     });
 

@@ -37,4 +37,19 @@ export const reportApi = {
     const { data } = await api.get('/reports/staff-performance');
     return data;
   },
+
+  getFinanceReport: async (params?: { startDate?: string; endDate?: string }): Promise<any> => {
+    const { data } = await api.get('/reports/finance', { params });
+    return data;
+  },
+
+  getOrdersReport: async (params?: { startDate?: string; endDate?: string }): Promise<any> => {
+    const { data } = await api.get('/reports/orders', { params });
+    return data;
+  },
+
+  getClientsReport: async (params?: { startDate?: string; endDate?: string }): Promise<any> => {
+    const { data } = await api.get('/reports/clients', { params });
+    return data;
+  },
 };

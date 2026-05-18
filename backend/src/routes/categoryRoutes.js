@@ -38,22 +38,22 @@ import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 const router = express.Router()
 
 // Create category
-router.post('/', protect, checkPermission('/menu/categories', 'canAdd'), createCategory)
+router.post('/', protect, checkPermission('/categories', 'canAdd'), createCategory)
 
 // Get all categories
-// router.get('/all', protect, checkPermission('/menu/categories', 'canView'), getAllCategories)
+// router.get('/all', protect, checkPermission('/categories', 'canView'), getAllCategories)
 router.get('/all',getAllCategories)
 
 // Get categories with items
-router.get('/with-items', protect, checkPermission('/menu/categories', 'canView'), getCategoriesWithItems)
+router.get('/with-items', getCategoriesWithItems)
 
 // Get category by id with items
-router.get('/:id/with-items', protect, checkPermission('/menu/categories', 'canView'), getCategoryByIdWithItems)
+router.get('/:id/with-items', protect, checkPermission('/categories', 'canView'), getCategoryByIdWithItems)
 
 // Update category
-router.patch('/:id', protect, checkPermission('/menu/categories', 'canEdit'), updateCategory)
+router.patch('/:id', protect, checkPermission('/categories', 'canEdit'), updateCategory)
 
 // Delete category
-router.delete('/:id', protect, checkPermission('/menu/categories', 'canDelete'), deleteCategory)
+router.delete('/:id', protect, checkPermission('/categories', 'canDelete'), deleteCategory)
 
 export default router

@@ -26,9 +26,14 @@ export default function LoginPage() {
       
       showToast("Login successful! Redirecting...", "success");
 
-      // Redirect after a short delay so the user sees the toast
+      // Redirect based on role
+      const userRole = res?.user?.role?.toLowerCase();
       setTimeout(() => {
-        window.location.href = "/dashboard";
+        if (userRole === "pos") {
+          window.location.href = "/pos-terminal";
+        } else {
+          window.location.href = "/dashboard";
+        }
       }, 1500);
     } catch (err: any) {
       console.error("Login caught error:", err);

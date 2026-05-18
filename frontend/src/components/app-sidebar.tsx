@@ -25,6 +25,8 @@ import {
   History,
   ClipboardList,
   Tag,
+  BarChart3,
+  CreditCard,
 } from "lucide-react";
 import {
   Sidebar,
@@ -83,6 +85,9 @@ const getIcon = (iconName: string) => {
     History,
     ClipboardList,
     Tag,
+    BarChart3,
+    CreditCard,
+    report: BarChart3,
   };
   return icons[iconName] || LayoutDashboard;
 };
@@ -147,7 +152,7 @@ function NavUser({ user }: { user: AuthUser | null }) {
                 Profile
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings" className="flex w-full items-center text-xs font-semibold uppercase tracking-widest cursor-pointer hover:bg-muted/50">
+                <Link href="/settings" className="flex w-full items-center text-xs font-semibold uppercase tracking-widest cursor-pointer hover:bg-muted/50">
                   <Settings2 className="mr-2 size-4" />
                   Settings
                 </Link>
@@ -160,9 +165,8 @@ function NavUser({ user }: { user: AuthUser | null }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               className="text-xs font-semibold uppercase tracking-widest text-destructive cursor-pointer hover:bg-destructive/5"
-              onClick={() => {
-                authApi.logout();
-                window.location.href = "/login";
+              onClick={async () => {
+                await authApi.logout();
               }}
             >
               <LogOut className="mr-2 size-4" />
@@ -233,11 +237,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader className="h-[76px] flex items-center justify-start px-4 bg-white border-b border-zinc-50 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:justify-center">
         <Link href="/dashboard" className="flex items-center gap-3 w-full group-data-[collapsible=icon]:justify-center mt-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#605DFF] text-white shadow-lg shadow-[#605DFF]/20 ml-1 group-data-[collapsible=icon]:ml-0 font-bold text-lg">
-            R
+            <UtensilsCrossed/>
           </div>
           <div className="flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
-            <span className="font-bold text-lg tracking-tighter text-[#1E293B] uppercase leading-none">RAADSAN</span>
-            <span className="text-[9px] font-bold text-muted-foreground/50 tracking-widest uppercase leading-none">Restaurant System</span>
+            <span className="font-bold text-lg tracking-tighter text-[#1E293B] uppercase leading-none">Restaurant</span>
+            <span className="text-[9px] font-bold text-muted-foreground/50 tracking-widest uppercase leading-none">Management System</span>
           </div>
         </Link>
       </SidebarHeader>

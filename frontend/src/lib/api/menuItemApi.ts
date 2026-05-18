@@ -1,33 +1,40 @@
 import api from './axios';
 
 export interface MenuItem {
-  id: string;
+  id: number;
   name: string;
   description?: string;
+  costPrice?: number;
   price: number;
+  tax: number;
   imageUrl?: string;
   isAvailable: boolean;
-  categoryId: string;
-  category?: { id: string; name: string };
+  categoryId: number;
+  category?: { id: number; name: string };
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateMenuItemPayload {
   name: string;
   description?: string;
+  costPrice?: number;
   price: number;
+  tax?: number;
   imageUrl?: string;
   isAvailable?: boolean;
-  categoryId: string;
+  categoryId: number;
 }
 
 export interface UpdateMenuItemPayload {
   name?: string;
   description?: string;
+  costPrice?: number;
   price?: number;
+  tax?: number;
   imageUrl?: string;
   isAvailable?: boolean;
-  categoryId?: string;
+  categoryId?: number;
 }
 
 export const menuItemApi = {
@@ -41,17 +48,17 @@ export const menuItemApi = {
     return data.data;
   },
 
-  getMenuItemsByCategory: async (categoryId: string): Promise<MenuItem[]> => {
+  getMenuItemsByCategory: async (categoryId: number): Promise<MenuItem[]> => {
     const { data } = await api.get<{ success: boolean; data: MenuItem[] }>(`/menu-items/category/${categoryId}`);
     return data.data;
   },
 
-  updateMenuItem: async (id: string, payload: UpdateMenuItemPayload): Promise<MenuItem> => {
+  updateMenuItem: async (id: number, payload: UpdateMenuItemPayload): Promise<MenuItem> => {
     const { data } = await api.patch<{ success: boolean; data: MenuItem }>(`/menu-items/${id}`, payload);
     return data.data;
   },
 
-  deleteMenuItem: async (id: string): Promise<void> => {
+  deleteMenuItem: async (id: number): Promise<void> => {
     await api.delete(`/menu-items/${id}`);
   },
 
