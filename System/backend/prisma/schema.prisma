@@ -1,0 +1,328 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model auditlog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  action      String
+  entity      String
+  entityId    Int?
+  description String?
+  createdAt   DateTime @default(now())
+  user        user?    @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "auditlog_userId_fkey")
+}
+
+model category {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  createdAt   DateTime   @default(now())
+  description String?
+  imageUrl    String?    @db.Text
+  updatedAt   DateTime?
+  menuitem    menuitem[]
+}
+
+model expense {
+  id            Int      @id @default(autoincrement())
+  title         String
+  amount        Float
+  category      String?
+  receiver      String?
+  date          DateTime @default(now())
+  description   String?  @db.Text
+  paymentMethod String?
+  createdById   Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  createdBy     user?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+}
+
+model customer {
+  id        Int       @id @default(autoincrement())
+  fullName  String
+  phone     String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+  addresses address[]
+  order     order[]
+}
+
+model receiptSettings {
+  id         Int      @id @default(1)
+  name       String   @default("My Restaurant")
+  address    String?  @db.LongText
+  phone      String?  @db.LongText
+  email      String?
+  logoUrl    String?  @db.LongText
+  vatNumber  String?
+  footerText String?  @db.LongText
+  updatedAt  DateTime @updatedAt
+}
+
+model address {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  name       String
+  district   String
+  street     String
+  phone      String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order      order[]
+
+  @@index([customerId])
+}
+
+model ingredient {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  unit          String
+  stockQuantity Float           @default(0)
+  minStockLevel Float           @default(0)
+  costPerUnit   Float           @default(0)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  menuitembom   menuitembom[]
+  stockmovement stockmovement[]
+}
+
+model menu {
+  id             Int              @id @default(autoincrement())
+  title          String
+  url            String
+  icon           String
+  order          Int              @default(0)
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+  roleMenuAccess roleMenuAccess[]
+  submenu        submenu[]
+}
+
+model menuitem {
+  id          Int           @id @default(autoincrement())
+  name        String
+  description String?
+  costPrice   Float?
+  price       Float
+  tax         Float         @default(0)
+  imageUrl    String?       @db.Text
+  isAvailable Boolean       @default(true)
+  categoryId  Int
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @default(now()) @updatedAt
+  category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+  menuitembom menuitembom[]
+  orderitem   orderitem[]
+
+
+  @@index([categoryId], map: "MenuItem_categoryId_fkey")
+}
+
+model menuitembom {
+  id               Int        @id @default(autoincrement())
+  menuItemId       Int
+  ingredientId     Int
+  quantityRequired Float
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @default(now()) @updatedAt
+  ingredient       ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  menuitem         menuitem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, ingredientId])
+  @@index([ingredientId], map: "menuitembom_ingredientId_fkey")
+}
+
+model notification {
+  id         Int      @id @default(autoincrement())
+  title      String
+  message    String
+  role       String?
+  orderId    Int?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  userId     Int?
+  customerId Int?
+  user       user?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model order {
+  id            Int         @id @default(autoincrement())
+  status        String      @default("pending")
+  total         Float       @default(0)
+  taxAmount     Float       @default(0)
+  subTotal      Float       @default(0)
+  tableId       Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now()) @updatedAt
+  customerName  String?
+  notes         String?
+  customerPhone String?
+  customerId    Int?
+  userId        Int?
+  orderType     String      @default("dine-in")
+  source        String      @default("pos")
+  addressId     Int?
+  address       address?    @relation(fields: [addressId], references: [id])
+  customer      customer?   @relation(fields: [customerId], references: [id])
+  table         table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  orderitem     orderitem[]
+
+  payment       payment?
+
+  @@index([addressId])
+
+  @@index([tableId], map: "Order_tableId_fkey")
+  @@index([customerId], map: "order_customerId_fkey")
+}
+
+model orderitem {
+  id         Int      @id @default(autoincrement())
+  quantity   Int      @default(1)
+  unitPrice  Float
+  tax        Float    @default(0)
+  orderId    Int
+  menuItemId Int
+  menuitem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: NoAction)
+  order      order    @relation(fields: [orderId], references: [id], onDelete: NoAction)
+
+  @@index([menuItemId], map: "OrderItem_menuItemId_fkey")
+  @@index([orderId], map: "OrderItem_orderId_fkey")
+}
+
+model payment {
+  id           Int       @id @default(autoincrement())
+  orderId      Int       @unique
+  amount       Float
+  method       String
+  status       String    @default("pending")
+  paidAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+  internalRef  String?   @unique
+  phone        String?
+  providerName String?
+  providerRef  String?   @unique
+  order        order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model role {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  description    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @updatedAt
+  roleMenuAccess roleMenuAccess[]
+  user           user[]
+}
+
+model roleMenuAccess {
+  id                Int                 @id @default(autoincrement())
+  roleId            Int
+  menuId            Int
+  canView           Boolean             @default(true)
+  canAdd            Boolean             @default(false)
+  canEdit           Boolean             @default(false)
+  canDelete         Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @default(now()) @updatedAt
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  role              role                @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleSubMenuAccess roleSubMenuAccess[]
+
+  @@unique([roleId, menuId])
+  @@index([menuId], map: "roleMenuAccess_menuId_fkey")
+}
+
+model roleSubMenuAccess {
+  id               Int            @id @default(autoincrement())
+  roleMenuAccessId Int
+  subMenuId        Int
+  canView          Boolean        @default(true)
+  canAdd           Boolean        @default(false)
+  canEdit          Boolean        @default(false)
+  canDelete        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+  roleMenuAccess   roleMenuAccess @relation(fields: [roleMenuAccessId], references: [id], onDelete: Cascade)
+  submenu          submenu        @relation(fields: [subMenuId], references: [id], onDelete: Cascade)
+
+  @@unique([roleMenuAccessId, subMenuId])
+  @@index([subMenuId], map: "roleSubMenuAccess_subMenuId_fkey")
+}
+
+model stockmovement {
+  id           Int        @id @default(autoincrement())
+  ingredientId Int
+  type         String
+  quantity     Float
+  note         String?
+  createdAt    DateTime   @default(now())
+  ingredient   ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId], map: "stockmovement_ingredientId_fkey")
+}
+
+model submenu {
+  id                Int                 @id @default(autoincrement())
+  menuId            Int
+  title             String
+  url               String
+  order             Int                 @default(0)
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @default(now()) @updatedAt
+  roleSubMenuAccess roleSubMenuAccess[]
+  menu              menu                @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@index([menuId], map: "submenu_menuId_fkey")
+}
+
+model table {
+  id        Int       @id @default(autoincrement())
+  number    Int       @unique
+  status    String    @default("active")
+  createdAt DateTime  @default(now())
+  name      String?
+  qrCode    String    @unique
+  updatedAt DateTime? @updatedAt
+  order     order[]
+}
+
+model user {
+  id        Int        @id @default(autoincrement())
+  email     String     @unique
+  password  String
+  createdAt DateTime   @default(now())
+  fullName  String
+  isActive  Boolean    @default(true)
+  phone     String?    @unique
+  address   String?    @db.Text
+  dateOfBirth DateTime?
+  gender    String?
+  avatarUrl String?    @db.LongText
+  updatedAt DateTime   @default(now()) @updatedAt
+  roleId    Int
+  auditlog  auditlog[]
+  notification notification[]
+  expense   expense[]
+  role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
+
+  @@index([roleId], map: "User_roleId_fkey")
+}
+
