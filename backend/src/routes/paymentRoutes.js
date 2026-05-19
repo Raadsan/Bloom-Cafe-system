@@ -8,8 +8,9 @@ import {
   getPaymentByOrderId,
   updatePaymentStatus,
   deletePayment,
-  getPaymentMethods
-  
+  getPaymentMethods,
+  processWaafiPayment,
+  processCheckoutPayment
 } from '../controllers/paymentController.js'
 import { protect, authorize } from '../middlewares/authMiddleware.js'
 
@@ -17,8 +18,10 @@ const router = express.Router()
 
 // PUBLIC ROUTES
 router.get('/methods', getPaymentMethods)
-router.post('/pay', createPublicPayment)
+router.post('/pay',            createPublicPayment)
 router.patch('/pay/:id/confirm', confirmPublicPayment)
+router.post('/waafi',          processWaafiPayment)   // Waafi mobile money
+router.post('/checkout-pay',   protect, processCheckoutPayment) // Direct Waafi Checkout payment-first
 
 // PROTECTED ROUTES
 // Create payment — accessible to pos role too

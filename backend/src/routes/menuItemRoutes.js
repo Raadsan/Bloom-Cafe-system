@@ -41,7 +41,7 @@ router.post('/', protect, checkPermission('/menus', 'canAdd'), createMenuItem)
 router.get('/all', getAllMenuItems)
 
 // Get menu items by category
-router.get('/category/:categoryId', protect, checkPermission('/menus', 'canView'), getMenuItemsByCategory)
+router.get('/category/:categoryId', getMenuItemsByCategory)
 
 // Update menu item
 router.patch('/:id', protect, checkPermission('/menus', 'canEdit'), updateMenuItem)

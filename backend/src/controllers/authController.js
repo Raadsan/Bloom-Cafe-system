@@ -102,23 +102,23 @@ export const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Find default 'user' role (case-insensitive check or fallback)
+    // Find default 'client' role (case-insensitive check or fallback)
     let role = await prisma.role.findFirst({ 
       where: { 
-        name: { equals: 'user' } 
+        name: { equals: 'client' } 
       } 
     })
     
     if (!role) {
       role = await prisma.role.findFirst({ 
         where: { 
-          name: { equals: 'User' } 
+          name: { equals: 'Client' } 
         } 
       })
     }
 
     if (!role) {
-      return res.status(500).json({ success: false, message: 'Default User role not found in system' })
+      return res.status(500).json({ success: false, message: 'Default Client role not found in system' })
     }
 
     const user = await prisma.user.create({

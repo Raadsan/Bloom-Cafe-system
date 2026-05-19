@@ -867,8 +867,10 @@ export const createOrder = async (req, res) => {
     })
     */
 
-    // 🔥 SOCKET → KITCHEN
-    emitNewOrder(order)
+    // 🔥 SOCKET → KITCHEN (Only emit if order is active/pending)
+    if (order.status === 'pending') {
+      emitNewOrder(order)
+    }
 
     logAudit({ userId: req.user?.id, action: 'Created', entity: 'Order', entityId: order.id, description: `Created order #${order.id} for table ${table?.number || 'N/A'}` })
 
@@ -1069,7 +1071,14 @@ export const getAllOrders = async (req, res) => {
 
     const where = {}
     if (status) where.status = status
-    if (onlyMine === 'true' && req.user?.id) where.userId = req.user.id
+    
+    // Haddii uu yahay Client ama Customer, ku qasab inuu arko kaliya orders-kiisa gaarka ah
+    const userRole = req.user?.role?.toLowerCase()
+    if (userRole === 'client' || userRole === 'customer') {
+      where.userId = req.user.id
+    } else if (onlyMine === 'true' && req.user?.id) {
+      where.userId = req.user.id
+    }
 
     const orders = await prisma.order.findMany({
       where,
