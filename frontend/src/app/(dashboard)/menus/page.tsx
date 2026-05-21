@@ -15,7 +15,8 @@ import {
   MoreVertical,
   ChevronDown,
   X,
-  RefreshCw
+  RefreshCw,
+  Star
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ export default function MenuPage() {
   const [formPrice, setFormPrice] = useState("");
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formIsAvailable, setFormIsAvailable] = useState(true);
+  const [formIsRecommended, setFormIsRecommended] = useState(false);
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formTax, setFormTax] = useState("");
   const [saving, setSaving] = useState(false);
@@ -117,6 +119,7 @@ export default function MenuPage() {
     setFormPrice("");
     setFormCategoryId("");
     setFormIsAvailable(true);
+    setFormIsRecommended(false);
     setFormImageUrl("");
     setFormTax("0");
     setIsAddOpen(true);
@@ -130,6 +133,7 @@ export default function MenuPage() {
     setFormPrice(String(item.price));
     setFormCategoryId(String(item.categoryId));
     setFormIsAvailable(item.isAvailable);
+    setFormIsRecommended(item.isRecommended || false);
     setFormImageUrl(item.imageUrl || "");
     setFormTax(String(item.tax || 0));
     setIsEditOpen(true);
@@ -174,6 +178,7 @@ export default function MenuPage() {
         tax: Number(formTax || 0),
         categoryId: Number(formCategoryId),
         isAvailable: formIsAvailable,
+        isRecommended: formIsRecommended,
         imageUrl: formImageUrl.trim() || undefined
       };
 
@@ -223,8 +228,8 @@ export default function MenuPage() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
               <span>Show</span>
-              <select 
-                value={pageSize} 
+              <select
+                value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
                 className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
@@ -237,8 +242,8 @@ export default function MenuPage() {
 
             <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
               <span>Filter Category</span>
-              <select 
-                value={categoryFilter} 
+              <select
+                value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
@@ -255,16 +260,16 @@ export default function MenuPage() {
           <div className="flex items-center gap-3">
             <div className="relative w-64 group">
               <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
-              <input 
-                type="text" 
-                placeholder="Search menu..." 
+              <input
+                type="text"
+                placeholder="Search menu..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
 
-            <Button 
+            <Button
               onClick={openAddModal}
               className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
             >
@@ -314,7 +319,10 @@ export default function MenuPage() {
                             )}
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-[13px] font-medium text-zinc-700 leading-tight">{item.name}</span>
+                            <span className="text-[13px] font-medium text-zinc-700 leading-tight flex items-center gap-1.5">
+                              {item.name}
+                              {item.isRecommended && <Star className="size-3 fill-amber-400 text-amber-400" />}
+                            </span>
                             <span className="text-[10px] text-zinc-400 uppercase tracking-wider">{item.category?.name || "No Category"}</span>
                           </div>
                         </div>
@@ -490,7 +498,7 @@ export default function MenuPage() {
               </div>
             </div>
 
-            {/* Row 3: Availability & Description */}
+            {/* Row 3: Availability & Recommended */}
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-[#1e293b]">Availability</label>
@@ -505,15 +513,28 @@ export default function MenuPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-[#1e293b]">Description</label>
-                <input
-                  type="text"
-                  value={formDesc}
-                  onChange={(e) => setFormDesc(e.target.value)}
-                  placeholder="Brief description..."
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium"
-                />
+                <label className="text-sm font-bold text-[#1e293b]">Recommended</label>
+                <select
+                  value={formIsRecommended ? "yes" : "no"}
+                  onChange={(e) => setFormIsRecommended(e.target.value === "yes")}
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium appearance-none cursor-pointer"
+                >
+                  <option value="yes">Yes (Recommended)</option>
+                  <option value="no">No</option>
+                </select>
               </div>
+            </div>
+
+            {/* Row 4: Description */}
+            <div className="space-y-2 pt-2">
+              <label className="text-sm font-bold text-[#1e293b]">Description</label>
+              <input
+                type="text"
+                value={formDesc}
+                onChange={(e) => setFormDesc(e.target.value)}
+                placeholder="Brief description..."
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium"
+              />
             </div>
 
             {/* Row 4: Image */}
@@ -522,7 +543,7 @@ export default function MenuPage() {
                 <ImageIcon className="size-4 text-zinc-400" />
                 Item Image
               </label>
-              
+
               <div className="flex items-center gap-4">
                 <div className="flex-1 flex gap-3">
                   <div className="relative flex-1">
@@ -558,16 +579,16 @@ export default function MenuPage() {
           </div>
 
           <DialogFooter className="px-8 py-6 bg-zinc-50/50 border-t border-zinc-100 flex items-center sm:justify-end gap-3">
-            <Button 
-              variant="outline" 
-              onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} 
+            <Button
+              variant="outline"
+              onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }}
               className="text-zinc-500 font-bold px-6 h-11 rounded-lg transition-all"
               disabled={saving}
             >
               Cancel
             </Button>
-            <Button 
-              onClick={handleSave} 
+            <Button
+              onClick={handleSave}
               className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11 transition-all active:scale-95"
               disabled={saving}
             >

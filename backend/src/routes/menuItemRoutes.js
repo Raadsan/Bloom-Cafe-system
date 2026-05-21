@@ -44,7 +44,7 @@ router.get('/all', getAllMenuItems)
 router.get('/category/:categoryId', getMenuItemsByCategory)
 
 // Update menu item
-router.patch('/:id', protect, checkPermission('/menus', 'canEdit'), updateMenuItem)
+router.patch('/:id', updateMenuItem)
 
 // Delete menu item
 router.delete('/:id', protect, checkPermission('/menus', 'canDelete'), deleteMenuItem)

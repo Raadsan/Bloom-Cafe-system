@@ -48,7 +48,7 @@ router.get('/all',getAllCategories)
 router.get('/with-items', getCategoriesWithItems)
 
 // Get category by id with items
-router.get('/:id/with-items', protect, checkPermission('/categories', 'canView'), getCategoryByIdWithItems)
+router.get('/:id/with-items', getCategoryByIdWithItems)
 
 // Update category
 router.patch('/:id', protect, checkPermission('/categories', 'canEdit'), updateCategory)

@@ -121,6 +121,7 @@ model menuitem {
   tax         Float         @default(0)
   imageUrl    String?       @db.Text
   isAvailable Boolean       @default(true)
+  isRecommended Boolean     @default(false)
   categoryId  Int
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @default(now()) @updatedAt

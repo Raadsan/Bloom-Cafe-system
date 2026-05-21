@@ -4,7 +4,7 @@ import { logAudit } from '../utils/auditHelper.js'
 // CREATE MENU ITEM
 export const createMenuItem = async (req, res) => {
   try {
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended } = req.body
 
     if (!name || price === undefined || !categoryId) {
       return res.status(400).json({
@@ -33,7 +33,8 @@ export const createMenuItem = async (req, res) => {
         tax: tax !== undefined ? Number(tax) : 0,
         imageUrl: imageUrl || null,
         categoryId: Number(categoryId),
-        isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true
+        isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
+        isRecommended: typeof isRecommended === 'boolean' ? isRecommended : false
       },
       include: {
         category: true
@@ -116,7 +117,7 @@ export const getMenuItemsByCategory = async (req, res) => {
 export const updateMenuItem = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended } = req.body
 
     const itemId = Number(id)
     if (isNaN(itemId)) {
@@ -145,7 +146,8 @@ export const updateMenuItem = async (req, res) => {
         tax: tax !== undefined ? Number(tax) : existing.tax,
         imageUrl: imageUrl !== undefined ? imageUrl : existing.imageUrl,
         categoryId: categoryId ? Number(categoryId) : existing.categoryId,
-        isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true
+        isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
+        isRecommended: typeof isRecommended === 'boolean' ? isRecommended : (existing.isRecommended ?? false)
       },
       include: {
         category: { select: { id: true, name: true } }

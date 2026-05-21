@@ -9,6 +9,7 @@ export interface MenuItem {
   tax: number;
   imageUrl?: string;
   isAvailable: boolean;
+  isRecommended: boolean;
   categoryId: number;
   category?: { id: number; name: string };
   createdAt?: string;
@@ -23,6 +24,7 @@ export interface CreateMenuItemPayload {
   tax?: number;
   imageUrl?: string;
   isAvailable?: boolean;
+  isRecommended?: boolean;
   categoryId: number;
 }
 
@@ -34,6 +36,7 @@ export interface UpdateMenuItemPayload {
   tax?: number;
   imageUrl?: string;
   isAvailable?: boolean;
+  isRecommended?: boolean;
   categoryId?: number;
 }
 

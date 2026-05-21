@@ -693,11 +693,11 @@ export const getPaymentMethods = async (req, res) => {
     // You can also fetch this from DB if you create a model
     // For now, let's return the standard ones as per the user's screenshot
     const methods = [
-      { id: 'evc_plus', name: 'EVC Plus', icon: 'E', color: '#FFEBEE', textColor: '#D32F2F' },
-      { id: 'edahab', name: 'eDahab', icon: 'e', color: '#F1F8E9', textColor: '#388E3C' },
-      { id: 'zaad', name: 'ZAAD', icon: 'Z', color: '#E8EAF6', textColor: '#303F9F' },
-      { id: 'waafi', name: 'WAAFI', icon: 'W', color: '#E8EAF6', textColor: '#3F51B5' },
-      { id: 'sahal', name: 'SAHAL', icon: 'S', color: '#E0F2F1', textColor: '#00796B' },
+      { id: 'evc_plus', name: 'EVC Plus', icon: 'E', color: '#FFEBEE', textColor: '#D32F2F', available: false },
+      { id: 'edahab', name: 'eDahab', icon: 'e', color: '#F1F8E9', textColor: '#388E3C', available: false },
+      { id: 'zaad', name: 'ZAAD', icon: 'Z', color: '#E8EAF6', textColor: '#303F9F', available: false },
+      { id: 'waafi', name: 'WAAFI', icon: 'W', color: '#E8EAF6', textColor: '#3F51B5', available: true },
+      { id: 'sahal', name: 'SAHAL', icon: 'S', color: '#E0F2F1', textColor: '#00796B', available: false },
     ]
 
     res.status(200).json({
