@@ -846,7 +846,21 @@ export const createOrder = async (req, res) => {
       include: {
         table: true,
         address: true,
-        orderitem: { include: { menuitem: true } }
+        orderitem: { 
+          include: { 
+            menuitem: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                costPrice: true,
+                tax: true,
+                categoryId: true,
+                isAvailable: true
+              }
+            } 
+          } 
+        }
       }
     })
 
@@ -1084,7 +1098,21 @@ export const getAllOrders = async (req, res) => {
       where,
       include: {
         table: true,
-        orderitem: { include: { menuitem: true } }
+        orderitem: { 
+          include: { 
+            menuitem: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                costPrice: true,
+                tax: true,
+                categoryId: true,
+                isAvailable: true
+              }
+            } 
+          } 
+        }
       },
       orderBy: { createdAt: 'desc' }
     })
@@ -1104,7 +1132,21 @@ export const getOrderById = async (req, res) => {
     where: { id: Number(req.params.id) },
     include: {
       table: true,
-      orderitem: { include: { menuitem: true } }
+      orderitem: { 
+        include: { 
+          menuitem: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              costPrice: true,
+              tax: true,
+              categoryId: true,
+              isAvailable: true
+            }
+          } 
+        } 
+      }
     }
   })
 
@@ -1146,7 +1188,19 @@ export const getOrdersByTable = async (req, res) => {
         table: true,
         customer: true,
         orderitem: {
-          include: { menuitem: true }
+          include: { 
+            menuitem: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                costPrice: true,
+                tax: true,
+                categoryId: true,
+                isAvailable: true
+              }
+            } 
+          }
         }
       },
       orderBy: { createdAt: 'desc' }

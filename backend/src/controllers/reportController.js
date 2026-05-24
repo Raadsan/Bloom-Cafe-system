@@ -202,8 +202,12 @@ export const getTopSellingItems = async (req, res) => {
           in: menuItemIds
         }
       },
-      include: {
-        category: true
+      select: {
+        id: true,
+        name: true,
+        category: {
+          select: { name: true }
+        }
       }
     })
 
@@ -528,7 +532,14 @@ export const getFinanceReport = async (req, res) => {
           include: {
             orderitem: {
               include: {
-                menuitem: true
+                menuitem: {
+                  select: {
+                    id: true,
+                    name: true,
+                    costPrice: true,
+                    price: true
+                  }
+                }
               }
             }
           }
