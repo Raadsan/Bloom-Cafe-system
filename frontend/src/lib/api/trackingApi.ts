@@ -16,7 +16,7 @@ export interface AuditLog {
 
 export const trackingApi = {
   getAllLogs: async (): Promise<AuditLog[]> => {
-    const { data } = await api.get<{ success: boolean; data: AuditLog[] }>('/tracking/all');
-    return data.data;
+    const res = await api.get('/tracking/all');
+    return res.data.data || [];
   }
 };

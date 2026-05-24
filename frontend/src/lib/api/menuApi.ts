@@ -1,4 +1,4 @@
-import axiosInstance from './axios';
+import api from './axios';
 
 export interface MenuPermission {
   canView: boolean;
@@ -29,52 +29,56 @@ export interface Menu {
 
 export const menuApi = {
   getMenusByRole: async (roleId: number): Promise<Menu[]> => {
-    const response = await axiosInstance.get(`/menus/permissions/${roleId}`);
-    return response.data.data;
+    const res = await api.get(`/menus/permissions/${roleId}`);
+    return res.data.data || [];
   },
-  
+
+  clearMenuCache: (_roleId?: number) => {
+    // No-op — backend is source of truth
+  },
+
   getAllMenus: async (): Promise<Menu[]> => {
-    const response = await axiosInstance.get('/menus');
-    return response.data.data;
+    const res = await api.get('/menus');
+    return res.data.data || [];
   },
 
   createMenu: async (data: Partial<Menu>) => {
-    const response = await axiosInstance.post('/menus', data);
-    return response.data;
+    const res = await api.post('/menus', data);
+    return { success: true, data: res.data.data };
   },
 
   updateMenu: async (id: number, data: Partial<Menu>) => {
-    const response = await axiosInstance.put(`/menus/${id}`, data);
-    return response.data;
+    const res = await api.put(`/menus/${id}`, data);
+    return { success: true, data: res.data.data };
   },
 
   deleteMenu: async (id: number) => {
-    const response = await axiosInstance.delete(`/menus/${id}`);
-    return response.data;
+    await api.delete(`/menus/${id}`);
+    return { success: true, message: 'Menu deleted' };
   },
 
   createSubMenu: async (data: { menuId: number; title: string; url: string; order?: number }) => {
-    const response = await axiosInstance.post('/menus/submenu', data);
-    return response.data;
+    const res = await api.post('/menus/submenu', data);
+    return { success: true, data: res.data.data };
   },
 
   updateSubMenu: async (id: number, data: { title?: string; url?: string; order?: number; isActive?: boolean }) => {
-    const response = await axiosInstance.put(`/menus/submenu/${id}`, data);
-    return response.data;
+    const res = await api.put(`/menus/submenu/${id}`, data);
+    return { success: true, data: res.data.data };
   },
 
   deleteSubMenu: async (id: number) => {
-    const response = await axiosInstance.delete(`/menus/submenu/${id}`);
-    return response.data;
-  },
-  
-  seedMenus: async (): Promise<{success: boolean, message: string}> => {
-    const response = await axiosInstance.post('/menus/seed');
-    return response.data;
+    await api.delete(`/menus/submenu/${id}`);
+    return { success: true, message: 'Submenu deleted' };
   },
 
-  updatePermissions: async (roleId: number, permissions: any[]): Promise<{success: boolean, message: string}> => {
-    const response = await axiosInstance.post(`/menus/permissions/${roleId}`, { permissions });
-    return response.data;
+  seedMenus: async (): Promise<{ success: boolean; message: string }> => {
+    const res = await api.post('/menus/seed');
+    return res.data;
+  },
+
+  updatePermissions: async (roleId: number, permissions: any[]): Promise<{ success: boolean; message: string }> => {
+    const res = await api.post(`/menus/permissions/${roleId}`, { permissions });
+    return res.data;
   }
 };

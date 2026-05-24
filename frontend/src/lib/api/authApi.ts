@@ -36,43 +36,126 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
+const USER_STORAGE_KEY = 'auth_user';
+
+/** Save user to localStorage */
+function saveUserToStorage(user: AuthUser): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  }
+}
+
+/** Read user from localStorage — returns null if not found */
+function getUserFromStorage(): AuthUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+/** Clear user from localStorage */
+function clearUserFromStorage(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem('token');
+  }
+}
+
 export const authApi = {
-  /** Login – saves token to localStorage automatically. */
+  /** Login – saves token AND user to localStorage */
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
-    const { data } = await api.post<LoginResponse>('/auth/login', credentials);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', data.token);
-    }
-    return data;
-  },
+    const res = await api.post('/auth/login', credentials);
+    const { token, user } = res.data;
 
-  /** Get the currently logged-in user. */
-  getMe: async (): Promise<AuthUser> => {
-    const { data } = await api.get<any>('/auth/me');
-    const userData = data.data || data.user || data;
-    return {
-      ...userData,
-      fullName: userData.fullName || userData.name || 'User'
+    const authUser: AuthUser = {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone || undefined,
+      address: user.address || undefined,
+      gender: user.gender || undefined,
+      dateOfBirth: user.dateOfBirth || undefined,
+      avatarUrl: user.avatarUrl || undefined,
+      role: user.role,
+      roleId: user.roleId,
+      createdAt: user.createdAt
     };
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', token);
+      saveUserToStorage(authUser);
+    }
+
+    return { token, user: authUser };
   },
 
-  /** Update profile. */
+  /**
+   * Get the currently logged-in user.
+   */
+  getMe: async (forceRefresh = false): Promise<AuthUser> => {
+    if (!forceRefresh) {
+      const cached = getUserFromStorage();
+      if (cached) return cached;
+    }
+
+    const res = await api.get('/auth/me');
+    const user = res.data.data;
+
+    const authUser: AuthUser = {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone || undefined,
+      address: user.address || undefined,
+      gender: user.gender || undefined,
+      dateOfBirth: user.dateOfBirth || undefined,
+      avatarUrl: user.avatarUrl || undefined,
+      role: user.role,
+      roleId: user.roleId,
+      createdAt: user.createdAt
+    };
+
+    saveUserToStorage(authUser);
+    return authUser;
+  },
+
+  /** Update profile – updates the db then refreshes localStorage. */
   updateProfile: async (payload: UpdateProfileData): Promise<AuthUser> => {
-    const { data } = await api.patch<any>('/auth/update-profile', payload);
-    return data.user || data.data || data;
+    const res = await api.patch('/auth/update-profile', payload);
+    const user = res.data.user;
+
+    const authUser: AuthUser = {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone || undefined,
+      address: user.address || undefined,
+      gender: user.gender || undefined,
+      dateOfBirth: user.dateOfBirth || undefined,
+      avatarUrl: user.avatarUrl || undefined,
+      role: user.role,
+      roleId: user.roleId,
+      createdAt: user.createdAt
+    };
+
+    saveUserToStorage(authUser);
+    return authUser;
   },
 
-  /** Clear token and redirect to login. */
+  /** Clear token + user cache and redirect to login. */
   logout: async () => {
     try {
       await api.post('/auth/logout');
-    } catch (err) {
-      console.error('Failed to log out from server', err);
-    } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-      }
+    } catch (error) {
+      console.error("Logout request error:", error);
+    }
+    clearUserFromStorage();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
     }
   },
 };

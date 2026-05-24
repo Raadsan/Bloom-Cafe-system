@@ -42,23 +42,23 @@ export interface UpdateMenuItemPayload {
 
 export const menuItemApi = {
   createMenuItem: async (payload: CreateMenuItemPayload): Promise<MenuItem> => {
-    const { data } = await api.post<{ success: boolean; data: MenuItem }>('/menu-items', payload);
-    return data.data;
+    const res = await api.post('/menu-items', payload);
+    return res.data.data;
   },
 
   getAllMenuItems: async (): Promise<MenuItem[]> => {
-    const { data } = await api.get<{ success: boolean; data: MenuItem[] }>('/menu-items/all');
-    return data.data;
+    const res = await api.get('/menu-items/all');
+    return res.data.data || [];
   },
 
   getMenuItemsByCategory: async (categoryId: number): Promise<MenuItem[]> => {
-    const { data } = await api.get<{ success: boolean; data: MenuItem[] }>(`/menu-items/category/${categoryId}`);
-    return data.data;
+    const res = await api.get(`/menu-items/category/${categoryId}`);
+    return res.data.data || [];
   },
 
   updateMenuItem: async (id: number, payload: UpdateMenuItemPayload): Promise<MenuItem> => {
-    const { data } = await api.patch<{ success: boolean; data: MenuItem }>(`/menu-items/${id}`, payload);
-    return data.data;
+    const res = await api.patch(`/menu-items/${id}`, payload);
+    return res.data.data;
   },
 
   deleteMenuItem: async (id: number): Promise<void> => {
@@ -67,7 +67,7 @@ export const menuItemApi = {
 
   /** PUBLIC – customer scans QR → gets full menu (no auth needed). */
   getPublicMenuByQrCode: async (qrCode: string): Promise<MenuItem[]> => {
-    const { data } = await api.get<{ success: boolean; data: MenuItem[] }>(`/menu-items/menu/${qrCode}`);
-    return data.data;
+    const res = await api.get(`/menu-items/menu/${qrCode}`);
+    return res.data.data || [];
   },
 };

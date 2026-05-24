@@ -7,40 +7,39 @@ export interface Notification {
   isRead: boolean;
   role?: string;
   orderId?: number;
+  customerId?: number;
   createdAt?: string;
 }
 
 export const notificationApi = {
-  // ── Staff (protected) ─────────────────────────────────────────
   getAllNotifications: async (): Promise<Notification[]> => {
-    const { data } = await api.get<{ success: boolean; data: Notification[] }>('/notifications');
-    return data.data;
+    const res = await api.get('/notifications');
+    return res.data.data || [];
   },
 
   getKitchenNotifications: async (): Promise<Notification[]> => {
-    const { data } = await api.get<{ success: boolean; data: Notification[] }>('/notifications/kitchen');
-    return data.data;
+    const res = await api.get('/notifications?role=kitchen');
+    return res.data.data || [];
   },
 
   getWaiterNotifications: async (): Promise<Notification[]> => {
-    const { data } = await api.get<{ success: boolean; data: Notification[] }>('/notifications/waiter');
-    return data.data;
+    const res = await api.get('/notifications?role=waiter');
+    return res.data.data || [];
   },
 
   markNotificationRead: async (id: number): Promise<Notification> => {
-    const { data } = await api.patch<{ success: boolean; data: Notification }>(`/notifications/${id}/read`);
-    return data.data;
+    const res = await api.patch(`/notifications/${id}/read`);
+    return res.data.data;
   },
 
-  // ── Customer (PUBLIC) ─────────────────────────────────────────
   getCustomerNotifications: async (customerId: number): Promise<Notification[]> => {
-    const { data } = await api.get<{ success: boolean; data: Notification[] }>(`/notifications/customer/${customerId}`);
-    return data.data;
+    const res = await api.get(`/notifications/customer/${customerId}`);
+    return res.data.data || [];
   },
 
   getOrderByNotification: async (orderId: number): Promise<Notification[]> => {
-    const { data } = await api.get<{ success: boolean; data: Notification[] }>(`/notifications/customer/order/${orderId}`);
-    return data.data;
+    const res = await api.get(`/notifications/order/${orderId}`);
+    return res.data.data || [];
   },
 
   markAllCustomerRead: async (customerId: number): Promise<void> => {
@@ -48,7 +47,7 @@ export const notificationApi = {
   },
 
   getUnreadCount: async (customerId: number): Promise<number> => {
-    const { data } = await api.get<{ success: boolean; count: number }>(`/notifications/customer/${customerId}/unread-count`);
-    return data.count;
+    const res = await api.get(`/notifications/customer/${customerId}/unread-count`);
+    return res.data.count || 0;
   }
 };

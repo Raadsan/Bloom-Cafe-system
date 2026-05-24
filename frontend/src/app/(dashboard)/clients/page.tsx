@@ -12,7 +12,8 @@ import {
   Calendar,
   MoreHorizontal,
   RefreshCw,
-  UserCheck
+  UserCheck,
+  Eye
 } from "lucide-react";
 import {
   Table,
@@ -60,6 +61,7 @@ export default function ClientsPage() {
   // Form states
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
+  const [formEmail, setFormEmail] = useState("");
 
   const fetchCustomers = async () => {
     try {
@@ -99,6 +101,7 @@ export default function ClientsPage() {
   const openAddModal = () => {
     setFormName("");
     setFormPhone("");
+    setFormEmail("");
     setIsAddOpen(true);
   };
 
@@ -106,6 +109,7 @@ export default function ClientsPage() {
     setSelectedCustomer(c);
     setFormName(c.fullName);
     setFormPhone(c.phone);
+    setFormEmail(c.email || "");
     setIsEditOpen(true);
   };
 
@@ -125,13 +129,15 @@ export default function ClientsPage() {
       if (isEditOpen && selectedCustomer) {
         await customerApi.updateCustomer(selectedCustomer.id, {
           fullName: formName,
-          phone: formPhone
+          phone: formPhone,
+          email: formEmail
         });
         showToast("Client profile updated", "success");
       } else {
         await customerApi.createCustomer({
           fullName: formName,
-          phone: formPhone
+          phone: formPhone,
+          email: formEmail
         });
         showToast("New client registered", "success");
       }

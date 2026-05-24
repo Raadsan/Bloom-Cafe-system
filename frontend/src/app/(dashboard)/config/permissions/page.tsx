@@ -208,6 +208,7 @@ export default function PermissionsPage() {
 
       await menuApi.updatePermissions(selectedRoleId, payload);
       showToast("Permissions updated successfully", "success");
+      window.dispatchEvent(new CustomEvent("sidebar-menu-updated"));
     } catch (error) {
       console.error("Save error:", error);
       showToast("Failed to save permissions", "error");

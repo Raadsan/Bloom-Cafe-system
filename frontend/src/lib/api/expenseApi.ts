@@ -5,7 +5,7 @@ export interface Expense {
   title: string;
   amount: number;
   category: string;
-  receiver?: string; // Company or Individual
+  receiver?: string;
   date: string;
   description?: string;
   paymentMethod?: string;
@@ -16,18 +16,18 @@ export interface Expense {
 
 export const expenseApi = {
   getAllExpenses: async (): Promise<Expense[]> => {
-    const { data } = await api.get<{ success: boolean; data: Expense[] }>('/expenses');
-    return data.data;
+    const res = await api.get('/expenses');
+    return res.data.data || [];
   },
 
   createExpense: async (payload: Partial<Expense>): Promise<Expense> => {
-    const { data } = await api.post<{ success: boolean; data: Expense }>('/expenses', payload);
-    return data.data;
+    const res = await api.post('/expenses', payload);
+    return res.data.data;
   },
 
   updateExpense: async (id: number, payload: Partial<Expense>): Promise<Expense> => {
-    const { data } = await api.put<{ success: boolean; data: Expense }>(`/expenses/${id}`, payload);
-    return data.data;
+    const res = await api.put(`/expenses/${id}`, payload);
+    return res.data.data;
   },
 
   deleteExpense: async (id: number): Promise<void> => {

@@ -98,6 +98,18 @@ const normalizeUrl = (url: string) => {
   return url;
 };
 
+// ─── In-memory sidebar cache (module-level = survives re-renders, clears on reload) ───
+// This makes sidebar render instantly on navigation — no extra API calls.
+interface SidebarCache {
+  menus: Menu[];
+  roleId: number;
+}
+let _sidebarCache: SidebarCache | null = null;
+
+function clearSidebarCache() {
+  _sidebarCache = null;
+}
+
 // Replicated NavUser component from Notary
 function NavUser({ user }: { user: AuthUser | null }) {
   const { isMobile } = useSidebar();
@@ -184,27 +196,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { state, isMobile } = useSidebar();
   
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [menus, setMenus] = useState<Menu[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Pre-populate from module cache for instant render — no loading flash on navigation
+  const [menus, setMenus] = useState<Menu[]>(_sidebarCache?.menus ?? []);
+  const [loading, setLoading] = useState(_sidebarCache === null); // only show skeleton on first load
   const [openMenus, setOpenMenus] = useState<Record<number, boolean>>({});
 
+  // Fetch user + menus on mount. Subsequent renders served from in-memory cache (instant).
   useEffect(() => {
-    const initSidebar = async () => {
+    const initSidebar = async (forceRefresh = false) => {
       try {
+        // authApi.getMe already uses localStorage cache — instant when not forced
         const currentUser = await authApi.getMe();
         setUser(currentUser);
-        
+
         if (currentUser && currentUser.roleId) {
+          // Check in-memory module cache first (survives navigation, cleared on config change)
+          if (!forceRefresh && _sidebarCache && _sidebarCache.roleId === currentUser.roleId) {
+            setMenus(_sidebarCache.menus);
+            setLoading(false);
+            return;
+          }
+          // Cache miss — fetch from backend
           const fetchedMenus = await menuApi.getMenusByRole(currentUser.roleId);
+          _sidebarCache = { menus: fetchedMenus, roleId: currentUser.roleId };
           setMenus(fetchedMenus);
-          
-          const initialOpen: Record<number, boolean> = {};
-          fetchedMenus.forEach(menu => {
-            if (menu.items?.some(sub => pathname === sub.url || pathname.startsWith(`${sub.url}/`))) {
-              initialOpen[menu.id] = true;
-            }
-          });
-          setOpenMenus(initialOpen);
         }
       } catch (error) {
         console.error("Failed to initialize sidebar:", error);
@@ -212,8 +227,31 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         setLoading(false);
       }
     };
+
     initSidebar();
-  }, [pathname]);
+
+    const handleMenuUpdate = () => {
+      clearSidebarCache();
+      initSidebar(true); // force re-fetch from backend
+    };
+
+    window.addEventListener("sidebar-menu-updated", handleMenuUpdate);
+    return () => {
+      window.removeEventListener("sidebar-menu-updated", handleMenuUpdate);
+    };
+  }, []); // ← empty deps: runs once on mount only
+
+  // Update which menu section is open when the path changes (no API calls)
+  useEffect(() => {
+    if (menus.length === 0) return;
+    const initialOpen: Record<number, boolean> = {};
+    menus.forEach(menu => {
+      if (menu.items?.some(sub => pathname === sub.url || pathname.startsWith(`${sub.url}/`))) {
+        initialOpen[menu.id] = true;
+      }
+    });
+    setOpenMenus(initialOpen);
+  }, [pathname, menus]);
 
   const toggleMenu = (menuId: number) => {
     setOpenMenus(prev => ({

@@ -19,41 +19,39 @@ export interface CreatePaymentPayload {
 }
 
 export const paymentApi = {
-  // ── PUBLIC ───────────────────────────────────────────────────
   createPublicPayment: async (payload: CreatePaymentPayload): Promise<Payment> => {
-    const { data } = await api.post<Payment>('/payments/pay', payload);
-    return data;
+    const res = await api.post('/payments/pay', payload);
+    return res.data.data;
   },
 
   confirmPublicPayment: async (id: string): Promise<Payment> => {
-    const { data } = await api.patch<Payment>(`/payments/pay/${id}/confirm`);
-    return data;
+    const res = await api.patch(`/payments/pay/${id}/confirm`);
+    return res.data.data;
   },
 
-  // ── Protected ─────────────────────────────────────────────────
   createPayment: async (payload: CreatePaymentPayload): Promise<Payment> => {
-    const { data } = await api.post<Payment>('/payments', payload);
-    return data;
+    const res = await api.post('/payments', payload);
+    return res.data.data;
   },
 
   getAllPayments: async (): Promise<Payment[]> => {
-    const { data } = await api.get<Payment[]>('/payments');
-    return data;
+    const res = await api.get('/payments');
+    return res.data.data || [];
   },
 
   getPaymentByOrderId: async (orderId: string): Promise<Payment> => {
-    const { data } = await api.get<Payment>(`/payments/order/${orderId}`);
-    return data;
+    const res = await api.get(`/payments/order/${orderId}`);
+    return res.data.data;
   },
 
   getPaymentById: async (id: string): Promise<Payment> => {
-    const { data } = await api.get<Payment>(`/payments/${id}`);
-    return data;
+    const res = await api.get(`/payments/${id}`);
+    return res.data.data;
   },
 
   updatePaymentStatus: async (id: string, status: PaymentStatus): Promise<Payment> => {
-    const { data } = await api.patch<Payment>(`/payments/${id}/status`, { status });
-    return data;
+    const res = await api.patch(`/payments/${id}/status`, { status });
+    return res.data.data;
   },
 
   deletePayment: async (id: string): Promise<void> => {

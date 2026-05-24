@@ -31,23 +31,23 @@ export interface UpdateIngredientPayload {
 
 export const ingredientApi = {
   createIngredient: async (payload: CreateIngredientPayload): Promise<Ingredient> => {
-    const { data } = await api.post<{ success: boolean; data: Ingredient }>('/ingredients', payload);
-    return data.data;
+    const res = await api.post('/ingredients', payload);
+    return res.data.data;
   },
 
   getAllIngredients: async (): Promise<Ingredient[]> => {
-    const { data } = await api.get<{ success: boolean; data: Ingredient[] }>('/ingredients');
-    return data.data;
+    const res = await api.get('/ingredients');
+    return res.data.data || [];
   },
 
   getIngredientById: async (id: number): Promise<Ingredient> => {
-    const { data } = await api.get<{ success: boolean; data: Ingredient }>(`/ingredients/${id}`);
-    return data.data;
+    const res = await api.get(`/ingredients/${id}`);
+    return res.data.data;
   },
 
   updateIngredient: async (id: number, payload: UpdateIngredientPayload): Promise<Ingredient> => {
-    const { data } = await api.patch<{ success: boolean; data: Ingredient }>(`/ingredients/${id}`, payload);
-    return data.data;
+    const res = await api.put(`/ingredients/${id}`, payload);
+    return res.data.data;
   },
 
   deleteIngredient: async (id: number): Promise<void> => {

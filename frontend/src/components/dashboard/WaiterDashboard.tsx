@@ -37,12 +37,12 @@ import { isToday, isThisMonth, format, subDays, subMonths } from "date-fns";
 export default function WaiterDashboard({ orders }: { orders: Order[] }) {
   // Calculate Stats
   const stats = useMemo(() => {
-    const todayOrders = orders.filter(o => isToday(new Date(o.createdAt)));
-    const thisMonthOrders = orders.filter(o => isThisMonth(new Date(o.createdAt)));
+    const todayOrders = orders.filter(o => isToday(o.createdAt ? new Date(o.createdAt) : new Date()));
+    const thisMonthOrders = orders.filter(o => isThisMonth(o.createdAt ? new Date(o.createdAt) : new Date()));
     
     const lastMonthDate = subMonths(new Date(), 1);
     const lastMonthOrders = orders.filter(o => {
-      const d = new Date(o.createdAt);
+      const d = o.createdAt ? new Date(o.createdAt) : new Date();
       return d.getMonth() === lastMonthDate.getMonth() && d.getFullYear() === lastMonthDate.getFullYear();
     });
 
@@ -72,7 +72,7 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
       const dayName = format(date, 'EEE'); // Mon, Tue, etc.
       const dateStr = format(date, 'yyyy-MM-dd');
       
-      const count = orders.filter(o => format(new Date(o.createdAt), 'yyyy-MM-dd') === dateStr).length;
+      const count = orders.filter(o => format(o.createdAt ? new Date(o.createdAt) : new Date(), 'yyyy-MM-dd') === dateStr).length;
       days.push({ name: dayName, orders: count });
     }
     return days;

@@ -24,12 +24,12 @@ export interface UpdateReceiptSettingsPayload {
 
 export const receiptSettingsApi = {
   getSettings: async (): Promise<ReceiptSettings> => {
-    const { data } = await api.get<{ success: boolean; data: ReceiptSettings }>('/receipt-settings');
-    return data.data;
+    const res = await api.get('/receipt-settings');
+    return res.data.data;
   },
 
   updateSettings: async (payload: UpdateReceiptSettingsPayload): Promise<ReceiptSettings> => {
-    const { data } = await api.patch<{ success: boolean; data: ReceiptSettings }>('/receipt-settings', payload);
-    return data.data;
+    const res = await api.patch('/receipt-settings', payload);
+    return res.data.data;
   }
 };

@@ -185,11 +185,11 @@ export default function ClientsReportPage() {
                     />
                     <Tooltip 
                       cursor={{ fill: '#F8FAFC' }}
-                      formatter={(value: number) => `$${value.toFixed(2)}`}
+                      formatter={(value: any) => `$${Number(value).toFixed(2)}`}
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                     />
                     <Bar dataKey="spent" radius={[0, 4, 4, 0]} barSize={24}>
-                      {getTopClientsChartData().map((entry, index) => (
+                      {getTopClientsChartData().map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Bar>

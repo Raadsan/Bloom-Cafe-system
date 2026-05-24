@@ -34,7 +34,7 @@ import { isToday, format, subDays } from "date-fns";
 
 export default function KitchenDashboard({ orders }: { orders: Order[] }) {
   const stats = useMemo(() => {
-    const todayOrders = orders.filter(o => isToday(new Date(o.createdAt)));
+    const todayOrders = orders.filter(o => isToday(o.createdAt ? new Date(o.createdAt) : new Date()));
     
     const inQueue = todayOrders.filter(o => o.status === 'pending').length;
     const preparing = todayOrders.filter(o => o.status === 'preparing').length;
@@ -55,7 +55,7 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
       const dayName = format(date, 'EEE');
       const dateStr = format(date, 'yyyy-MM-dd');
       
-      const count = orders.filter(o => format(new Date(o.createdAt), 'yyyy-MM-dd') === dateStr).length;
+      const count = orders.filter(o => o.createdAt && format(new Date(o.createdAt), 'yyyy-MM-dd') === dateStr).length;
       days.push({ name: dayName, orders: count });
     }
     return days;
@@ -218,7 +218,7 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
                     </span>
                   </TableCell>
                   <TableCell className="px-6 py-5">
-                    <span className="text-[13px] font-bold text-[#1E293B]">{order.items?.length || 0} items</span>
+                    <span className="text-[13px] font-bold text-[#1E293B]">{order.orderitem?.length || 0} items</span>
                   </TableCell>
                 </TableRow>
               )) : (

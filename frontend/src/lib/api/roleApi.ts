@@ -19,18 +19,18 @@ export interface UpdateRolePayload {
 
 export const roleApi = {
   createRole: async (payload: CreateRolePayload): Promise<Role> => {
-    const { data } = await api.post<{ success: boolean; data: Role }>('/roles', payload);
-    return data.data;
+    const res = await api.post('/roles', payload);
+    return res.data.data;
   },
 
   getAllRoles: async (): Promise<Role[]> => {
-    const { data } = await api.get<{ success: boolean; data: Role[] }>('/roles');
-    return data.data;
+    const res = await api.get('/roles');
+    return res.data.data;
   },
 
   updateRole: async (id: number, payload: UpdateRolePayload): Promise<Role> => {
-    const { data } = await api.patch<{ success: boolean; data: Role }>(`/roles/${id}`, payload);
-    return data.data;
+    const res = await api.patch(`/roles/${id}`, payload);
+    return res.data.data;
   },
 
   deleteRole: async (id: number): Promise<void> => {

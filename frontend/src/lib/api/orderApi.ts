@@ -1,6 +1,6 @@
 import api from './axios';
 
-export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled' | 'held';
+export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled' | 'held' | 'completed';
 
 export interface OrderItem {
   id: number;
@@ -15,6 +15,8 @@ export interface Order {
   tableId: number;
   status: OrderStatus;
   total: number;
+  taxAmount: number;
+  subTotal: number;
   notes?: string;
   customerName?: string;
   customerPhone?: string;
@@ -36,33 +38,36 @@ export interface CreateOrderPayload {
 
 export const orderApi = {
   createOrder: async (payload: CreateOrderPayload): Promise<Order> => {
-    const { data } = await api.post<{ success: boolean; data: Order }>('/orders', payload);
-    return data.data;
+    const res = await api.post('/orders', payload);
+    return res.data.data;
   },
 
   getAllOrders: async (params?: { status?: string; onlyMine?: boolean }): Promise<Order[]> => {
-    const { data } = await api.get<{ success: boolean; data: Order[] }>('/orders/all', { params });
-    return data.data;
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.onlyMine) query.set('onlyMine', 'true');
+    const res = await api.get(`/orders/all?${query.toString()}`);
+    return res.data.data || [];
   },
 
   getOrdersByTable: async (tableId: number): Promise<Order[]> => {
-    const { data } = await api.get<{ success: boolean; data: Order[] }>(`/orders/table/${tableId}`);
-    return data.data;
+    const res = await api.get(`/orders/table/${tableId}`);
+    return res.data.data || [];
   },
 
   getOrderById: async (id: number): Promise<Order> => {
-    const { data } = await api.get<{ success: boolean; data: Order }>(`/orders/${id}`);
-    return data.data;
+    const res = await api.get(`/orders/${id}`);
+    return res.data.data;
   },
 
   updateOrder: async (id: number, payload: CreateOrderPayload): Promise<Order> => {
-    const { data } = await api.put<{ success: boolean; data: Order }>(`/orders/${id}`, payload);
-    return data.data;
+    const res = await api.put(`/orders/${id}`, payload);
+    return res.data.data;
   },
 
   updateStatus: async (id: number, status: OrderStatus): Promise<Order> => {
-    const { data } = await api.patch<{ success: boolean; data: Order }>(`/orders/${id}/status`, { status });
-    return data.data;
+    const res = await api.patch(`/orders/${id}/status`, { status });
+    return res.data.data;
   },
 
   deleteOrder: async (id: number): Promise<void> => {

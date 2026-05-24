@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useRouter } from 'next/navigation';
 
@@ -18,30 +18,31 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [isConnected, setIsConnected] = useState(false);
   const router = useRouter();
 
+  // Store router in a ref so the socket useEffect never re-runs because of it
+  const routerRef = useRef(router);
   useEffect(() => {
-    // Connect to the socket server
+    routerRef.current = router;
+  }, [router]);
+
+  useEffect(() => {
     const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
-    const socketInstance = io(socketUrl);
+    const socketInstance = io(socketUrl, {
+      transports: ['websocket'], // skip long-polling, go straight to WebSocket
+    });
 
     socketInstance.on('connect', () => {
-      console.log('Socket connected:', socketInstance.id);
       setIsConnected(true);
     });
 
     socketInstance.on('disconnect', () => {
-      console.log('Socket disconnected');
       setIsConnected(false);
     });
 
-    // Listen to global refresh orders event
+    // Dispatch a window event so individual pages can refetch their own data
     socketInstance.on('refresh_orders', () => {
-      console.log('Received refresh_orders event via Socket. Refreshing data...');
-      
-      // Dispatch a window event so individual client components can refetch
       window.dispatchEvent(new CustomEvent('refresh_orders'));
-      
-      // Tell Next.js to refresh server components and current route data
-      router.refresh();
+      // NOTE: do NOT call router.refresh() here — it causes all useEffects
+      // on the page to re-run and every API to be called again.
     });
 
     setSocket(socketInstance);
@@ -49,7 +50,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       socketInstance.disconnect();
     };
-  }, [router]);
+  }, []); // ← empty deps: socket is created ONCE and never recreated
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

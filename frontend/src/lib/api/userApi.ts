@@ -31,23 +31,23 @@ export interface UpdateUserPayload {
 
 export const userApi = {
   createUser: async (payload: CreateUserPayload): Promise<User> => {
-    const { data } = await api.post<{ success: boolean; data: User }>('/users', payload);
-    return data.data;
+    const res = await api.post('/users', payload);
+    return res.data.data;
   },
 
   getAllUsers: async (): Promise<User[]> => {
-    const { data } = await api.get<{ success: boolean; data: User[] }>('/users');
-    return data.data;
+    const res = await api.get('/users');
+    return res.data.data;
   },
 
   getUsersByRole: async (roleId: number): Promise<User[]> => {
-    const { data } = await api.get<{ success: boolean; data: User[] }>(`/users/role/${roleId}`);
-    return data.data;
+    const res = await api.get(`/users/role/${roleId}`);
+    return res.data.data;
   },
 
   updateUser: async (id: number, payload: UpdateUserPayload): Promise<User> => {
-    const { data } = await api.patch<{ success: boolean; data: User }>(`/users/${id}`, payload);
-    return data.data;
+    const res = await api.patch(`/users/${id}`, payload);
+    return res.data.data;
   },
 
   deleteUser: async (id: number): Promise<void> => {

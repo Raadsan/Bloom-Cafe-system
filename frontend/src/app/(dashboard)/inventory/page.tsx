@@ -10,7 +10,8 @@ import {
   Package, 
   Filter,
   ChevronDown,
-  History
+  History,
+  Eye
 } from "lucide-react";
 import { usePermissions } from "@/context/PermissionContext";
 import { 
@@ -298,7 +299,6 @@ export default function InventoryPage() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => openViewModal(ing)}
                             className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                           >
                             <Eye className="size-4" />

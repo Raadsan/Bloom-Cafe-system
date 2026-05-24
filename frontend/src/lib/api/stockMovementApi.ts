@@ -8,6 +8,7 @@ export interface StockMovement {
   type: MovementType;
   quantity: number;
   notes?: string;
+  note?: string;
   ingredient?: { id: string; name: string; unit: string };
   createdAt?: string;
 }
@@ -17,27 +18,33 @@ export interface CreateStockMovementPayload {
   type: MovementType;
   quantity: number;
   notes?: string;
+  note?: string;
 }
 
 export const stockMovementApi = {
   createStockMovement: async (payload: CreateStockMovementPayload): Promise<StockMovement> => {
-    const { data } = await api.post<{ success: boolean; data: StockMovement }>('/stock-movements', payload);
-    return data.data;
+    const res = await api.post('/stock-movements', {
+      ...payload,
+      note: payload.notes || payload.note
+    });
+    const data = res.data.data;
+    return { ...data, note: data.note, notes: data.note };
   },
 
   getAllStockMovements: async (): Promise<StockMovement[]> => {
-    const { data } = await api.get<{ success: boolean; data: StockMovement[] }>('/stock-movements/all');
-    return data.data;
+    const res = await api.get('/stock-movements/all');
+    return (res.data.data || []).map((m: any) => ({ ...m, note: m.note, notes: m.note }));
   },
 
   getStockMovementsByIngredient: async (ingredientId: string): Promise<StockMovement[]> => {
-    const { data } = await api.get<{ success: boolean; data: StockMovement[] }>(`/stock-movements/ingredient/${ingredientId}`);
-    return data.data;
+    const res = await api.get(`/stock-movements/ingredient/${ingredientId}`);
+    return (res.data.data || []).map((m: any) => ({ ...m, note: m.note, notes: m.note }));
   },
 
   getStockMovementById: async (id: string): Promise<StockMovement> => {
-    const { data } = await api.get<{ success: boolean; data: StockMovement }>(`/stock-movements/${id}`);
-    return data.data;
+    const res = await api.get(`/stock-movements/${id}`);
+    const data = res.data.data;
+    return { ...data, note: data.note, notes: data.note };
   },
 
   deleteStockMovement: async (id: string): Promise<void> => {

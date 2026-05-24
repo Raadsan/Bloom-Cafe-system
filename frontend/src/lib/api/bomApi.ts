@@ -21,23 +21,23 @@ export interface UpdateBOMItemPayload {
 
 export const bomApi = {
   createBOMItem: async (payload: CreateBOMItemPayload): Promise<BOMItem> => {
-    const { data } = await api.post<BOMItem>('/bom', payload);
-    return data;
+    const res = await api.post('/bom', payload);
+    return res.data.data;
   },
 
   getAllBOMItems: async (): Promise<BOMItem[]> => {
-    const { data } = await api.get<BOMItem[]>('/bom');
-    return data;
+    const res = await api.get('/bom');
+    return res.data.data || [];
   },
 
   getBOMByMenuItem: async (menuItemId: string): Promise<BOMItem[]> => {
-    const { data } = await api.get<BOMItem[]>(`/bom/menu-item/${menuItemId}`);
-    return data;
+    const res = await api.get(`/bom/menu-item/${menuItemId}`);
+    return res.data.data || [];
   },
 
   updateBOMItem: async (id: string, payload: UpdateBOMItemPayload): Promise<BOMItem> => {
-    const { data } = await api.patch<BOMItem>(`/bom/${id}`, payload);
-    return data;
+    const res = await api.patch(`/bom/${id}`, payload);
+    return res.data.data;
   },
 
   deleteBOMItem: async (id: string): Promise<void> => {

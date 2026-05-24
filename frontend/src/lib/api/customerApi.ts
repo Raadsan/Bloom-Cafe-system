@@ -4,6 +4,7 @@ export interface Customer {
   id: number;
   fullName: string;
   phone: string;
+  email?: string;
   createdAt: string;
   updatedAt: string;
   totalOrders?: number;
@@ -13,27 +14,28 @@ export interface Customer {
 export interface CreateCustomerPayload {
   fullName: string;
   phone: string;
+  email?: string;
 }
 
 export const customerApi = {
   getAllCustomers: async (): Promise<Customer[]> => {
-    const { data } = await api.get<{ success: boolean; data: Customer[] }>('/customers/all');
-    return data.data;
+    const res = await api.get('/customers/all');
+    return res.data.data || [];
   },
 
   getCustomerById: async (id: number): Promise<Customer> => {
-    const { data } = await api.get<{ success: boolean; data: Customer }>(`/customers/${id}`);
-    return data.data;
+    const res = await api.get(`/customers/${id}`);
+    return res.data.data;
   },
 
   createCustomer: async (payload: CreateCustomerPayload): Promise<Customer> => {
-    const { data } = await api.post<{ success: boolean; data: Customer }>('/customers', payload);
-    return data.data;
+    const res = await api.post('/customers', payload);
+    return res.data.data;
   },
 
   updateCustomer: async (id: number, payload: Partial<CreateCustomerPayload>): Promise<Customer> => {
-    const { data } = await api.put<{ success: boolean; data: Customer }>(`/customers/${id}`, payload);
-    return data.data;
+    const res = await api.put(`/customers/${id}`, payload);
+    return res.data.data;
   },
 
   deleteCustomer: async (id: number): Promise<void> => {
