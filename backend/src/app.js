@@ -23,6 +23,7 @@ import customerRoutes from './routes/customerRoutes.js'
 import expenseRoutes from './routes/expenseRoutes.js';
 import receiptSettingsRoutes from './routes/receiptSettingsRoutes.js'
 import addressRoutes from './routes/addressRoutes.js'
+import roomRoutes from './routes/roomRoutes.js'
 
 const app = express();
 app.use(express.json({ limit: '50mb' }))
@@ -50,6 +51,7 @@ app.use('/api/menus', menuRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/expenses', expenseRoutes)
 app.use('/api/addresses', addressRoutes)
+app.use('/api/rooms', roomRoutes)
 app.use('/api/receipt-settings', receiptSettingsRoutes)
 
 app.get('/', (req, res) => {

@@ -32,9 +32,12 @@ export default function DashboardPage() {
         
         const role = currentUser?.role?.toLowerCase() || 'admin';
         const isAdminOrManager = role === 'admin' || role === 'manager';
+        const isWaiter = role === 'waiter';
 
         // 2. Conditionally fetch data based on role to avoid 403 Forbidden errors
-        const promises: Promise<any>[] = [orderApi.getAllOrders()];
+        const promises: Promise<any>[] = [
+          orderApi.getAllOrders(isWaiter ? { onlyMine: true } : undefined),
+        ];
         
         if (isAdminOrManager) {
           promises.push(reportApi.getDashboardSummary());

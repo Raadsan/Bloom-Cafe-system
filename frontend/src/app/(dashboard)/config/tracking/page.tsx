@@ -1,20 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { 
-  History, 
-  Search, 
-  User, 
-  Activity, 
-  Calendar,
-  Clock,
-  Filter,
-  RefreshCcw,
-  ArrowDownCircle,
-  Database,
-  Shield,
-  Key
-} from "lucide-react";
+import { Search, Activity, RefreshCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { 
   Table, 
   TableBody, 
@@ -26,6 +14,17 @@ import {
 import { trackingApi, AuditLog } from "@/lib/api/trackingApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+} from "@/lib/dashboard-ui";
 
 const ACTION_COLORS: Record<string, { bg: string; text: string }> = {
   LOGIN: { bg: "bg-emerald-50", text: "text-emerald-600" },
@@ -41,6 +40,8 @@ export default function TrackingPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(25);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [actionFilter, setActionFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState({
     start: "",
     end: ""
@@ -74,6 +75,10 @@ export default function TrackingPage() {
         log.entity.toLowerCase().includes(search.toLowerCase()) ||
         log.description.toLowerCase().includes(search.toLowerCase()) ||
         log.user?.fullName.toLowerCase().includes(search.toLowerCase());
+
+      const matchesAction =
+        actionFilter === "all" ||
+        log.action.toLowerCase().includes(actionFilter.toLowerCase());
       
       let matchesDate = true;
       if (dateFilter.start || dateFilter.end) {
@@ -82,9 +87,19 @@ export default function TrackingPage() {
         if (dateFilter.end && logDate > dateFilter.end) matchesDate = false;
       }
 
-      return matchesSearch && matchesDate;
-    }).slice(0, pageSize);
-  }, [logs, search, pageSize, dateFilter]);
+      return matchesSearch && matchesDate && matchesAction;
+    });
+  }, [logs, search, dateFilter, actionFilter]);
+
+  const totalPages = Math.ceil(filteredLogs.length / pageSize) || 1;
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredLogs.slice(start, start + pageSize);
+  }, [filteredLogs, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, pageSize, dateFilter, actionFilter]);
 
   const getActionStyle = (action: string) => {
     const act = action.toUpperCase();
@@ -97,20 +112,16 @@ export default function TrackingPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 font-sans mx-1">
-      {/* Header */}
-      <div className="mb-8 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
+      <div className="mb-6 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#1e293b] uppercase tracking-tight flex items-center gap-2">
-          
-            System Tracking
-          </h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium italic">Monitor every click, login, and change happening in the system in real-time.</p>
+          <h1 className={pageHeaderTitleClass}>Activity Tracking</h1>
+          <p className={pageHeaderSubtitleClass}>Monitor logins, changes and actions across the system.</p>
         </div>
         <button 
           onClick={fetchLogs}
           disabled={loading}
-          className="flex items-center gap-2 px-4 h-10 rounded-xl bg-white border border-zinc-100 text-[#64748B] hover:text-[#605DFF] hover:bg-zinc-50 transition-all shadow-sm text-xs font-black uppercase tracking-widest"
+          className="flex items-center gap-2 px-4 h-10 rounded-xl bg-white border border-zinc-100 text-[#64748B] hover:text-primary hover:bg-zinc-50 transition-all shadow-sm text-xs font-black uppercase tracking-widest"
         >
           <RefreshCcw className={cn("size-3.5", loading && "animate-spin")} />
           Refresh Log
@@ -127,13 +138,28 @@ export default function TrackingPage() {
                 <select 
                     value={pageSize} 
                     onChange={(e) => setPageSize(Number(e.target.value))}
-                    className="w-16 h-[38px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                    className="w-16 h-[38px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
                 >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
                 </select>
+            </div>
+
+            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+              <span>Filter Action</span>
+              <select
+                value={actionFilter}
+                onChange={(e) => setActionFilter(e.target.value)}
+                className="w-36 h-[38px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+              >
+                <option value="all">All Events</option>
+                <option value="login">Login</option>
+                <option value="create">Create</option>
+                <option value="update">Update</option>
+                <option value="delete">Delete</option>
+              </select>
             </div>
           </div>
 
@@ -170,13 +196,13 @@ export default function TrackingPage() {
 
           <div className="flex items-center gap-3">
             <div className="relative w-72 group">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search who or what..."
-                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
           </div>
@@ -185,32 +211,38 @@ export default function TrackingPage() {
         {/* Table Content */}
         <div className="overflow-x-auto">
           <Table className="w-full">
-            <TableHeader className="bg-[#605DFF]">
-              <TableRow className="hover:bg-transparent border-none">
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Actor (Who)</TableHead>
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-center">Event</TableHead>
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Description</TableHead>
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Module</TableHead>
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Date/Time</TableHead>
+            <TableHeader className={dashboardTableHeaderClass}>
+              <TableRow className={dashboardTableHeadRowClass}>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left w-16")}>No</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Actor</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-center")}>Event</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Description</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Module</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Date/Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && logs.length === 0 ? (
                 Array.from({ length: 10 }).map((_, i) => (
-                  <TableRow key={i} className="h-16 animate-pulse bg-muted/5"><TableCell colSpan={5} /></TableRow>
+                  <TableRow key={i} className="h-16 animate-pulse bg-muted/5"><TableCell colSpan={6} /></TableRow>
                 ))
-              ) : filteredLogs.length > 0 ? (
-                filteredLogs.map((log) => {
+              ) : paginatedLogs.length > 0 ? (
+                paginatedLogs.map((log, index) => {
                   const style = getActionStyle(log.action);
                   return (
-                    <TableRow key={log.id} className="border-zinc-50 hover:bg-zinc-50/50 transition-colors">
-                      <TableCell className="px-6 py-4">
+                    <TableRow key={log.id} className={dashboardTableBodyRowClass}>
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[13px] font-bold text-primary">
+                          {(currentPage - 1) * pageSize + index + 1}
+                        </span>
+                      </TableCell>
+                      <TableCell className={dashboardTableCellClass}>
                         <div>
                           <p className="text-[13px] font-normal text-zinc-800 leading-tight uppercase tracking-tight">{log.user?.fullName || "System"}</p>
                           <p className="text-[10px] text-zinc-400 font-medium lowercase italic">{log.user?.email || "automated"}</p>
                         </div>
                       </TableCell>
-                      <TableCell className="px-6 py-4 text-center">
+                      <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
                           style.text
@@ -218,17 +250,17 @@ export default function TrackingPage() {
                           {log.action}
                         </span>
                       </TableCell>
-                      <TableCell className="px-6 py-4">
-                        <p className="text-[12px] font-normal text-zinc-600 leading-relaxed max-w-sm">
+                      <TableCell className={dashboardTableCellClass}>
+                        <p className="text-[12px] font-medium text-zinc-600 leading-relaxed max-w-sm">
                           {log.description}
                         </p>
                       </TableCell>
-                      <TableCell className="px-6 py-4">
-                        <span className="text-[11px] font-normal uppercase tracking-widest text-zinc-500">
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[11px] font-medium uppercase tracking-widest text-zinc-500">
                           {log.entity}
                         </span>
                       </TableCell>
-                      <TableCell className="px-6 py-4 text-right">
+                      <TableCell className={cn(dashboardTableCellClass, "text-right")}>
                         <div className="flex flex-col items-end gap-0.5">
                           <span className="text-[11px] font-normal text-zinc-800">
                             {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -243,7 +275,7 @@ export default function TrackingPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="px-6 py-32 text-center">
+                  <TableCell colSpan={6} className="px-6 py-32 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <div className="size-16 rounded-full bg-zinc-50 flex items-center justify-center shadow-inner">
                         <Activity className="size-8 text-zinc-100" />
@@ -259,18 +291,31 @@ export default function TrackingPage() {
 
         {/* Footer info */}
         <div className="px-8 py-4 bg-zinc-50/50 border-t border-zinc-100 flex justify-between items-center">
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                End of Activity stream
+            <p className="text-[12px] font-medium text-zinc-500">
+              {filteredLogs.length > 0
+                ? `Showing ${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredLogs.length)} of ${filteredLogs.length}`
+                : "No records"}
             </p>
-            <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
-                <div className="flex items-center gap-1.5">
-                    <div className="size-2 rounded-full bg-emerald-500" />
-                    <span className="text-zinc-500">Log Live</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <Database className="size-3 text-zinc-400" />
-                    <span className="text-zinc-500">Synced</span>
-                </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+                className="h-8 text-xs"
+              >
+                Previous
+              </Button>
+              <span className="text-xs font-medium text-zinc-500">{currentPage} / {totalPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+                className="h-8 text-xs"
+              >
+                Next
+              </Button>
             </div>
         </div>
       </div>

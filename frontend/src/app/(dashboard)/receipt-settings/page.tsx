@@ -18,6 +18,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
 import { useToast } from "@/components/ui/toast";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+} from "@/lib/dashboard-ui";
 
 export default function ReceiptSettingsPage() {
   const { showToast } = useToast();
@@ -101,12 +107,12 @@ export default function ReceiptSettingsPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 font-sans mx-1 pt-0 pb-12">
+    <div className={`${dashboardPageClass} pb-12`} style={dashboardPageStyle}>
       {/* Page Header */}
       <div className="mb-8 px-4 flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold text-[#1e293b] uppercase tracking-tight">Receipt Settings</h1>
-          <p className="text-[13px] text-zinc-500 uppercase tracking-wider mt-1 font-medium italic">Configure the information that appears on your customer receipts.</p>
+          <h1 className={pageHeaderTitleClass}>Receipt Settings</h1>
+          <p className={pageHeaderSubtitleClass}>Configure the information that appears on your customer receipts.</p>
         </div>
         <div className="flex gap-3">
           <Button 
@@ -120,7 +126,7 @@ export default function ReceiptSettingsPage() {
           <Button 
             onClick={handleSave}
             disabled={saving || loading}
-            className="h-11 px-8 bg-[#605DFF] hover:bg-[#4E4BCB] text-white font-bold flex items-center gap-2 shadow-lg shadow-[#605DFF]/20 transition-all active:scale-95"
+            className="h-11 px-8 bg-primary !text-white hover:bg-primary/90 hover:!text-white font-bold flex items-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
           >
             {saving ? <Loader2 className="animate-spin size-4" /> : <Save className="size-4" />}
             Save Settings
@@ -134,7 +140,7 @@ export default function ReceiptSettingsPage() {
           <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
             <div className="px-8 py-6 border-b border-zinc-50 bg-zinc-50/30 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100">
-                <Building2 className="size-5 text-[#605DFF]" />
+                <Building2 className="size-5 text-primary" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-[#1e293b]">Company Details</h3>
@@ -154,7 +160,7 @@ export default function ReceiptSettingsPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Fine Dine Restaurant"
-                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[14px] font-medium"
+                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-medium"
                   />
                 </div>
                 <div className="space-y-2">
@@ -167,7 +173,7 @@ export default function ReceiptSettingsPage() {
                     value={vatNumber}
                     onChange={(e) => setVatNumber(e.target.value)}
                     placeholder="e.g. VAT-12345678"
-                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[14px] font-medium"
+                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-medium"
                   />
                 </div>
               </div>
@@ -182,7 +188,7 @@ export default function ReceiptSettingsPage() {
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="Street, City, Country"
                   rows={2}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[14px] font-medium resize-none"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-medium resize-none"
                 />
               </div>
 
@@ -213,7 +219,7 @@ export default function ReceiptSettingsPage() {
                           setPhones(newPhones);
                         }}
                         placeholder="Provider (e.g. Hormuud)"
-                        className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-[#605DFF] text-[13px] font-medium"
+                        className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-primary text-[13px] font-medium"
                       />
                       <input
                         type="text"
@@ -224,7 +230,7 @@ export default function ReceiptSettingsPage() {
                           setPhones(newPhones);
                         }}
                         placeholder="Number"
-                        className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-[#605DFF] text-[13px] font-medium"
+                        className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-primary text-[13px] font-medium"
                       />
                     </div>
                     <Button 
@@ -257,7 +263,7 @@ export default function ReceiptSettingsPage() {
                   Restaurant Logo
                 </label>
                 <div className="flex items-center gap-6">
-                  <div className="size-24 rounded-2xl border-2 border-dashed border-zinc-200 flex items-center justify-center bg-zinc-50 overflow-hidden group hover:border-[#605DFF] transition-all relative">
+                  <div className="size-24 rounded-2xl border-2 border-dashed border-zinc-200 flex items-center justify-center bg-zinc-50 overflow-hidden group hover:border-primary transition-all relative">
                     {logoUrl ? (
                       <img src={logoUrl} alt="Logo Preview" className="w-full h-full object-contain" />
                     ) : (
@@ -294,7 +300,7 @@ export default function ReceiptSettingsPage() {
                   onChange={(e) => setFooterText(e.target.value)}
                   placeholder="e.g. Thank you for visiting! Please come again."
                   rows={3}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[14px] font-medium resize-none"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-medium resize-none"
                 />
               </div>
 
@@ -308,7 +314,7 @@ export default function ReceiptSettingsPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="info@restaurant.com"
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[14px] font-medium"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-medium"
                 />
               </div>
             </div>

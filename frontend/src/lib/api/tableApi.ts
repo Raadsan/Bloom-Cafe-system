@@ -2,10 +2,20 @@ import api from './axios';
 
 export type TableStatus = 'active' | 'inactive';
 
+export interface TableRoom {
+  id: number;
+  name: string;
+  description?: string | null;
+  isActive?: boolean;
+}
+
 export interface Table {
   id: number;
   number: number;
   name?: string;
+  description?: string | null;
+  roomId?: number | null;
+  room?: TableRoom | null;
   capacity?: number;
   status: TableStatus;
   qrCode?: string;
@@ -15,6 +25,8 @@ export interface Table {
 export interface CreateTablePayload {
   number: number;
   name?: string;
+  description?: string | null;
+  roomId: number;
   capacity?: number;
   status?: TableStatus;
 }
@@ -22,6 +34,8 @@ export interface CreateTablePayload {
 export interface UpdateTablePayload {
   number?: number;
   name?: string;
+  description?: string | null;
+  roomId?: number;
   capacity?: number;
   status?: TableStatus;
 }

@@ -33,6 +33,20 @@ import {
 import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
 import { useToast } from "@/components/ui/toast";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnView,
+  actionBtnEdit,
+  actionBtnDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardStatusBadgeClass,
+  getTableStatusBadgeClass,
+} from "@/lib/dashboard-ui";
 
 export default function MenuPage() {
   const { showToast } = useToast();
@@ -172,7 +186,7 @@ export default function MenuPage() {
     try {
       const payload = {
         name: formName.trim(),
-        description: formDesc.trim(),
+        description: formDesc.trim() || undefined,
         costPrice: formCostPrice ? Number(formCostPrice) : undefined,
         price: Number(formPrice),
         tax: Number(formTax || 0),
@@ -214,11 +228,11 @@ export default function MenuPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 font-sans mx-1 pt-0 pb-8">
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Page Header: Outside the box */}
       <div className="mb-6 px-4">
-        <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Menu Management</h1>
-        <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Manage your restaurant menu items, categories, and availability in one place.</p>
+        <h1 className={pageHeaderTitleClass}>Menu Management</h1>
+        <p className={pageHeaderSubtitleClass}>Manage your restaurant menu items, categories, and availability in one place.</p>
       </div>
 
       {/* Main Container Box */}
@@ -231,7 +245,7 @@ export default function MenuPage() {
               <select
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value={10}>10</option>
                 <option value={20}>20</option>
@@ -245,7 +259,7 @@ export default function MenuPage() {
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value="all">All Categories</option>
                 {categories.map(c => (
@@ -259,19 +273,19 @@ export default function MenuPage() {
 
           <div className="flex items-center gap-3">
             <div className="relative w-64 group">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input
                 type="text"
                 placeholder="Search menu..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
 
             <Button
               onClick={openAddModal}
-              className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
+              className="h-[42px] px-6 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
             >
               <Plus className="size-4" />
               Add Menu Item
@@ -283,15 +297,15 @@ export default function MenuPage() {
         <div className="border-t border-zinc-100 overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Menus ID</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Item Name</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Cost Price</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Selling Price</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Tax (%)</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Status</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Actions</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Item Name</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Cost Price</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Selling Price</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Tax (%)</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Status</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -308,7 +322,7 @@ export default function MenuPage() {
                 ) : paginatedItems.length > 0 ? (
                   paginatedItems.map((item) => (
                     <TableRow key={item.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
-                      <TableCell className="px-6 py-3 text-[13px] text-zinc-500 font-medium">ID-{item.id}</TableCell>
+                      <TableCell className="px-6 py-3 text-[13px] text-zinc-500 font-medium">{item.id}</TableCell>
                       <TableCell className="px-6 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-md overflow-hidden flex items-center justify-center shrink-0 border border-zinc-100 bg-zinc-50">
@@ -330,7 +344,7 @@ export default function MenuPage() {
                       <TableCell className="px-6 py-3 text-[13px] font-medium text-zinc-400 text-right">
                         ${(item.costPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </TableCell>
-                      <TableCell className="px-6 py-3 text-[13px] font-bold text-[#605DFF] text-right">
+                      <TableCell className="px-6 py-3 text-[13px] font-bold text-primary text-right">
                         ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="px-6 py-3 text-[13px] font-medium text-zinc-500 text-right">
@@ -338,8 +352,8 @@ export default function MenuPage() {
                       </TableCell>
                       <TableCell className="px-6 py-3 text-right">
                         <span className={cn(
-                          "px-3 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider border",
-                          item.isAvailable ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-rose-50 text-rose-600 border-rose-100"
+                          dashboardStatusBadgeClass,
+                          getTableStatusBadgeClass(item.isAvailable ? "active" : "inactive")
                         )}>
                           {item.isAvailable ? "Active" : "Inactive"}
                         </span>
@@ -349,7 +363,7 @@ export default function MenuPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            className={actionBtnView}
                           >
                             <Eye className="size-4" />
                           </Button>
@@ -357,7 +371,7 @@ export default function MenuPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => openEditModal(item)}
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            className={actionBtnEdit}
                           >
                             <Edit className="size-4" />
                           </Button>
@@ -365,7 +379,7 @@ export default function MenuPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => openDeleteModal(item)}
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            className={actionBtnDelete}
                           >
                             <Trash2 className="size-4" />
                           </Button>
@@ -437,7 +451,7 @@ export default function MenuPage() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="e.g. Grilled Salmon"
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium placeholder:text-zinc-400"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium placeholder:text-zinc-400"
                 />
               </div>
 
@@ -447,7 +461,7 @@ export default function MenuPage() {
                   <select
                     value={formCategoryId}
                     onChange={(e) => setFormCategoryId(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium appearance-none cursor-pointer"
+                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium appearance-none cursor-pointer"
                   >
                     <option value="">Select Category</option>
                     {categories.map(cat => (
@@ -469,7 +483,7 @@ export default function MenuPage() {
                   value={formCostPrice}
                   onChange={(e) => setFormCostPrice(e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium text-zinc-600"
+                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium text-zinc-600"
                 />
               </div>
 
@@ -481,7 +495,7 @@ export default function MenuPage() {
                   value={formPrice}
                   onChange={(e) => setFormPrice(e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium"
                 />
               </div>
 
@@ -493,7 +507,7 @@ export default function MenuPage() {
                   value={formTax}
                   onChange={(e) => setFormTax(e.target.value)}
                   placeholder="0"
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium"
                 />
               </div>
             </div>
@@ -505,7 +519,7 @@ export default function MenuPage() {
                 <select
                   value={formIsAvailable ? "available" : "unavailable"}
                   onChange={(e) => setFormIsAvailable(e.target.value === "available")}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium appearance-none cursor-pointer"
                 >
                   <option value="available">Available</option>
                   <option value="unavailable">Out of Stock</option>
@@ -517,7 +531,7 @@ export default function MenuPage() {
                 <select
                   value={formIsRecommended ? "yes" : "no"}
                   onChange={(e) => setFormIsRecommended(e.target.value === "yes")}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium appearance-none cursor-pointer"
                 >
                   <option value="yes">Yes (Recommended)</option>
                   <option value="no">No</option>
@@ -525,15 +539,15 @@ export default function MenuPage() {
               </div>
             </div>
 
-            {/* Row 4: Description */}
+            {/* Description — shown to kitchen when preparing orders */}
             <div className="space-y-2 pt-2">
               <label className="text-sm font-bold text-[#1e293b]">Description</label>
-              <input
-                type="text"
+              <textarea
                 value={formDesc}
                 onChange={(e) => setFormDesc(e.target.value)}
-                placeholder="Brief description..."
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[15px] font-medium"
+                placeholder="Ingredients, prep notes, allergens… (visible to kitchen staff)"
+                rows={3}
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium resize-y min-h-[88px]"
               />
             </div>
 
@@ -552,12 +566,12 @@ export default function MenuPage() {
                       value={formImageUrl}
                       onChange={(e) => setFormImageUrl(e.target.value)}
                       placeholder="Paste image URL here..."
-                      className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[14px] font-medium"
+                      className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[14px] font-medium"
                     />
                   </div>
                   <label className="cursor-pointer">
                     <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                    <div className="h-[46px] px-6 rounded-lg bg-[#605DFF]/5 text-[#605DFF] hover:bg-[#605DFF]/10 flex items-center justify-center font-bold text-[13px] transition-all border border-[#605DFF]/20">
+                    <div className="h-[46px] px-6 rounded-lg bg-primary/5 text-primary hover:bg-primary/10 flex items-center justify-center font-bold text-[13px] transition-all border border-primary/20">
                       Upload
                     </div>
                   </label>
@@ -589,7 +603,7 @@ export default function MenuPage() {
             </Button>
             <Button
               onClick={handleSave}
-              className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11 transition-all active:scale-95"
+              className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold border-none px-8 h-11 transition-all active:scale-95"
               disabled={saving}
             >
               {saving ? "Saving..." : isEditOpen ? "Update Item" : "Create Item"}
@@ -608,22 +622,21 @@ export default function MenuPage() {
                 <div className="flex items-center gap-3 mb-2">
                   <h3 className="text-2xl font-bold text-[#1E293B] truncate">{selectedItem?.name}</h3>
                   <span className={cn(
-                    "px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest border shrink-0",
-                    selectedItem?.isAvailable
-                      ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                      : "bg-rose-50 text-rose-600 border-rose-100"
+                    dashboardStatusBadgeClass,
+                    getTableStatusBadgeClass(selectedItem?.isAvailable ? "active" : "inactive"),
+                    "shrink-0"
                   )}>
-                    {selectedItem?.isAvailable ? "Available" : "Sold Out"}
+                    {selectedItem?.isAvailable ? "Active" : "Inactive"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 bg-[#605DFF]/10 text-[#605DFF] text-[11px] font-bold rounded-md uppercase tracking-wider">
+                  <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-[11px] font-bold rounded-md uppercase tracking-wider">
                     {categories.find(c => String(c.id) === String(selectedItem?.categoryId))?.name || "Uncategorized"}
                   </span>
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-2xl font-black text-[#605DFF]">${Number(selectedItem?.price).toFixed(2)}</p>
+                <p className="text-2xl font-black text-primary">${Number(selectedItem?.price).toFixed(2)}</p>
                 <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-1">Per serving</p>
               </div>
             </div>
@@ -657,7 +670,7 @@ export default function MenuPage() {
             <DialogFooter className="mt-8 pt-6 border-t border-zinc-100">
               <Button
                 onClick={() => setIsViewOpen(false)}
-                className="w-full bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-xl font-bold border-none h-12 shadow-lg shadow-[#605DFF]/20"
+                className="w-full bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-xl font-bold border-none h-12 shadow-lg shadow-primary/20"
               >
                 Close View
               </Button>
@@ -686,7 +699,7 @@ export default function MenuPage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11">
               Cancel
             </Button>
-            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10">
+            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10">
               Yes, Delete Item
             </Button>
           </DialogFooter>

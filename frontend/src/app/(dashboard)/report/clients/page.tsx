@@ -27,6 +27,14 @@ import { reportApi } from "@/lib/api/reportApi";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  dashboardNativeTheadClass,
+  dashboardNativeThClass,
+} from "@/lib/dashboard-ui";
 
 const COLORS = ['#605DFF', '#8B5CF6', '#A78BFA', '#C4B5FD', '#DDD6FE'];
 
@@ -67,15 +75,12 @@ export default function ClientsReportPage() {
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className={`${dashboardPageClass} space-y-8 pb-12`} style={dashboardPageStyle}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground uppercase">Clients Report</h1>
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2 flex items-center gap-2">
-            <Users className="size-3 text-[#605DFF]" />
-            Customer Value & Retention Analysis
-          </p>
+          <h1 className={pageHeaderTitleClass}>Clients Report</h1>
+          <p className={pageHeaderSubtitleClass}>Customer value & retention analysis</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl border border-zinc-100 shadow-sm">
@@ -99,7 +104,7 @@ export default function ClientsReportPage() {
           <Button 
             onClick={fetchReport}
             disabled={loading}
-            className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white font-bold h-10 px-6 rounded-xl shadow-lg shadow-[#605DFF]/20 transition-all active:scale-95"
+            className="bg-primary !text-white hover:bg-primary/90 hover:!text-white font-bold h-10 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95"
           >
             {loading ? "Updating..." : "Filter Clients"}
           </Button>
@@ -121,8 +126,8 @@ export default function ClientsReportPage() {
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Active Clients</p>
                   <h3 className="text-3xl font-black text-[#1E293B] mt-1">{data.totalClients}</h3>
                 </div>
-                <div className="p-3 bg-[#605DFF]/10 rounded-xl">
-                  <Users className="size-6 text-[#605DFF]" />
+                <div className="p-3 bg-primary/10 rounded-xl">
+                  <Users className="size-6 text-primary" />
                 </div>
               </div>
             </div>
@@ -206,18 +211,18 @@ export default function ClientsReportPage() {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-zinc-50/50 border-b border-zinc-100">
-                      <th className="px-8 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em]">Rank</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em]">Client</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em]">Total Orders</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em] text-right">Total Spent</th>
+                  <thead className={dashboardNativeTheadClass}>
+                    <tr className="border-none">
+                      <th className={cn(dashboardNativeThClass, "text-left px-8")}>Rank</th>
+                      <th className={cn(dashboardNativeThClass, "text-left px-8")}>Client</th>
+                      <th className={cn(dashboardNativeThClass, "text-left px-8")}>Total Orders</th>
+                      <th className={cn(dashboardNativeThClass, "text-right px-8")}>Total Spent</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50">
                     {data.topClients?.slice(0, 10).map((c: any, i: number) => (
-                      <tr key={c.id} className="hover:bg-[#605DFF]/[0.02] transition-colors">
-                        <td className="px-8 py-4 font-black text-zinc-400">#{i + 1}</td>
+                      <tr key={c.id} className="hover:bg-primary/[0.02] transition-colors">
+                        <td className="px-8 py-4 font-black text-zinc-400">{i + 1}</td>
                         <td className="px-8 py-4">
                           <p className="text-[13px] font-bold text-[#1E293B]">{c.fullName}</p>
                           <p className="text-[10px] font-medium text-[#64748B]">{c.phone}</p>

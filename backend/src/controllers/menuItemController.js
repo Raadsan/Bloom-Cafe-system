@@ -27,7 +27,7 @@ export const createMenuItem = async (req, res) => {
     const item = await prisma.menuitem.create({
       data: {
         name: name.trim(),
-        description: description || null,
+        description: description?.trim() ? description.trim() : null,
         costPrice: costPrice !== undefined ? Number(costPrice) : null,
         price: Number(price),
         tax: tax !== undefined ? Number(tax) : 0,
@@ -140,7 +140,12 @@ export const updateMenuItem = async (req, res) => {
       where: { id: itemId },
       data: {
         name: name ?? existing.name,
-        description: description !== undefined ? description : existing.description,
+        description:
+          description !== undefined
+            ? description?.trim()
+              ? description.trim()
+              : null
+            : existing.description,
         costPrice: costPrice !== undefined ? Number(costPrice) : existing.costPrice,
         price: price !== undefined ? Number(price) : existing.price,
         tax: tax !== undefined ? Number(tax) : existing.tax,

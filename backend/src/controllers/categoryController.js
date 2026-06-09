@@ -4,7 +4,7 @@ import { logAudit } from '../utils/auditHelper.js'
 // CREATE CATEGORY
 export const createCategory = async (req, res) => {
   try {
-    const { name, description, imageUrl } = req.body
+    const { name, description, imageUrl, isActive } = req.body
 
     if (!name || !name.trim()) {
       return res.status(400).json({
@@ -28,7 +28,8 @@ export const createCategory = async (req, res) => {
       data: {
         name: name.trim(),
         description: description || null,
-        imageUrl: imageUrl || null
+        imageUrl: imageUrl || null,
+        isActive: isActive !== undefined ? !!isActive : true,
       }
     })
 
@@ -78,7 +79,7 @@ export const getAllCategories = async (req, res) => {
 export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, description, imageUrl } = req.body
+    const { name, description, imageUrl, isActive } = req.body
 
     const categoryId = parseInt(id)
 
@@ -99,6 +100,7 @@ export const updateCategory = async (req, res) => {
         name: name ?? existingCategory.name,
         description: description ?? existingCategory.description,
         imageUrl: imageUrl ?? existingCategory.imageUrl,
+        isActive: isActive !== undefined ? !!isActive : existingCategory.isActive,
         updatedAt: new Date()
       }
     })

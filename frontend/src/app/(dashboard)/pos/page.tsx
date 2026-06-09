@@ -27,6 +27,12 @@ import { paymentApi, PaymentMethod } from "@/lib/api/paymentApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+} from "@/lib/dashboard-ui";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -160,21 +166,21 @@ export default function PosPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-100px)] animate-in fade-in duration-700 font-sans mx-1">
+    <div className={`${dashboardPageClass} flex flex-col h-[calc(100vh-100px)]`} style={dashboardPageStyle}>
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 px-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-[#1E293B] uppercase">Restaurant POS</h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-2">Pay first system - Fast & Reliable</p>
+          <h1 className={pageHeaderTitleClass}>Restaurant POS</h1>
+          <p className={pageHeaderSubtitleClass}>Pay first system - fast & reliable</p>
         </div>
         <div className="relative group w-full md:w-80">
-          <Search className="size-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-[#605DFF] transition-colors" />
+          <Search className="size-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <input
             type="text"
             placeholder="Search products..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-11 pl-10 pr-4 text-[11px] font-bold bg-white border border-zinc-100 rounded-xl outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all shadow-sm"
+            className="w-full h-11 pl-10 pr-4 text-[11px] font-bold bg-white border border-zinc-100 rounded-xl outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all shadow-sm"
           />
         </div>
       </div>
@@ -190,8 +196,8 @@ export default function PosPage() {
               className={cn(
                 "rounded-xl px-6 h-9 text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all",
                 selectedCategory === "All"
-                  ? "bg-[#605DFF] text-white shadow-lg shadow-[#605DFF]/20"
-                  : "bg-white border border-zinc-100 text-[#64748B] hover:bg-zinc-50 hover:text-[#605DFF]"
+                  ? "bg-primary !text-white shadow-lg shadow-primary/20"
+                  : "bg-white border border-zinc-100 text-[#64748B] hover:bg-zinc-50 hover:text-primary"
               )}
             >
               All Items
@@ -204,8 +210,8 @@ export default function PosPage() {
                 className={cn(
                   "rounded-xl px-6 h-9 text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all",
                   selectedCategory === cat.id
-                    ? "bg-[#605DFF] text-white shadow-lg shadow-[#605DFF]/20"
-                    : "bg-white border border-zinc-100 text-[#64748B] hover:bg-zinc-50 hover:text-[#605DFF]"
+                    ? "bg-primary !text-white shadow-lg shadow-primary/20"
+                    : "bg-white border border-zinc-100 text-[#64748B] hover:bg-zinc-50 hover:text-primary"
                 )}
               >
                 {cat.name}
@@ -224,23 +230,23 @@ export default function PosPage() {
                 <div
                   key={product.id}
                   onClick={() => addToCart(product)}
-                  className="bg-white rounded-2xl border border-zinc-100 shadow-sm hover:border-[#605DFF] hover:shadow-xl hover:shadow-[#605DFF]/5 transition-all p-3 cursor-pointer group flex flex-col"
+                  className="bg-white rounded-2xl border border-zinc-100 shadow-sm hover:border-primary hover:shadow-xl hover:shadow-primary/5 transition-all p-3 cursor-pointer group flex flex-col"
                 >
                   <div className="aspect-[4/3] bg-zinc-50 rounded-xl flex items-center justify-center relative overflow-hidden mb-4">
                     {product.imageUrl ? (
                       <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                     ) : (
-                      <Utensils className="size-8 text-zinc-200 group-hover:scale-110 group-hover:text-[#605DFF]/20 transition-all duration-500" />
+                      <Utensils className="size-8 text-zinc-200 group-hover:scale-110 group-hover:text-primary/20 transition-all duration-500" />
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="absolute bottom-2 right-2 translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
-                      <div className="bg-[#605DFF] text-white p-2 rounded-lg shadow-xl">
+                      <div className="bg-primary !text-white p-2 rounded-lg shadow-xl">
                         <Plus className="size-4" />
                       </div>
                     </div>
                   </div>
                   <div className="flex-1 flex flex-col">
-                    <p className="text-[9px] font-black text-[#605DFF] uppercase tracking-[0.2em] mb-1">
+                    <p className="text-[9px] font-black text-primary uppercase tracking-[0.2em] mb-1">
                       {categories.find(c => c.id === product.categoryId)?.name || "Main Menu"}
                     </p>
                     <h3 className="font-bold text-[13px] text-[#1E293B] line-clamp-2 leading-tight h-8">{product.name}</h3>
@@ -266,7 +272,7 @@ export default function PosPage() {
             <div className="p-6 border-b border-zinc-50 bg-zinc-50/30">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#605DFF] rounded-xl shadow-lg shadow-[#605DFF]/20">
+                  <div className="p-2 bg-primary rounded-xl shadow-lg shadow-primary/20">
                     <ShoppingCart className="size-4 text-white" />
                   </div>
                   <div>
@@ -306,20 +312,20 @@ export default function PosPage() {
                           <X className="size-4" />
                         </button>
                       </div>
-                      <p className="text-[10px] font-black text-[#605DFF] mt-0.5">${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                      <p className="text-[10px] font-black text-primary mt-0.5">${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
 
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-3 bg-zinc-50 rounded-lg p-1 border border-zinc-100">
                           <button
                             onClick={() => updateQuantity(item.id, -1)}
-                            className="size-7 flex items-center justify-center rounded-md bg-white border border-zinc-200 text-zinc-500 hover:text-[#605DFF] hover:border-[#605DFF] transition-all shadow-sm"
+                            className="size-7 flex items-center justify-center rounded-md bg-white border border-zinc-200 text-zinc-500 hover:text-primary hover:border-primary transition-all shadow-sm"
                           >
                             <Minus className="size-3" />
                           </button>
                           <span className="text-[11px] font-black text-[#1E293B] w-4 text-center">{item.quantity}</span>
                           <button
                             onClick={() => updateQuantity(item.id, 1)}
-                            className="size-7 flex items-center justify-center rounded-md bg-white border border-zinc-200 text-zinc-500 hover:text-[#605DFF] hover:border-[#605DFF] transition-all shadow-sm"
+                            className="size-7 flex items-center justify-center rounded-md bg-white border border-zinc-200 text-zinc-500 hover:text-primary hover:border-primary transition-all shadow-sm"
                           >
                             <Plus className="size-3" />
                           </button>
@@ -353,14 +359,14 @@ export default function PosPage() {
                 </div>
                 <div className="flex justify-between items-center pt-4 border-t border-zinc-200/60">
                   <span className="text-sm font-black uppercase tracking-widest text-[#1E293B]">Grand Total</span>
-                  <span className="text-2xl font-black text-[#605DFF]">${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="text-2xl font-black text-primary">${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
 
               <Button
                 onClick={() => setIsCheckoutOpen(true)}
                 disabled={cart.length === 0}
-                className="w-full h-14 text-[11px] font-black uppercase tracking-widest gap-3 bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-2xl shadow-xl shadow-[#605DFF]/20 border-none transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
+                className="w-full h-14 text-[11px] font-black uppercase tracking-widest gap-3 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-2xl shadow-xl shadow-primary/20 border-none transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
               >
                 <CreditCard className="size-4" />
                 Proceed to Checkout
@@ -373,7 +379,7 @@ export default function PosPage() {
       {/* Checkout Modal */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
         <DialogContent className="sm:max-w-[500px] bg-white p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
-          <DialogHeader className="p-8 bg-[#605DFF] text-white">
+          <DialogHeader className="p-8 bg-primary !text-white">
             <DialogTitle className="text-2xl font-black uppercase tracking-tight flex items-center gap-3">
               <CreditCard className="size-6" />
               Finalize Payment
@@ -396,7 +402,7 @@ export default function PosPage() {
                     className={cn(
                       "h-12 rounded-xl border-2 font-black text-[11px] uppercase tracking-widest transition-all",
                       selectedTable === table.id
-                        ? "bg-[#605DFF] border-[#605DFF] text-white shadow-lg shadow-[#605DFF]/20"
+                        ? "bg-primary border-primary text-white shadow-lg shadow-primary/20"
                         : "bg-zinc-50 border-zinc-100 text-[#1E293B] hover:border-zinc-200"
                     )}
                   >
@@ -424,7 +430,7 @@ export default function PosPage() {
                     className={cn(
                       "flex flex-col items-center justify-center gap-2 h-20 rounded-2xl border-2 transition-all",
                       paymentMethod === method.id
-                        ? "bg-[#605DFF]/5 border-[#605DFF] text-[#605DFF] shadow-inner"
+                        ? "bg-primary/5 border-primary text-primary shadow-inner"
                         : "bg-zinc-50 border-zinc-100 text-[#64748B] hover:border-zinc-200"
                     )}
                   >
@@ -461,7 +467,7 @@ export default function PosPage() {
             <Button
               onClick={handleCheckout}
               disabled={isProcessing}
-              className="flex-[2] h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-[#605DFF] hover:bg-[#4E4BCB] text-white shadow-xl shadow-[#605DFF]/30"
+              className="flex-[2] h-14 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-primary !text-white hover:bg-primary/90 hover:!text-white shadow-xl shadow-primary/30"
             >
               {isProcessing ? (
                 <Loader2 className="size-5 animate-spin" />

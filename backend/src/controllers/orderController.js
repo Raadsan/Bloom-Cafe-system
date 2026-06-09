@@ -740,8 +740,23 @@
 
 
 import prisma from '../config/db.js'
-import { emitNewOrder, emitOrderUpdate } from '../utils/socketEvents.js'
+import { emitOrderUpdate } from '../utils/socketEvents.js'
+import { notifyNewOrder, notifyOrderReady } from '../utils/orderNotifications.js'
 import { logAudit } from '../utils/auditHelper.js'
+
+const orderListCache = new Map()
+const orderListInflight = new Map()
+const ORDER_LIST_TTL_MS = 45 * 1000
+
+function orderListCacheKey(req) {
+  const { status, onlyMine, readyPickup, waiterHistory } = req.query
+  return `${req.user?.id || 0}:${status || ''}:${onlyMine || ''}:${readyPickup || ''}:${waiterHistory || ''}`
+}
+
+export const clearOrderListCache = () => {
+  orderListCache.clear()
+  orderListInflight.clear()
+}
 
 /**
  * 🔥 CREATE ORDER (STAFF)
@@ -864,13 +879,8 @@ export const createOrder = async (req, res) => {
       }
     })
 
-    // 🔥 TABLE OCCUPIED (Only if NOT a 'held' order)
-    if ((type === 'eating' || type === 'dine-in') && tableId && req.body.status !== 'held') {
-      await prisma.table.update({
-        where: { id: Number(tableId) },
-        data: { status: 'occupied' }
-      })
-    }
+    // Table stays active/inactive only — no separate "occupied" status
+    // (orders track table usage; admin sets inactive to disable a table)
 
     /* 
     await prisma.orderStatusHistory.create({
@@ -881,12 +891,13 @@ export const createOrder = async (req, res) => {
     })
     */
 
-    // 🔥 SOCKET → KITCHEN (Only emit if order is active/pending)
-    if (order.status === 'pending') {
-      emitNewOrder(order)
+    if (order.status === 'pending' || order.status === 'paid') {
+      await notifyNewOrder(order)
     }
 
     logAudit({ userId: req.user?.id, action: 'Created', entity: 'Order', entityId: order.id, description: `Created order #${order.id} for table ${table?.number || 'N/A'}` })
+
+    clearOrderListCache()
 
     res.status(201).json({
       success: true,
@@ -917,6 +928,30 @@ export const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ success: false })
     }
 
+    const userRole = req.user?.role?.toLowerCase()
+    if (userRole === 'kitchen') {
+      const allowed =
+        (order.status === 'pending' && status === 'preparing') ||
+        (order.status === 'paid' && status === 'preparing') ||
+        (order.status === 'preparing' && status === 'ready')
+      if (!allowed) {
+        return res.status(400).json({
+          success: false,
+          message: 'Kitchen can only move pending/paid → preparing or preparing → ready',
+        })
+      }
+    }
+
+    if (userRole === 'waiter') {
+      const allowed = order.status === 'ready' && status === 'served'
+      if (!allowed) {
+        return res.status(400).json({
+          success: false,
+          message: 'Waiter can only mark ready orders as served',
+        })
+      }
+    }
+
     const updatedOrder = await prisma.order.update({
       where: { id: order.id },
       data: { status },
@@ -937,18 +972,11 @@ export const updateOrderStatus = async (req, res) => {
     */
 
     if (status === 'ready') {
-      await prisma.notification.create({
-        data: {
-          title: 'Order Ready',
-          message: `Table ${order.table.number} ready`,
-          role: 'waiter',
-          orderId: order.id
-        }
-      })
+      await notifyOrderReady(updatedOrder)
     }
 
     // 🔥 TABLE FREE
-    if (status === 'served' || status === 'cancelled') {
+    if ((status === 'served' || status === 'cancelled') && order.tableId) {
       await prisma.table.update({
         where: { id: order.tableId },
         data: { status: 'active' }
@@ -959,6 +987,8 @@ export const updateOrderStatus = async (req, res) => {
     emitOrderUpdate(updatedOrder)
 
     logAudit({ userId: req.user?.id, action: 'Status Changed', entity: 'Order', entityId: updatedOrder.id, description: `Order #${updatedOrder.id} status changed to "${status}"` })
+
+    clearOrderListCache()
 
     res.status(200).json({
       success: true,
@@ -1052,16 +1082,14 @@ export const updateOrder = async (req, res) => {
           create: orderItemsData
         }
       },
-      include: {
-        table: true,
-        address: true,
-        orderitem: { include: { menuitem: true } }
-      }
+      include: orderListInclude,
     })
 
     emitOrderUpdate(updatedOrder)
 
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Order', entityId: updatedOrder.id, description: `Updated order #${updatedOrder.id}` })
+
+    clearOrderListCache()
 
     res.status(200).json({
       success: true,
@@ -1076,46 +1104,130 @@ export const updateOrder = async (req, res) => {
 
 ///////////////////////////////////////////////////////////////
 
+const orderUserInclude = {
+  user: {
+    select: {
+      id: true,
+      fullName: true,
+      role: { select: { id: true, name: true } },
+    },
+  },
+}
+
+const orderListInclude = {
+  table: {
+    include: {
+      room: { select: { id: true, name: true } },
+    },
+  },
+  address: true,
+  ...orderUserInclude,
+  orderitem: {
+    include: {
+      menuitem: {
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          costPrice: true,
+          tax: true,
+          categoryId: true,
+          isAvailable: true,
+          imageUrl: true,
+          description: true,
+        },
+      },
+    },
+  },
+}
+
+const orderListLightInclude = {
+  table: {
+    select: {
+      id: true,
+      number: true,
+      room: { select: { id: true, name: true } },
+    },
+  },
+  address: {
+    select: { id: true, street: true, district: true, name: true, phone: true },
+  },
+  ...orderUserInclude,
+  orderitem: {
+    include: {
+      menuitem: {
+        select: { id: true, name: true, price: true, imageUrl: true },
+      },
+    },
+  },
+}
+
 /**
  * 🔥 GET ALL ORDERS
  */
 export const getAllOrders = async (req, res) => {
   try {
-    const { status, onlyMine } = req.query
+    const cacheKey = orderListCacheKey(req)
+    const now = Date.now()
+    const cached = orderListCache.get(cacheKey)
+
+    if (cached && now - cached.at < ORDER_LIST_TTL_MS) {
+      return res.json({ success: true, data: cached.data })
+    }
+
+    const pending = orderListInflight.get(cacheKey)
+    if (pending) {
+      const orders = await pending
+      return res.json({ success: true, data: orders })
+    }
+
+    const { status, onlyMine, readyPickup } = req.query
+    const isWaiterHistory = req.query.waiterHistory === 'true'
 
     const where = {}
     if (status) where.status = status
-    
-    // Haddii uu yahay Client ama Customer, ku qasab inuu arko kaliya orders-kiisa gaarka ah
+
     const userRole = req.user?.role?.toLowerCase()
-    if (userRole === 'client' || userRole === 'customer') {
+    let useLightInclude = false
+    let takeLimit
+
+    if (userRole === 'waiter' && readyPickup === 'true') {
+      where.status = 'ready'
+      useLightInclude = true
+      takeLimit = 80
+    } else if (userRole === 'waiter' && isWaiterHistory) {
       where.userId = req.user.id
-    } else if (onlyMine === 'true' && req.user?.id) {
-      where.userId = req.user.id
+      where.status = 'served'
+      useLightInclude = true
+      takeLimit = 100
+    } else {
+      const ownOrdersOnly = ['client', 'customer', 'waiter']
+      if (ownOrdersOnly.includes(userRole)) {
+        where.userId = req.user.id
+      } else if (onlyMine === 'true' && req.user?.id) {
+        where.userId = req.user.id
+      }
     }
 
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        table: true,
-        orderitem: { 
-          include: { 
-            menuitem: {
-              select: {
-                id: true,
-                name: true,
-                price: true,
-                costPrice: true,
-                tax: true,
-                categoryId: true,
-                isAvailable: true
-              }
-            } 
-          } 
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    const fetchPromise = prisma.order
+      .findMany({
+        where,
+        include: useLightInclude ? orderListLightInclude : orderListInclude,
+        orderBy: { createdAt: 'desc' },
+        ...(takeLimit ? { take: takeLimit } : {}),
+      })
+      .then((orders) => {
+        orderListCache.set(cacheKey, { data: orders, at: Date.now() })
+        orderListInflight.delete(cacheKey)
+        return orders
+      })
+      .catch((err) => {
+        orderListInflight.delete(cacheKey)
+        throw err
+      })
+
+    orderListInflight.set(cacheKey, fetchPromise)
+    const orders = await fetchPromise
 
     res.json({ success: true, data: orders })
   } catch (error) {
@@ -1130,24 +1242,7 @@ export const getAllOrders = async (req, res) => {
 export const getOrderById = async (req, res) => {
   const order = await prisma.order.findUnique({
     where: { id: Number(req.params.id) },
-    include: {
-      table: true,
-      orderitem: { 
-        include: { 
-          menuitem: {
-            select: {
-              id: true,
-              name: true,
-              price: true,
-              costPrice: true,
-              tax: true,
-              categoryId: true,
-              isAvailable: true
-            }
-          } 
-        } 
-      }
-    }
+    include: orderListInclude,
   })
 
   if (!order) return res.status(404).json({ success: false })
@@ -1165,6 +1260,8 @@ export const deleteOrder = async (req, res) => {
   await prisma.order.delete({ where: { id } })
 
   logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Order', entityId: id, description: `Deleted order #${id}` })
+
+  clearOrderListCache()
 
   res.json({ success: true })
 }
@@ -1197,7 +1294,9 @@ export const getOrdersByTable = async (req, res) => {
                 costPrice: true,
                 tax: true,
                 categoryId: true,
-                isAvailable: true
+                isAvailable: true,
+                imageUrl: true,
+                description: true,
               }
             } 
           }

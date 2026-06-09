@@ -1,14 +1,72 @@
 import prisma from "../config/db.js"
 
+const notifCache = new Map()
+const NOTIF_CACHE_TTL = 30 * 1000
+
+function buildRoleWhere(req) {
+  const role = req.user.role?.toLowerCase()
+
+  if (role === 'admin' || role === 'manager') {
+    return {}
+  }
+
+  if (role === 'waiter') {
+    return {
+      role: 'waiter',
+      OR: [{ userId: null }, { userId: req.user.id }],
+    }
+  }
+
+  if (role === 'kitchen') {
+    return { role: 'kitchen' }
+  }
+
+  return { role }
+}
+
+// GET MY NOTIFICATIONS (role-aware)
+export const getMyNotifications = async (req, res) => {
+  try {
+    const cacheKey = `${req.user.id}:${req.user.role?.toLowerCase()}`
+    const cached = notifCache.get(cacheKey)
+    if (cached && Date.now() - cached.at < NOTIF_CACHE_TTL) {
+      return res.status(200).json(cached.payload)
+    }
+
+    const where = buildRoleWhere(req)
+
+    const notifications = await prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    })
+
+    const payload = {
+      success: true,
+      count: notifications.length,
+      data: notifications,
+    }
+
+    notifCache.set(cacheKey, { payload, at: Date.now() })
+
+    res.status(200).json(payload)
+  } catch (error) {
+    console.error('Get My Notifications Error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch notifications',
+      error: error.message,
+    })
+  }
+}
+
 // GET MY NOTIFICATIONS BY LOGGED IN USER ROLE
 export const getAllNotifications = async (req, res) => {
   try {
-    const userRole = req.user.role
+    const where = buildRoleWhere(req)
 
     const notifications = await prisma.notification.findMany({
-      where: {
-        role: userRole
-      },
+      where,
       orderBy: {
         createdAt: "desc"
       }
@@ -71,7 +129,8 @@ export const getWaiterNotifications = async (req, res) => {
 
     const notifications = await prisma.notification.findMany({
       where: {
-        role: "waiter"
+        role: "waiter",
+        OR: [{ userId: null }, { userId: req.user.id }],
       },
       orderBy: {
         createdAt: "desc"
@@ -130,36 +189,6 @@ export const markNotificationRead = async (req, res) => {
 
   }
 
-}
-
-
-// ADMIN / MANAGER / KITCHEN / WAITER MY NOTIFICATIONS
-export const getMyNotifications = async (req, res) => {
-  try {
-    const role = req.user.role
-
-    const notifications = await prisma.notification.findMany({
-      where: {
-        role: role
-      },
-      orderBy: {
-        createdAt: "desc"
-      }
-    })
-
-    res.status(200).json({
-      success: true,
-      count: notifications.length,
-      data: notifications
-    })
-  } catch (error) {
-    console.error("Get My Notifications Error:", error)
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch notifications",
-      error: error.message
-    })
-  }
 }
 
 // CUSTOMER NOTIFICATIONS BY CUSTOMER ID

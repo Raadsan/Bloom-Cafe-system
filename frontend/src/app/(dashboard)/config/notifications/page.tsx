@@ -5,6 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bell, Info, AlertTriangle, CheckCircle, Clock, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { notificationApi, Notification } from "@/lib/api/notificationApi";
+import { onDebouncedEvent, REFRESH_NOTIFICATIONS } from "@/lib/live-updates";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+} from "@/lib/dashboard-ui";
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -13,7 +20,7 @@ export default function NotificationsPage() {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const data = await notificationApi.getAllNotifications();
+        const data = await notificationApi.getMyNotifications();
         setNotifications(data);
       } catch (error) {
         console.error("Failed to fetch notifications", error);
@@ -22,6 +29,12 @@ export default function NotificationsPage() {
       }
     };
     fetchNotifications();
+
+    const removeListener = onDebouncedEvent(REFRESH_NOTIFICATIONS, () => {
+      fetchNotifications();
+    }, 800);
+
+    return () => removeListener();
   }, []);
 
   const getIcon = (title: string) => {
@@ -33,11 +46,11 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 w-full">
-      <div className="flex items-center justify-between border-b border-border pb-4">
+    <div className={`${dashboardPageClass} space-y-6 w-full`} style={dashboardPageStyle}>
+      <div className="flex items-center justify-between border-b border-border pb-4 px-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight uppercase">SYSTEM NOTIFICATIONS</h1>
-          <div className="h-1 w-20 bg-primary mt-2"></div>
+          <h1 className={pageHeaderTitleClass}>Notifications</h1>
+          <p className={pageHeaderSubtitleClass}>View alerts and system messages for your restaurant.</p>
         </div>
         <Button variant="outline" size="sm" className="font-bold uppercase tracking-widest text-[10px]">
           MARK ALL AS READ

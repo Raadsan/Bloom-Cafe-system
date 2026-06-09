@@ -34,6 +34,19 @@ import { ingredientApi, Ingredient } from "@/lib/api/ingredientApi";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardStatusBadgeClass,
+  getStockStatusBadgeClass,
+} from "@/lib/dashboard-ui";
 
 export default function StockMovementsPage() {
   const { showToast } = useToast();
@@ -145,19 +158,17 @@ export default function StockMovementsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-700">
+    <div className={`${dashboardPageClass} space-y-6`} style={dashboardPageStyle}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2 px-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground uppercase">Stock Movements</h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-3">
-            Track all incoming and outgoing inventory changes.
-          </p>
+          <h1 className={pageHeaderTitleClass}>Stock Movements</h1>
+          <p className={pageHeaderSubtitleClass}>Track all incoming and outgoing inventory changes.</p>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/inventory">
             <Button variant="outline" className="h-[42px] px-4 rounded-lg font-bold border-zinc-100 hover:bg-zinc-50 shadow-sm text-[#64748B]">
-              <Package className="mr-2 size-4 text-[#605DFF]" /> Current Stock
+              <Package className="mr-2 size-4 text-primary" /> Current Stock
             </Button>
           </Link>
         </div>
@@ -173,13 +184,13 @@ export default function StockMovementsPage() {
           
           <div className="flex flex-col md:flex-row items-center gap-3">
             <div className="relative group w-full md:w-64">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-[#605DFF] transition-colors" />
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input
                 type="text"
                 placeholder="Search history..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-[14.5px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all shadow-sm"
+                className="w-full pl-10 pr-4 py-2.5 text-[14.5px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all shadow-sm"
               />
             </div>
             
@@ -188,7 +199,7 @@ export default function StockMovementsPage() {
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="appearance-none pl-9 pr-9 py-2.5 text-[14px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-[#605DFF]/30 shadow-sm cursor-pointer min-w-[140px]"
+                className="appearance-none pl-9 pr-9 py-2.5 text-[14px] font-medium bg-white border border-zinc-100 rounded-lg outline-none focus:border-primary/30 shadow-sm cursor-pointer min-w-[140px]"
               >
                 <option value="all">All Types</option>
                 <option value="in">Stock In</option>
@@ -199,7 +210,7 @@ export default function StockMovementsPage() {
             </div>
 
             {canAdd && (
-              <Button onClick={openRecordModal} className="h-[42px] px-6 rounded-lg bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
+              <Button onClick={openRecordModal} className="h-[42px] px-6 rounded-lg bg-primary !text-white hover:bg-primary/90 hover:!text-white font-bold border-none shadow-md whitespace-nowrap text-[14.5px]">
                 <History className="mr-2 size-4" /> Record Entry
               </Button>
             )}
@@ -208,14 +219,14 @@ export default function StockMovementsPage() {
 
         <div className="border-t border-zinc-100">
           <Table>
-            <TableHeader className="bg-zinc-50/50">
-              <TableRow className="border-zinc-100 hover:bg-transparent">
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Move ID</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Type</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Ingredient</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B] text-right">Quantity</TableHead>
-                <TableHead className="px-6 py-5 text-[11px] font-bold uppercase tracking-widest text-[#64748B]">Date & Note</TableHead>
-                <TableHead className="px-6 py-5 text-right text-[11px] font-bold uppercase tracking-widest text-[#64748B] w-24">Actions</TableHead>
+            <TableHeader className={dashboardTableHeaderClass}>
+              <TableRow className={dashboardTableHeadRowClass}>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Type</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Ingredient</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Quantity</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Date & Note</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -246,14 +257,14 @@ export default function StockMovementsPage() {
                   return (
                     <TableRow key={move.id} className="border-zinc-50 hover:bg-zinc-50/30 transition-colors group">
                       <TableCell className="px-6 py-5 text-[13px] font-medium text-[#1E293B]">
-                        #{move.id}
+                        {move.id}
                       </TableCell>
                       <TableCell className="px-6 py-5">
-                        <div className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest inline-flex items-center gap-1.5 ${
-                          isIn ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : 
-                          isOut ? "bg-rose-50 text-rose-600 border border-rose-100" : 
-                          "bg-amber-50 text-amber-600 border border-amber-100"
-                        }`}>
+                        <div className={cn(
+                          dashboardStatusBadgeClass,
+                          "inline-flex items-center gap-1.5",
+                          getStockStatusBadgeClass(isIn ? "in" : isOut ? "out" : "low")
+                        )}>
                           {isIn ? <ArrowDownLeft className="size-3" /> : 
                            isOut ? <ArrowUpRight className="size-3" /> : 
                            <RefreshCw className="size-3" />}
@@ -291,7 +302,7 @@ export default function StockMovementsPage() {
                               variant="ghost" 
                               size="sm" 
                               onClick={() => openDeleteModal(move)} 
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                              className={actionBtnDelete}
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -323,7 +334,7 @@ export default function StockMovementsPage() {
               <select
                 value={formIngredientId}
                 onChange={(e) => setFormIngredientId(e.target.value)}
-                className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all text-sm font-medium appearance-none cursor-pointer"
+                className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-sm font-medium appearance-none cursor-pointer"
               >
                 <option value="">Choose an item...</option>
                 {ingredients.map((ing) => (
@@ -338,7 +349,7 @@ export default function StockMovementsPage() {
                 <select
                   value={formType}
                   onChange={(e) => setFormType(e.target.value as MovementType)}
-                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all text-sm font-medium appearance-none cursor-pointer"
+                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-sm font-medium appearance-none cursor-pointer"
                 >
                   <option value="in">Stock In (+)</option>
                   <option value="out">Stock Out (-)</option>
@@ -353,7 +364,7 @@ export default function StockMovementsPage() {
                   value={formQuantity}
                   onChange={(e) => setFormQuantity(Number(e.target.value))}
                   placeholder="0.00"
-                  className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-2 focus:ring-[#605DFF]/10 transition-all text-sm font-medium"
+                  className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
                 />
               </div>
             </div>
@@ -364,7 +375,7 @@ export default function StockMovementsPage() {
                 value={formNote}
                 onChange={(e) => setFormNote(e.target.value)}
                 placeholder="e.g. Weekly replenishment, Expired disposal..."
-                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-2 focus:ring-[#605DFF]/10 transition-all text-sm font-medium min-h-[100px] resize-none"
+                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium min-h-[100px] resize-none"
               />
             </div>
           </div>
@@ -373,7 +384,7 @@ export default function StockMovementsPage() {
             <Button variant="outline" onClick={() => setIsRecordOpen(false)} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleRecordMovement} className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11" disabled={saving}>
+            <Button onClick={handleRecordMovement} className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold border-none px-8 h-11" disabled={saving}>
               {saving ? "Saving..." : "Record Entry"}
             </Button>
           </DialogFooter>
@@ -398,7 +409,7 @@ export default function StockMovementsPage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-6 h-11" disabled={saving}>
+            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-lg font-bold border-none px-6 h-11" disabled={saving}>
               {saving ? "Deleting..." : "Yes, Delete Entry"}
             </Button>
           </DialogFooter>

@@ -2,6 +2,7 @@ import express from "express"
 
 import {
     getAllNotifications,
+    getMyNotifications,
     getKitchenNotifications,
     getWaiterNotifications,
     markNotificationRead,
@@ -14,6 +15,9 @@ import {
 import { protect, authorize } from "../middlewares/authMiddleware.js"
 
 const router = express.Router()
+
+// ALL STAFF — role-aware notifications for bell dropdown
+router.get("/me", protect, getMyNotifications)
 
 // ADMIN + MANAGER → SEE ALL
 router.get("/", protect, authorize("admin", "manager"), getAllNotifications)

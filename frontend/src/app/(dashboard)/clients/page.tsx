@@ -34,6 +34,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { customerApi, Customer } from "@/lib/api/customerApi";
 import { useToast } from "@/components/ui/toast";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnView,
+  actionBtnEdit,
+  actionBtnDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+} from "@/lib/dashboard-ui";
 import { usePermissions } from "@/context/PermissionContext";
 
 export default function ClientsPage() {
@@ -169,11 +181,11 @@ export default function ClientsPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-700 font-sans mx-1 pt-0 pb-8">
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Page Header: Outside the box */}
       <div className="mb-6 px-4">
-        <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Client Management</h1>
-        <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">View and manage customer data, loyalty points, and purchase history.</p>
+        <h1 className={pageHeaderTitleClass}>Client Management</h1>
+        <p className={pageHeaderSubtitleClass}>View and manage customer data, loyalty points, and purchase history.</p>
       </div>
 
       {/* Main Container Box */}
@@ -186,7 +198,7 @@ export default function ClientsPage() {
               <select 
                 value={pageSize} 
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -200,20 +212,20 @@ export default function ClientsPage() {
 
           <div className="flex items-center gap-3">
             <div className="relative w-64 group">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
                 placeholder="Search clients..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
 
             {canAdd && (
               <Button 
                 onClick={openAddModal}
-                className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
+                className="h-[42px] px-6 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
               >
                 <Plus className="size-4" />
                 Add Client
@@ -226,13 +238,13 @@ export default function ClientsPage() {
         <div className="border-t border-zinc-100 overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">#</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Client Name</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Phone Number</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Orders & Activity</TableHead>
-                  <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Actions</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Client Name</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Phone Number</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Orders & Activity</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -255,7 +267,7 @@ export default function ClientsPage() {
                 ) : (
                   paginatedCustomers.map((c) => (
                     <TableRow key={c.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
-                    <TableCell className="px-6 py-3 text-[13px] text-zinc-500 font-medium">#{c.id}</TableCell>
+                    <TableCell className="px-6 py-3 text-[13px] text-zinc-500 font-medium">{c.id}</TableCell>
                     <TableCell className="px-6 py-3">
                       <p className="text-[13px] font-medium text-zinc-700">{c.fullName}</p>
                       <p className="text-[10px] text-zinc-400">{c.email}</p>
@@ -280,7 +292,7 @@ export default function ClientsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            className={actionBtnView}
                           >
                             <Eye className="size-4" />
                           </Button>
@@ -289,7 +301,7 @@ export default function ClientsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => openEditModal(c)}
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className={actionBtnEdit}
                             >
                               <Edit className="size-4" />
                             </Button>
@@ -299,7 +311,7 @@ export default function ClientsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => openDeleteModal(c)}
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              className={actionBtnDelete}
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -363,7 +375,7 @@ export default function ClientsPage() {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g. Ali Ahmed"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
 
@@ -374,7 +386,7 @@ export default function ClientsPage() {
                 value={formEmail}
                 onChange={(e) => setFormEmail(e.target.value)}
                 placeholder="client@example.com"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
 
@@ -385,7 +397,7 @@ export default function ClientsPage() {
                 value={formPhone}
                 onChange={(e) => setFormPhone(e.target.value)}
                 placeholder="e.g. +252 61 1234567"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
           </div>
@@ -394,7 +406,7 @@ export default function ClientsPage() {
             <Button variant="outline" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-[#605DFF]/20" disabled={saving}>
+            <Button onClick={handleSave} className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-primary/20" disabled={saving}>
               {saving ? "Processing..." : isEditOpen ? "Update Profile" : "Register Client"}
             </Button>
           </DialogFooter>
@@ -421,7 +433,7 @@ export default function ClientsPage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={saving}>
+            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={saving}>
               {saving ? "Deleting..." : "Yes, Delete Record"}
             </Button>
           </DialogFooter>

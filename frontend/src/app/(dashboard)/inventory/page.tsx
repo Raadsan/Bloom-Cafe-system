@@ -14,6 +14,20 @@ import {
   Eye
 } from "lucide-react";
 import { usePermissions } from "@/context/PermissionContext";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnView,
+  actionBtnEdit,
+  actionBtnDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardStatusBadgeClass,
+  getStockStatusBadgeClass,
+} from "@/lib/dashboard-ui";
 import { 
   Table, 
   TableBody, 
@@ -187,13 +201,14 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-700 font-sans pt-2 pb-8">
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
+      <div className="mb-6 px-4">
+        <h1 className={pageHeaderTitleClass}>Current Stock</h1>
+        <p className={pageHeaderSubtitleClass}>Track inventory levels, stock alerts, and item availability across your kitchen.</p>
+      </div>
+
       {/* Main Container */}
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden w-full">
-        {/* Box Header */}
-        <div className="px-8 pt-6 pb-0">
-          <h1 className="text-2xl font-semibold text-[#1e293b]">Current Stock</h1>
-        </div>
         {/* Table Controls Row */}
         <div className="px-10 py-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-12">
@@ -202,7 +217,7 @@ export default function InventoryPage() {
               <select 
                 value={pageSize} 
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="w-24 px-3 py-1.5 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer shadow-sm"
+                className="w-24 px-3 py-1.5 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer shadow-sm"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -215,23 +230,23 @@ export default function InventoryPage() {
 
           <div className="flex items-center gap-4 flex-1 md:flex-none justify-end">
             <div className="relative group w-full md:w-80">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search..." 
-                className="w-full pl-10 pr-4 py-2.5 text-[13px] bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/20 transition-all placeholder:text-zinc-400 shadow-sm" 
+                className="w-full pl-10 pr-4 py-2.5 text-[13px] bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/20 transition-all placeholder:text-zinc-400 shadow-sm" 
               />
             </div>
             <div className="flex items-center gap-3">
               <Link href="/inventory/movements">
                 <Button variant="outline" className="h-10 px-6 rounded-md border-zinc-200 hover:bg-zinc-50 text-[11px] font-black uppercase tracking-widest text-[#64748B] shadow-sm">
-                  <History className="mr-2 size-4 text-[#605DFF]" /> Movements
+                  <History className="mr-2 size-4 text-primary" /> Movements
                 </Button>
               </Link>
               {canAdd && (
-                <Button onClick={openAddModal} className="h-10 px-8 rounded-md bg-[#605DFF] text-white hover:bg-[#4E4BCB] font-medium border-none flex items-center gap-2 transition-all active:scale-95 shrink-0">
+                <Button onClick={openAddModal} className="h-10 px-8 rounded-md bg-primary !text-white hover:bg-primary/90 hover:!text-white font-medium border-none flex items-center gap-2 transition-all active:scale-95 shrink-0">
                   <Plus className="size-4" /> Add New Item
                 </Button>
               )}
@@ -242,14 +257,14 @@ export default function InventoryPage() {
         <div className="mx-4 mb-6 border border-zinc-100 rounded-xl overflow-hidden shadow-sm bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none">#</TableHead>
-                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none">Ingredient</TableHead>
-                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none text-right">Qty & Unit</TableHead>
-                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none">Min Level</TableHead>
-                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none text-right pr-20">Status</TableHead>
-                  <TableHead className="px-10 py-4 text-[12px] font-black uppercase text-white border-none text-right">Actions</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Ingredient</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Qty & Unit</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Min Level</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Status</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
             <TableBody>
@@ -276,30 +291,28 @@ export default function InventoryPage() {
 
                   return (
                     <TableRow key={ing.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
-                      <TableCell className="px-10 py-3 text-sm text-zinc-500 font-normal">#{ing.id}</TableCell>
-                      <TableCell className="px-10 py-3 text-sm text-zinc-700">{ing.name}</TableCell>
-                      <TableCell className="px-10 py-3 text-sm text-zinc-700 text-right">
+                      <TableCell className="px-6 py-3 text-sm text-zinc-500 font-normal">{ing.id}</TableCell>
+                      <TableCell className="px-6 py-3 text-sm text-zinc-700">{ing.name}</TableCell>
+                      <TableCell className="px-6 py-3 text-sm text-zinc-700 text-right">
                         {ing.stockQuantity} <span className="text-[11px] text-zinc-400 uppercase">{ing.unit}</span>
                       </TableCell>
-                      <TableCell className="px-10 py-3 text-sm text-zinc-400">
+                      <TableCell className="px-6 py-3 text-sm text-zinc-400">
                         {ing.minStockLevel} <span className="text-[11px] uppercase">{ing.unit}</span>
                       </TableCell>
-                      <TableCell className="px-10 py-3 text-right pr-20">
+                      <TableCell className="px-6 py-3 text-right">
                         <span className={cn(
-                          "px-3 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider border",
-                          isOut ? "bg-rose-50 text-rose-600 border-rose-100" :
-                          isLow ? "bg-amber-50 text-amber-600 border-amber-100" :
-                          "bg-emerald-50 text-emerald-600 border-emerald-100"
+                          dashboardStatusBadgeClass,
+                          getStockStatusBadgeClass(isOut ? "out" : isLow ? "low" : "in")
                         )}>
                           {isOut ? "Out of Stock" : isLow ? "Low Stock" : "In Stock"}
                         </span>
                       </TableCell>
-                      <TableCell className="px-10 py-3 text-right">
+                      <TableCell className="px-6 py-3 text-right">
                         <div className="flex justify-end gap-2">
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            className={actionBtnView}
                           >
                             <Eye className="size-4" />
                           </Button>
@@ -308,7 +321,7 @@ export default function InventoryPage() {
                               variant="ghost" 
                               size="sm"
                               onClick={() => openEditModal(ing)} 
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className={actionBtnEdit}
                             >
                               <Edit className="size-4" />
                             </Button>
@@ -318,7 +331,7 @@ export default function InventoryPage() {
                               variant="ghost" 
                               size="sm"
                               onClick={() => openDeleteModal(ing)} 
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              className={actionBtnDelete}
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -382,7 +395,7 @@ export default function InventoryPage() {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g. Tomato, Flour, Milk"
-                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-2 focus:ring-[#605DFF]/10 transition-all text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
               />
             </div>
             
@@ -393,7 +406,7 @@ export default function InventoryPage() {
                 value={formUnit}
                 onChange={(e) => setFormUnit(e.target.value)}
                 placeholder="e.g. kg, pcs, litters"
-                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-2 focus:ring-[#605DFF]/10 transition-all text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
               />
             </div>
 
@@ -403,7 +416,7 @@ export default function InventoryPage() {
                 type="number"
                 value={formStock}
                 onChange={(e) => setFormStock(Number(e.target.value))}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-2 focus:ring-[#605DFF]/10 transition-all text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
               />
             </div>
 
@@ -413,7 +426,7 @@ export default function InventoryPage() {
                 type="number"
                 value={formMinLevel}
                 onChange={(e) => setFormMinLevel(Number(e.target.value))}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-2 focus:ring-[#605DFF]/10 transition-all text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
               />
             </div>
 
@@ -423,7 +436,7 @@ export default function InventoryPage() {
                 type="number"
                 value={formCost}
                 onChange={(e) => setFormCost(Number(e.target.value))}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-2 focus:ring-[#605DFF]/10 transition-all text-sm font-medium"
+                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
               />
             </div>
           </div>
@@ -432,7 +445,7 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11" disabled={saving}>
+            <Button onClick={handleSave} className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold border-none px-8 h-11" disabled={saving}>
               {saving ? "Saving..." : isEditOpen ? "Update Item" : "Create Item"}
             </Button>
           </DialogFooter>
@@ -457,7 +470,7 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-6 h-11" disabled={saving}>
+            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-lg font-bold border-none px-6 h-11" disabled={saving}>
               {saving ? "Deleting..." : "Yes, Delete"}
             </Button>
           </DialogFooter>

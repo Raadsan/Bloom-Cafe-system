@@ -30,6 +30,12 @@ import { reportApi } from "@/lib/api/reportApi";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+} from "@/lib/dashboard-ui";
 
 const COLORS = ['#605DFF', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
@@ -102,15 +108,12 @@ export default function FinanceReportPage() {
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className={`${dashboardPageClass} space-y-8 pb-12`} style={dashboardPageStyle}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground uppercase">Finance Report</h1>
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2 flex items-center gap-2">
-            <TrendingUp className="size-3 text-[#605DFF]" />
-            Revenue Analysis & Financial Performance
-          </p>
+          <h1 className={pageHeaderTitleClass}>Finance Report</h1>
+          <p className={pageHeaderSubtitleClass}>Revenue analysis & financial performance</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl border border-zinc-100 shadow-sm">
@@ -134,7 +137,7 @@ export default function FinanceReportPage() {
           <Button
             onClick={fetchReport}
             disabled={loading}
-            className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white font-bold h-10 px-6 rounded-xl shadow-lg shadow-[#605DFF]/20 transition-all active:scale-95"
+            className="bg-primary !text-white hover:bg-primary/90 hover:!text-white font-bold h-10 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95"
           >
             {loading ? "Updating..." : "Apply Filter"}
           </Button>
@@ -151,7 +154,7 @@ export default function FinanceReportPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <StatCard title="Total Revenue" value={data.totalRevenue} icon={DollarSign} color="bg-emerald-500" trend={12.5} />
-            <StatCard title="Average Order Value" value={data.averageTransaction} icon={TrendingUp} color="bg-[#605DFF]" trend={3.2} />
+            <StatCard title="Average Order Value" value={data.averageTransaction} icon={TrendingUp} color="bg-primary" trend={3.2} />
             <StatCard title="Total Transactions" value={data.transactionCount} icon={CreditCard} color="bg-amber-500" trend={-1.4} />
           </div>
 
@@ -244,7 +247,7 @@ export default function FinanceReportPage() {
                   {Object.entries(data.breakdownByMethod || {}).map(([name, value]: any) => (
                     <div key={name} className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-100">
                       <span className="text-xs font-bold text-[#1E293B] uppercase">{name}</span>
-                      <span className="text-sm font-black text-[#605DFF]">{formatCurrency(value)}</span>
+                      <span className="text-sm font-black text-primary">{formatCurrency(value)}</span>
                     </div>
                   ))}
                 </div>

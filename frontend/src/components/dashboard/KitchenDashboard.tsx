@@ -30,6 +30,20 @@ import {
   Cell
 } from "recharts";
 import { Order } from "@/lib/api/orderApi";
+import {
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  dashboardStatIconClass,
+  chartPrimary,
+  chartPrimaryVariants,
+  chartTooltipStyle,
+  dashboardStatusBadgeClass,
+  getOrderStatusBadgeClass,
+  formatStatusLabel,
+} from "@/lib/dashboard-ui";
 import { isToday, format, subDays } from "date-fns";
 
 export default function KitchenDashboard({ orders }: { orders: Order[] }) {
@@ -67,7 +81,7 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
     { name: 'Appetizers', value: 20 },
     { name: 'Desserts', value: 15 },
   ];
-  const COLORS = ['#ef4444', '#f97316', '#f59e0b'];
+  const COLORS = [...chartPrimaryVariants];
 
   const pendingOrders = useMemo(() => orders.filter(o => o.status === 'pending' || o.status === 'preparing').slice(0, 5), [orders]);
 
@@ -76,25 +90,21 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
       title: "Today's Orders",
       value: stats.totalToday,
       icon: CheckSquare,
-      color: "bg-[#605DFF]"
     },
     {
       title: "In Queue (Pending)",
       value: stats.inQueue,
       icon: Clock,
-      color: "bg-amber-500"
     },
     {
       title: "Currently Cooking",
       value: stats.preparing,
       icon: Flame,
-      color: "bg-orange-500"
     },
     {
       title: "Completed Today",
       value: stats.completed,
       icon: ChefHat,
-      color: "bg-emerald-500"
     }
   ];
 
@@ -111,8 +121,8 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
         {statCards.map((stat, i) => (
           <div key={i} className="trezo-card p-6 flex flex-col justify-between group hover:border-primary/30 transition-all hover:shadow-md">
             <div className="flex items-start justify-between">
-              <div className={cn("p-2.5 rounded-xl text-white shadow-lg transition-all group-hover:scale-110", stat.color)}>
-                <stat.icon className="size-5" />
+              <div className={dashboardStatIconClass(i)}>
+                <stat.icon className="size-5 text-white" />
               </div>
             </div>
             <div className="mt-4">
@@ -137,15 +147,15 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
               <AreaChart data={weeklyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorKitchen" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                    <stop offset="5%" stopColor={chartPrimary} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={chartPrimary} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "12px", fontSize: "12px", fontWeight: 700 }} />
-                <Area type="monotone" dataKey="orders" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorKitchen)" />
+                <Tooltip contentStyle={chartTooltipStyle} itemStyle={{ color: "#ffffff" }} />
+                <Area type="monotone" dataKey="orders" stroke={chartPrimary} strokeWidth={2.5} fillOpacity={1} fill="url(#colorKitchen)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -166,7 +176,7 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "12px", fontSize: "12px", fontWeight: 700 }} />
+                <Tooltip contentStyle={chartTooltipStyle} itemStyle={{ color: "#ffffff" }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
@@ -192,39 +202,38 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
 
           <div className="border-t border-zinc-100 overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none">Order ID</TableHead>
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none">Table</TableHead>
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none">Status</TableHead>
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none">Items count</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Table</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Status</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Items count</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="bg-white">
                 {pendingOrders.length > 0 ? pendingOrders.map((order) => (
-                  <TableRow key={order.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors group">
-                  <TableCell className="px-6 py-5 text-[13px] font-bold text-[#1E293B]">#{order.id}</TableCell>
-                  <TableCell className="px-6 py-5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-zinc-50 text-[#64748B] rounded-lg border border-zinc-100">
+                  <TableRow key={order.id} className={dashboardTableBodyRowClass}>
+                  <TableCell className={dashboardTableCellClass}>
+                    <span className="text-[13px] font-bold text-primary">{order.id}</span>
+                  </TableCell>
+                  <TableCell className={dashboardTableCellClass}>
+                    <span className="text-[13px] font-medium text-zinc-600">
                       Table {order.table?.number || order.tableId}
                     </span>
                   </TableCell>
-                  <TableCell className="px-6 py-5">
-                    <span className={cn(
-                      "text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border shadow-sm",
-                      order.status === 'preparing' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                    )}>
-                      {order.status}
+                  <TableCell className={dashboardTableCellClass}>
+                    <span className={cn(dashboardStatusBadgeClass, getOrderStatusBadgeClass(order.status))}>
+                      {formatStatusLabel(order.status)}
                     </span>
                   </TableCell>
-                  <TableCell className="px-6 py-5">
-                    <span className="text-[13px] font-bold text-[#1E293B]">{order.orderitem?.length || 0} items</span>
+                  <TableCell className={dashboardTableCellClass}>
+                    <span className="text-[13px] font-medium text-zinc-700">{order.orderitem?.length || 0} items</span>
                   </TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="px-6 py-16 text-center">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#64748B]">No pending orders right now</p>
+                  <TableCell colSpan={4} className="px-6 py-10 text-center text-zinc-500">
+                    No pending orders right now
                   </TableCell>
                 </TableRow>
               )}

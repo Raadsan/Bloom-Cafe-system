@@ -59,43 +59,33 @@ import { authApi, AuthUser } from "@/lib/api/authApi";
 import { menuApi, Menu } from "@/lib/api/menuApi";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
-
-// Icon mapping helper
-const getIcon = (iconName: string) => {
-  const icons: Record<string, any> = {
-    LayoutDashboard,
-    UtensilsCrossed,
-    ListOrdered,
-    Users,
-    Settings,
-    Store,
-    PackageOpen,
-    Settings2,
-    Shield,
-    Key,
-    Activity,
-    User: UserIcon,
-    ShieldCheck,
-    Bell,
-    Sun,
-    FileText,
-    LayoutGrid,
-    History,
-    ClipboardList,
-    Tag,
-    BarChart3,
-    CreditCard,
-    report: BarChart3,
-  };
-  return icons[iconName] || LayoutDashboard;
-};
+import { getLucideIcon, searchLucideIconNames, LUCIDE_ICON_NAMES } from "@/lib/lucide-icons";
 
 // Helper to normalize URLs from database
 const normalizeUrl = (url: string) => {
   if (!url) return "/dashboard";
   return url;
+};
+
+/** Active route match — /orders must not highlight sibling order routes */
+const ORDER_SIBLING_PREFIXES = [
+  "/orders/create",
+  "/orders/pickup",
+  "/orders/kitchen",
+];
+
+const isNavRouteActive = (pathname: string, itemUrl: string) => {
+  if (pathname === itemUrl) return true;
+  if (itemUrl === "/dashboard") return false;
+  if (itemUrl === "/orders/pickup" && pathname.startsWith("/orders/pickup/")) {
+    return false;
+  }
+  if (itemUrl === "/orders" && ORDER_SIBLING_PREFIXES.some(p => pathname.startsWith(p))) {
+    return false;
+  }
+  return pathname.startsWith(`${itemUrl}/`);
 };
 
 // ─── In-memory sidebar cache (module-level = survives re-renders, clears on reload) ───
@@ -200,24 +190,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [menus, setMenus] = useState<Menu[]>(_sidebarCache?.menus ?? []);
   const [loading, setLoading] = useState(_sidebarCache === null); // only show skeleton on first load
   const [openMenus, setOpenMenus] = useState<Record<number, boolean>>({});
+  const userRoleIdRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    userRoleIdRef.current = user?.roleId;
+  }, [user?.roleId]);
 
   // Fetch user + menus on mount. Subsequent renders served from in-memory cache (instant).
   useEffect(() => {
     const initSidebar = async (forceRefresh = false) => {
       try {
-        // authApi.getMe already uses localStorage cache — instant when not forced
         const currentUser = await authApi.getMe();
         setUser(currentUser);
 
         if (currentUser && currentUser.roleId) {
-          // Check in-memory module cache first (survives navigation, cleared on config change)
           if (!forceRefresh && _sidebarCache && _sidebarCache.roleId === currentUser.roleId) {
             setMenus(_sidebarCache.menus);
             setLoading(false);
             return;
           }
-          // Cache miss — fetch from backend
-          const fetchedMenus = await menuApi.getMenusByRole(currentUser.roleId);
+          const fetchedMenus = await menuApi.getMenusByRole(currentUser.roleId, forceRefresh);
           _sidebarCache = { menus: fetchedMenus, roleId: currentUser.roleId };
           setMenus(fetchedMenus);
         }
@@ -229,17 +221,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     };
 
     initSidebar();
+  }, []);
 
-    const handleMenuUpdate = () => {
+  useEffect(() => {
+    const handleMenuUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<{ roleId?: number }>).detail;
+      const roleId = userRoleIdRef.current;
+      if (!roleId) return;
+      if (detail?.roleId && detail.roleId !== roleId) return;
+
       clearSidebarCache();
-      initSidebar(true); // force re-fetch from backend
+      menuApi.getMenusByRole(roleId, true).then((fetchedMenus) => {
+        _sidebarCache = { menus: fetchedMenus, roleId };
+        setMenus(fetchedMenus);
+      }).catch(() => {});
     };
 
     window.addEventListener("sidebar-menu-updated", handleMenuUpdate);
-    return () => {
-      window.removeEventListener("sidebar-menu-updated", handleMenuUpdate);
-    };
-  }, []); // ← empty deps: runs once on mount only
+    return () => window.removeEventListener("sidebar-menu-updated", handleMenuUpdate);
+  }, []);
 
   // Update which menu section is open when the path changes (no API calls)
   useEffect(() => {
@@ -274,7 +274,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar collapsible="icon" {...props} className="border-r border-zinc-100 shadow-none bg-white">
       <SidebarHeader className="h-[76px] flex items-center justify-start px-4 bg-white border-b border-zinc-50 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:justify-center">
         <Link href="/dashboard" className="flex items-center gap-3 w-full group-data-[collapsible=icon]:justify-center mt-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#605DFF] text-white shadow-lg shadow-[#605DFF]/20 ml-1 group-data-[collapsible=icon]:ml-0 font-bold text-lg">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-primary/20 ml-1 group-data-[collapsible=icon]:ml-0 font-bold text-lg">
             <UtensilsCrossed/>
           </div>
           <div className="flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
@@ -295,15 +295,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               ))
             ) : (
               navItems.map((item) => {
-                const Icon = getIcon(item.icon);
+                const Icon = getLucideIcon(item.icon);
                 const hasSubmenu = item.items && item.items.length > 0;
                 const isOpen = openMenus[item.id];
                 const itemUrl = normalizeUrl(item.url);
                 const isChildActive = item.items?.some(sub => {
                   const subUrl = normalizeUrl(sub.url);
-                  return pathname === subUrl || (pathname.startsWith(subUrl + "/") && subUrl !== "/dashboard");
+                  return isNavRouteActive(pathname, subUrl);
                 });
-                const isActive = pathname === itemUrl || (pathname.startsWith(`${itemUrl}/`) && itemUrl !== "/dashboard") || isChildActive;
+                const isActive = isNavRouteActive(pathname, itemUrl) || isChildActive;
                 const displayTitle = item.title;
 
                 return (
@@ -329,7 +329,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           <SidebarMenuSub className="ml-8 border-none pl-0 mt-1 py-1 gap-1 group-data-[collapsible=icon]:hidden">
                             {item.items?.map((sub) => {
                               const subUrl = normalizeUrl(sub.url);
-                              const isSubActive = pathname === subUrl || (pathname.startsWith(subUrl + "/") && subUrl !== "/dashboard");
+                              const isSubActive = isNavRouteActive(pathname, subUrl);
                               return (
                                 <SidebarMenuSubItem key={sub.id}>
                                   <SidebarMenuSubButton 

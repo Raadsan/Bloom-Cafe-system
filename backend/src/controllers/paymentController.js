@@ -684,7 +684,8 @@
 
 
 import prisma from '../config/db.js'
-import { emitNewOrder, emitPaymentSuccess } from '../utils/socketEvents.js'
+import { emitPaymentSuccess } from '../utils/socketEvents.js'
+import { notifyNewOrder } from '../utils/orderNotifications.js'
 import { sendWaafiPayment } from '../utils/waafiPayment.js'
 
 // GET AVAILABLE PAYMENT METHODS
@@ -799,7 +800,7 @@ export const processWaafiPayment = async (req, res) => {
       if (order.tableId) {
         await prisma.table.update({
           where: { id: order.tableId },
-          data: { status: 'occupied' }
+          data: { status: 'active' }
         })
       }
     }
@@ -831,26 +832,19 @@ export const processWaafiPayment = async (req, res) => {
     }
 
     // ── 5. NOTIFICATIONS ────────────────────────────────────────────────────
-    await prisma.notification.createMany({
-      data: [
-        {
-          title:   'Waafi Payment Received',
-          message: `Table ${updatedPayment.order?.table?.number ?? orderId} paid via Waafi`,
-          role:    'kitchen',
-          orderId
-        },
-        {
-          title:     'Payment Successful',
-          message:   'Your Waafi payment was processed successfully',
-          role:      'customer',
-          orderId,
-          customerId: updatedPayment.order?.customerId || null
-        }
-      ]
+    await prisma.notification.create({
+      data: {
+        title: 'Payment Successful',
+        message: 'Your Waafi payment was processed successfully',
+        role: 'customer',
+        orderId,
+        customerId: updatedPayment.order?.customerId || null,
+      },
     })
 
+    await notifyNewOrder(updatedPayment.order)
+
     // ── 6. SOCKET EVENTS ────────────────────────────────────────────────────
-    emitNewOrder(updatedPayment.order)
     emitPaymentSuccess(updatedPayment.order)
 
     return res.json({
@@ -999,31 +993,24 @@ export const processCheckoutPayment = async (req, res) => {
     if (order.tableId) {
       await prisma.table.update({
         where: { id: order.tableId },
-        data: { status: 'occupied' }
+        data: { status: 'active' }
       })
     }
 
     // 6. NOTIFICATIONS
-    await prisma.notification.createMany({
-      data: [
-        {
-          title:   'New Paid Order Received',
-          message: `Order #${order.id} paid via Waafi for table ${order.table?.number ?? 'N/A'}`,
-          role:    'kitchen',
-          orderId: order.id
-        },
-        {
-          title:     'Payment Successful',
-          message:   'Your Waafi payment was processed successfully. Order is sent to kitchen.',
-          role:      'customer',
-          orderId:   order.id,
-          customerId: order.customerId || null
-        }
-      ]
+    await prisma.notification.create({
+      data: {
+        title: 'Payment Successful',
+        message: 'Your Waafi payment was processed successfully. Order is sent to kitchen.',
+        role: 'customer',
+        orderId: order.id,
+        customerId: order.customerId || null,
+      },
     })
 
+    await notifyNewOrder(order)
+
     // 7. SOCKET EVENTS
-    emitNewOrder(order)
     emitPaymentSuccess(order)
 
     return res.status(201).json({
@@ -1133,32 +1120,23 @@ export const confirmPublicPayment = async (req, res) => {
       if (payment.order.tableId) {
         await prisma.table.update({
           where: { id: payment.order.tableId },
-          data: { status: 'inactive' }
+          data: { status: 'active' }
         })
       }
 
       // 🔥 NOTIFICATIONS
-      await prisma.notification.createMany({
-        data: [
-          {
-            title: 'New Paid Order',
-            message: `Table ${payment.order.table?.number ?? payment.orderId} paid`,
-            role: 'kitchen',
-            orderId: payment.order.id
-          },
-          {
-            title: 'Payment Successful',
-            message: 'Your payment was successful',
-            role: 'customer',
-            orderId: payment.order.id,
-            customerId: payment.order.customerId
-          }
-        ]
+      await prisma.notification.create({
+        data: {
+          title: 'Payment Successful',
+          message: 'Your payment was successful',
+          role: 'customer',
+          orderId: payment.order.id,
+          customerId: payment.order.customerId,
+        },
       })
 
-      // 🔥 SOCKET
       if (finalOrder) {
-        emitNewOrder(finalOrder)
+        await notifyNewOrder(finalOrder)
         emitPaymentSuccess(finalOrder)
       }
     }
@@ -1192,7 +1170,7 @@ export const confirmPublicPayment = async (req, res) => {
 //  STAFF PAYMENT (CASH / POS)
 export const createPayment = async (req, res) => {
   try {
-    const { orderId, method } = req.body
+    const { orderId, method, phone, providerName } = req.body
 
     const order = await prisma.order.findUnique({
       where: { id: Number(orderId) },
@@ -1205,11 +1183,15 @@ export const createPayment = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Already paid' })
     }
 
+    const previousStatus = order.status
+
     const payment = await prisma.payment.create({
       data: {
         orderId: order.id,
         amount: order.total,
         method: method || 'cash',
+        phone: phone?.trim() || null,
+        providerName: providerName?.trim() || null,
         status: 'paid',
         internalRef: generateInternalRef(),
         paidAt: new Date()
@@ -1217,14 +1199,32 @@ export const createPayment = async (req, res) => {
       include: { order: { include: { table: true } } }
     })
 
-    // 🔥 UPDATE TABLE
-    await prisma.table.update({
-      where: { id: order.tableId },
-      data: { status: 'inactive' }
-    })
+    // Keep order in kitchen queue after staff/POS payment
+    if (order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'served') {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: 'pending' }
+      })
+    }
 
-    // 🔥 SOCKET
-    emitNewOrder(payment.order)
+    if (order.tableId) {
+      await prisma.table.update({
+        where: { id: order.tableId },
+        data: { status: 'active' }
+      })
+    }
+
+    if (previousStatus === 'unpaid') {
+      const fullOrder = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: {
+          table: true,
+          orderitem: { include: { menuitem: true } },
+        },
+      })
+      if (fullOrder) await notifyNewOrder(fullOrder)
+    }
+
     emitPaymentSuccess(payment.order)
 
     res.json({ success: true, data: payment })

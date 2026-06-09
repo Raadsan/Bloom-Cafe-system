@@ -1,23 +1,32 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { 
-  ShieldCheck, 
-  Save, 
-  ChevronDown,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  Shield,
-  LayoutGrid,
-  CheckCircle2,
-  Lock
-} from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Save, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { roleApi, Role } from "@/lib/api/roleApi";
-import { menuApi, Menu, SubMenu } from "@/lib/api/menuApi";
+import { menuApi, Menu } from "@/lib/api/menuApi";
+import { authApi } from "@/lib/api/authApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+} from "@/lib/dashboard-ui";
 
 interface PermissionState {
   canView: boolean;
@@ -35,8 +44,27 @@ export default function PermissionsPage() {
     submenus: Record<number, PermissionState> 
   }>>({});
   const [loading, setLoading] = useState(true);
+  const [permsLoading, setPermsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pageSize, setPageSize] = useState(25);
   const { showToast } = useToast();
+
+  const filteredMenus = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return allMenus;
+    return allMenus.filter((menu) => {
+      const menuMatch =
+        menu.title.toLowerCase().includes(q) ||
+        menu.url?.toLowerCase().includes(q);
+      const subMatch = (menu.items || []).some(
+        (sm) =>
+          sm.title.toLowerCase().includes(q) ||
+          sm.url?.toLowerCase().includes(q)
+      );
+      return menuMatch || subMatch;
+    });
+  }, [allMenus, searchQuery]);
 
   useEffect(() => {
     const init = async () => {
@@ -80,7 +108,7 @@ export default function PermissionsPage() {
   const fetchRolePermissions = async (roleId: number) => {
     if (!allMenus.length) return;
     try {
-      setLoading(true);
+      setPermsLoading(true);
       const roleMenus = await menuApi.getMenusByRole(roleId);
       const newPerms: typeof permissions = {};
       
@@ -114,7 +142,7 @@ export default function PermissionsPage() {
       console.error("Failed to fetch permissions:", error);
       showToast("Error loading role permissions", "error");
     } finally {
-      setLoading(false);
+      setPermsLoading(false);
     }
   };
 
@@ -207,8 +235,15 @@ export default function PermissionsPage() {
       }));
 
       await menuApi.updatePermissions(selectedRoleId, payload);
+      menuApi.clearMenuCache(selectedRoleId);
       showToast("Permissions updated successfully", "success");
-      window.dispatchEvent(new CustomEvent("sidebar-menu-updated"));
+
+      const currentUser = await authApi.getMe();
+      if (currentUser.roleId === selectedRoleId) {
+        window.dispatchEvent(
+          new CustomEvent("sidebar-menu-updated", { detail: { roleId: selectedRoleId } })
+        );
+      }
     } catch (error) {
       console.error("Save error:", error);
       showToast("Failed to save permissions", "error");
@@ -239,8 +274,8 @@ export default function PermissionsPage() {
           disabled
             ? "bg-zinc-100 border border-zinc-200 cursor-not-allowed opacity-40"
             : checked
-            ? "bg-[#605DFF] border border-[#605DFF] cursor-pointer"
-            : "bg-white border border-zinc-300 hover:border-[#605DFF]/60 cursor-pointer"
+            ? "bg-primary border border-primary cursor-pointer"
+            : "bg-white border border-zinc-300 hover:border-primary/60 cursor-pointer"
         )}
       >
         {checked && !disabled && (
@@ -253,100 +288,115 @@ export default function PermissionsPage() {
   );
 
   return (
-    <div className="animate-in fade-in duration-500 font-sans mx-1">
-      {/* Page Header */}
-      <div className="mb-8 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-[#1e293b] uppercase tracking-tight flex items-center gap-2">
-           
-            Control Matrix
-          </h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium italic">Configure detailed access rights for each module and user group.</p>
-        </div>
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
+      <div className="mb-6 px-4">
+        <h1 className={pageHeaderTitleClass}>Role Permissions</h1>
+        <p className={pageHeaderSubtitleClass}>Configure view, add, edit and delete access for each module by role.</p>
       </div>
 
-      {/* Main Container Box */}
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-        {/* Controls Row */}
-        <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50 bg-zinc-50/10">
+        <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50">
           <div className="flex items-center gap-4">
-            <div className="size-9 rounded-lg bg-white border border-zinc-200 flex items-center justify-center shadow-sm">
-                <Lock className="size-4 text-[#605DFF]" />
+            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+              <span>Show</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
             </div>
-            <div>
-                <h3 className="text-[13px] font-bold text-zinc-800 uppercase tracking-tight">Access Rights</h3>
+
+            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+              <span>Filter Role</span>
+              <select
+                value={selectedRoleId || ""}
+                onChange={(e) => setSelectedRoleId(Number(e.target.value))}
+                className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600 capitalize"
+              >
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          <div className="flex-1"></div>
+          <div className="flex-1" />
 
           <div className="flex items-center gap-3">
-             <div className="flex items-center gap-3 px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg">
-                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Active Role:</span>
-                <select 
-                    value={selectedRoleId || ""} 
-                    onChange={(e) => setSelectedRoleId(Number(e.target.value))}
-                    className="bg-transparent text-[13px] font-bold uppercase text-[#605DFF] outline-none cursor-pointer py-1 min-w-[120px]"
-                >
-                    {roles.map(r => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                </select>
-             </div>
+            <div className="relative w-64 group">
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search modules..."
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
+              />
+            </div>
 
-            <Button 
-              onClick={handleSave} 
+            <Button
+              onClick={handleSave}
               disabled={saving || loading}
-              className="h-[42px] px-8 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-bold text-xs uppercase tracking-widest shadow-lg shadow-[#605DFF]/20 border-none"
+              className="h-[42px] px-6 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md flex items-center gap-2 transition-colors font-bold text-xs uppercase tracking-widest shadow-sm border-none"
             >
               <Save className="size-4" />
-              {saving ? "Processing..." : "Commit Changes"}
+              {saving ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>
 
-        {/* Table Content */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-[#605DFF]">
-              <tr className="border-none">
-                <th className="px-8 py-4 text-[12px] font-black text-white uppercase tracking-widest border-none">Module / Sub-Module</th>
-                <th className="px-6 py-4 text-[12px] font-black text-white uppercase tracking-widest border-none text-center w-32">View</th>
-                <th className="px-6 py-4 text-[12px] font-black text-white uppercase tracking-widest border-none text-center w-32">Add</th>
-                <th className="px-6 py-4 text-[12px] font-black text-white uppercase tracking-widest border-none text-center w-32">Edit</th>
-                <th className="px-6 py-4 text-[12px] font-black text-white uppercase tracking-widest border-none text-center w-32">Delete</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
+        <div className={cn("border-t border-zinc-100 overflow-hidden bg-white", permsLoading && "opacity-60 pointer-events-none")}>
+          <div className="overflow-x-auto">
+            <Table className="w-full">
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left w-16")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Module / Sub-Module</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-center w-28")}>View</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-center w-28")}>Add</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-center w-28")}>Edit</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-center w-28")}>Delete</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse h-[60px]">
-                    <td className="px-8 py-4"><div className="h-4 bg-zinc-100 rounded w-40" /></td>
-                    {[0,1,2,3].map(j => (
-                      <td key={j} className="px-6 py-4 text-center">
-                        <div className="h-4 w-4 bg-zinc-100 rounded mx-auto" />
-                      </td>
-                    ))}
-                  </tr>
+                  <TableRow key={i} className="h-14 animate-pulse">
+                    <TableCell colSpan={6} className="px-6 py-3">
+                      <div className="h-4 bg-zinc-100 rounded w-full" />
+                    </TableCell>
+                  </TableRow>
                 ))
-              ) : allMenus.map((menu) => {
+              ) : (() => {
+                let rowNum = 0;
+                const visibleMenus = filteredMenus.slice(0, pageSize);
+                return visibleMenus.map((menu) => {
                 const menuPerms = permissions[menu.id]?.menu || { canView: false, canAdd: false, canEdit: false, canDelete: false };
                 const submenus = menu.items || [];
                 const hasSubmenus = submenus.length > 0;
 
+                rowNum += 1;
+                const currentRow = rowNum;
                 return (
                   <React.Fragment key={menu.id}>
-                    <tr className={cn(
-                      "transition-all duration-300",
-                      hasSubmenus ? "bg-zinc-50/60" : "hover:bg-zinc-50/40"
+                    <TableRow className={cn(
+                      dashboardTableBodyRowClass,
+                      hasSubmenus ? "bg-zinc-50/60" : ""
                     )}>
-                      <td className="px-8 py-5">
-                        <span className="text-[13px] font-normal text-zinc-800 uppercase tracking-tight">
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[13px] font-bold text-primary">{currentRow}</span>
+                      </TableCell>
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[13px] font-medium text-zinc-800 uppercase tracking-tight">
                           {menu.title}
                         </span>
-                      </td>
-
-                      <td className="px-6 py-5">
+                      </TableCell>
+                      <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                         <Checkbox
                           checked={menuPerms.canView}
                           onChange={() =>
@@ -355,9 +405,8 @@ export default function PermissionsPage() {
                               : handleLeafMenuToggle(menu.id, 'canView')
                           }
                         />
-                      </td>
-
-                      <td className="px-6 py-5">
+                      </TableCell>
+                      <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                         {hasSubmenus ? null : (
                           <Checkbox
                             checked={menuPerms.canAdd}
@@ -365,9 +414,8 @@ export default function PermissionsPage() {
                             disabled={!menuPerms.canView}
                           />
                         )}
-                      </td>
-
-                      <td className="px-6 py-5">
+                      </TableCell>
+                      <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                         {hasSubmenus ? null : (
                           <Checkbox
                             checked={menuPerms.canEdit}
@@ -375,9 +423,8 @@ export default function PermissionsPage() {
                             disabled={!menuPerms.canView}
                           />
                         )}
-                      </td>
-
-                      <td className="px-6 py-5">
+                      </TableCell>
+                      <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                         {hasSubmenus ? null : (
                           <Checkbox
                             checked={menuPerms.canDelete}
@@ -385,58 +432,62 @@ export default function PermissionsPage() {
                             disabled={!menuPerms.canView}
                           />
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
 
                     {hasSubmenus && menuPerms.canView && submenus.map((sm) => {
                       const smPerms = permissions[menu.id]?.submenus[sm.id] || { canView: false, canAdd: false, canEdit: false, canDelete: false };
+                      rowNum += 1;
+                      const subRow = rowNum;
                       return (
-                        <tr key={sm.id} className="bg-white hover:bg-[#605DFF]/[0.02] transition-colors border-zinc-50">
-                          <td className="px-8 py-4 pl-20">
-                            <div className="flex items-center gap-3">
-                               <div className="size-1.5 rounded-full bg-[#605DFF]/30" />
-                               <span className="text-[12px] font-normal text-zinc-500 uppercase tracking-tight">{sm.title}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
+                        <TableRow key={sm.id} className={dashboardTableBodyRowClass}>
+                          <TableCell className={dashboardTableCellClass}>
+                            <span className="text-[13px] font-bold text-primary">{subRow}</span>
+                          </TableCell>
+                          <TableCell className={cn(dashboardTableCellClass, "pl-10")}>
+                            <span className="text-[12px] font-medium text-zinc-500 uppercase tracking-tight">{sm.title}</span>
+                          </TableCell>
+                          <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                             <Checkbox
                               size="sm"
                               checked={smPerms.canView}
                               onChange={() => handleSubMenuToggle(menu.id, sm.id, 'canView')}
                             />
-                          </td>
-                          <td className="px-6 py-4">
+                          </TableCell>
+                          <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                             <Checkbox
                               size="sm"
                               checked={smPerms.canAdd}
                               onChange={() => handleSubMenuToggle(menu.id, sm.id, 'canAdd')}
                               disabled={!smPerms.canView}
                             />
-                          </td>
-                          <td className="px-6 py-4">
+                          </TableCell>
+                          <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                             <Checkbox
                               size="sm"
                               checked={smPerms.canEdit}
                               onChange={() => handleSubMenuToggle(menu.id, sm.id, 'canEdit')}
                               disabled={!smPerms.canView}
                             />
-                          </td>
-                          <td className="px-6 py-4">
+                          </TableCell>
+                          <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                             <Checkbox
                               size="sm"
                               checked={smPerms.canDelete}
                               onChange={() => handleSubMenuToggle(menu.id, sm.id, 'canDelete')}
                               disabled={!smPerms.canView}
                             />
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
                   </React.Fragment>
                 );
-              })}
-            </tbody>
-          </table>
+              });
+              })()}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
     </div>

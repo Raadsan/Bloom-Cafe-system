@@ -19,12 +19,14 @@ export interface CreateCategoryPayload {
   name: string;
   description?: string;
   imageUrl?: string;
+  isActive?: boolean;
 }
 
 export interface UpdateCategoryPayload {
   name?: string;
   description?: string;
   imageUrl?: string;
+  isActive?: boolean;
 }
 
 export const categoryApi = {

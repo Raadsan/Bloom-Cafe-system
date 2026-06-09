@@ -29,6 +29,17 @@ import { reportApi } from "@/lib/api/reportApi";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  dashboardNativeTheadClass,
+  dashboardNativeThClass,
+  dashboardStatusBadgeClass,
+  getOrderStatusBadgeClass,
+  formatStatusLabel,
+} from "@/lib/dashboard-ui";
 
 const STATUS_COLORS = {
   served: '#10B981',
@@ -93,15 +104,12 @@ export default function OrdersReportPage() {
   );
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className={`${dashboardPageClass} space-y-8 pb-12`} style={dashboardPageStyle}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground uppercase">Orders Report</h1>
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2 flex items-center gap-2">
-            <Package className="size-3 text-[#605DFF]" />
-            Volume, Status & Channel Distribution
-          </p>
+          <h1 className={pageHeaderTitleClass}>Orders Report</h1>
+          <p className={pageHeaderSubtitleClass}>Volume, status & channel distribution</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl border border-zinc-100 shadow-sm">
@@ -125,7 +133,7 @@ export default function OrdersReportPage() {
           <Button 
             onClick={fetchReport}
             disabled={loading}
-            className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white font-bold h-10 px-6 rounded-xl shadow-lg shadow-[#605DFF]/20 transition-all active:scale-95"
+            className="bg-primary !text-white hover:bg-primary/90 hover:!text-white font-bold h-10 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95"
           >
             {loading ? "Updating..." : "Update Results"}
           </Button>
@@ -141,7 +149,7 @@ export default function OrdersReportPage() {
       ) : data && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard title="Total Orders" value={data.totalOrders} icon={ShoppingBag} color="bg-[#605DFF]" subtext="Volume for this period" />
+            <StatCard title="Total Orders" value={data.totalOrders} icon={ShoppingBag} color="bg-primary" subtext="Volume for this period" />
             <StatCard title="Served" value={data.breakdownByStatus?.served || 0} icon={CheckCircle2} color="bg-emerald-500" subtext="Successfully completed" />
             <StatCard title="Pending" value={data.breakdownByStatus?.pending || 0} icon={Clock} color="bg-amber-500" subtext="Awaiting service" />
             <StatCard title="Cancelled" value={data.breakdownByStatus?.cancelled || 0} icon={XCircle} color="bg-rose-500" subtext="Rejected or voided" />
@@ -222,40 +230,36 @@ export default function OrdersReportPage() {
           {/* Activity Table */}
           <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-zinc-100 bg-zinc-50/30 flex items-center gap-2">
-              <Activity className="size-4 text-[#605DFF]" />
+              <Activity className="size-4 text-primary" />
               <h3 className="text-sm font-black text-foreground uppercase tracking-tight">Recent Order Activity</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-zinc-50/50 border-b border-zinc-100">
-                    <th className="px-6 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em]">Order ID</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em]">Customer</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em]">Source</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em]">Status</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-[#64748B] uppercase tracking-[0.15em] text-right">Amount</th>
+                <thead className={dashboardNativeTheadClass}>
+                  <tr className="border-none">
+                    <th className={cn(dashboardNativeThClass, "text-left")}>No</th>
+                    <th className={cn(dashboardNativeThClass, "text-left")}>Customer</th>
+                    <th className={cn(dashboardNativeThClass, "text-left")}>Source</th>
+                    <th className={cn(dashboardNativeThClass, "text-left")}>Status</th>
+                    <th className={cn(dashboardNativeThClass, "text-right")}>Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-50">
                   {data.orders?.map((o: any) => (
                     <tr key={o.id} className="hover:bg-zinc-50/30 transition-colors">
-                      <td className="px-6 py-4 font-bold text-[#1E293B]">#{o.id}</td>
+                      <td className="px-6 py-4 font-bold text-primary">{o.id}</td>
                       <td className="px-6 py-4">
                         <p className="text-[13px] font-bold text-[#1E293B]">{o.customerName || 'Walk-in'}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-[10px] font-black text-[#605DFF] bg-[#605DFF]/5 px-2 py-0.5 rounded uppercase tracking-wider">
+                        <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-0.5 rounded uppercase tracking-wider">
                           {o.source}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-1.5">
-                          <div className={cn(
-                            "size-1.5 rounded-full",
-                            (STATUS_COLORS as any)[o.status] || "bg-zinc-300"
-                          )} />
-                          <span className="text-[12px] font-bold text-[#1E293B] capitalize">{o.status}</span>
-                        </div>
+                        <span className={cn(dashboardStatusBadgeClass, getOrderStatusBadgeClass(o.status))}>
+                          {formatStatusLabel(o.status)}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-right font-black text-[#1E293B]">
                         ${o.total.toFixed(2)}

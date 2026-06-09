@@ -1,6 +1,6 @@
 import api from './axios';
 
-export type PaymentMethod = 'cash' | 'card' | 'online';
+export type PaymentMethod = 'cash' | 'card' | 'online' | 'evc_plus' | 'edahab' | 'premier_wallet';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 
 export interface Payment {
@@ -16,6 +16,8 @@ export interface CreatePaymentPayload {
   orderId: string;
   amount: number;
   method: PaymentMethod;
+  phone?: string;
+  providerName?: string;
 }
 
 export const paymentApi = {
@@ -31,6 +33,11 @@ export const paymentApi = {
 
   createPayment: async (payload: CreatePaymentPayload): Promise<Payment> => {
     const res = await api.post('/payments', payload);
+    return res.data.data;
+  },
+
+  processWaafiPayment: async (orderId: number, phone: string): Promise<Payment> => {
+    const res = await api.post('/payments/waafi', { orderId, phone });
     return res.data.data;
   },
 

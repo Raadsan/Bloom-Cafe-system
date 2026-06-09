@@ -8,33 +8,14 @@ import {
   Trash2,
   PlusCircle,
   LayoutGrid,
-  Settings,
   Search,
-  CheckCircle2,
-  XCircle,
-  LayoutDashboard,
-  UtensilsCrossed,
-  ListOrdered,
-  Users,
-  PackageOpen,
-  Settings2,
-  Shield,
-  Key,
-  Activity,
-  Bell,
-  FileText,
-  History,
-  ClipboardList,
-  Tag,
-  BarChart3,
-  CreditCard,
-  ChevronRight,
-  Monitor,
-  Eye,
-  GripVertical,
-  Layers,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import {
+  getLucideIcon,
+  searchLucideIconNames,
+  LUCIDE_ICON_NAMES,
+} from "@/lib/lucide-icons";
 import {
   Table,
   TableBody,
@@ -53,172 +34,23 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-
-// ─── Icon mapping (same as sidebar) ──────────────────────────────────────────
-const ICON_MAP: Record<string, React.ElementType> = {
-  LayoutDashboard,
-  UtensilsCrossed,
-  ListOrdered,
-  Users,
-  Settings,
-  PackageOpen,
-  Settings2,
-  Shield,
-  Key,
-  Activity,
-  Bell,
-  FileText,
-  LayoutGrid,
-  History,
-  ClipboardList,
-  Tag,
-  BarChart3,
-  CreditCard,
-};
-
-const ALL_ICONS = Object.keys(ICON_MAP);
-
-function getIcon(name: string): React.ElementType {
-  return ICON_MAP[name] || LayoutDashboard;
-}
-
-// ─── Live Sidebar Preview ─────────────────────────────────────────────────────
-function SidebarPreview({ menus }: { menus: Menu[] }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Preview toolbar */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
-          Live Preview
-        </span>
-        <button
-          onClick={() => { setCollapsed(!collapsed); setOpenMenuId(null); }}
-          className={cn(
-            "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md transition-all",
-            collapsed
-              ? "bg-[#605DFF] text-white shadow-sm"
-              : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
-          )}
-        >
-          <Monitor className="size-3" />
-          {collapsed ? "Expanded" : "Collapsed"}
-        </button>
-      </div>
-
-      {/* The mini sidebar */}
-      <div
-        className={cn(
-          "flex flex-col rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden transition-all duration-300 flex-1",
-          collapsed ? "w-[64px]" : "w-full"
-        )}
-      >
-        {/* Header */}
-        <div className={cn(
-          "flex items-center gap-2.5 border-b border-zinc-100 shrink-0",
-          collapsed ? "justify-center px-2 py-3" : "px-4 py-3"
-        )}>
-          <div className="w-7 h-7 shrink-0 rounded-md bg-[#605DFF] flex items-center justify-center">
-            <UtensilsCrossed className="size-3.5 text-white" />
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col leading-tight overflow-hidden">
-              <span className="text-[11px] font-black text-[#1E293B] uppercase tracking-tighter truncate">Restaurant</span>
-              <span className="text-[8px] text-zinc-400 uppercase tracking-widest truncate">Management</span>
-            </div>
-          )}
-        </div>
-
-        {/* Nav items */}
-        <div className={cn("flex flex-col gap-1 py-3 flex-1 overflow-y-auto", collapsed ? "px-2 items-center" : "px-3")}>
-          {menus.filter(m => m.isActive !== false).map((menu) => {
-            const Icon = getIcon(menu.icon);
-            const hasChildren = (menu.items?.length ?? 0) > 0;
-            const isOpen = openMenuId === menu.id;
-
-            return (
-              <div key={menu.id} className="w-full">
-                <div
-                  onClick={() => hasChildren && !collapsed && setOpenMenuId(isOpen ? null : menu.id)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg transition-all cursor-pointer group",
-                    collapsed ? "justify-center w-10 h-10 mx-auto" : "px-3 h-9 w-full",
-                    "hover:bg-[#F3F4FF] hover:text-[#605DFF] text-zinc-500"
-                  )}
-                  title={collapsed ? menu.title : undefined}
-                >
-                  <Icon className="size-3.5 shrink-0 group-hover:text-[#605DFF]" strokeWidth={2} />
-                  {!collapsed && (
-                    <>
-                      <span className="text-[11px] font-semibold flex-1 truncate">{menu.title}</span>
-                      {hasChildren && (
-                        <ChevronRight className={cn("size-3 shrink-0 opacity-40 transition-transform", isOpen && "rotate-90")} />
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Sub items */}
-                {!collapsed && isOpen && hasChildren && (
-                  <div className="ml-5 mt-0.5 border-l border-zinc-100 pl-3 flex flex-col gap-0.5 pb-1">
-                    {menu.items?.filter(s => s.isActive !== false).map((sub) => (
-                      <div
-                        key={sub.id}
-                        className="text-[10px] font-medium text-zinc-400 hover:text-[#605DFF] px-2 py-1.5 rounded-md hover:bg-[#F3F4FF]/60 cursor-pointer transition-colors truncate"
-                      >
-                        {sub.title}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {menus.filter(m => m.isActive !== false).length === 0 && (
-            <div className={cn("flex flex-col items-center gap-1 py-6 opacity-30", collapsed ? "px-0" : "px-2")}>
-              <Layers className="size-5 text-zinc-400" />
-              {!collapsed && <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest text-center">No menus yet</span>}
-            </div>
-          )}
-        </div>
-
-        {/* Footer user area */}
-        <div className={cn(
-          "border-t border-zinc-100 shrink-0",
-          collapsed ? "p-2 flex justify-center" : "p-3"
-        )}>
-          <div className={cn(
-            "flex items-center gap-2 rounded-lg bg-zinc-50 border border-zinc-100",
-            collapsed ? "w-10 h-10 justify-center" : "px-3 py-2 w-full"
-          )}>
-            <div className="w-6 h-6 shrink-0 rounded bg-[#605DFF] text-white text-[10px] font-bold flex items-center justify-center">A</div>
-            {!collapsed && (
-              <div className="flex flex-col leading-tight overflow-hidden flex-1">
-                <span className="text-[10px] font-bold text-zinc-700 uppercase tracking-tight truncate">Admin User</span>
-                <span className="text-[8px] text-zinc-400 uppercase tracking-widest truncate">admin</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="bg-white border border-zinc-100 rounded-lg p-2.5 text-center">
-          <div className="text-lg font-black text-[#605DFF]">{menus.filter(m => m.isActive !== false).length}</div>
-          <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Active</div>
-        </div>
-        <div className="bg-white border border-zinc-100 rounded-lg p-2.5 text-center">
-          <div className="text-lg font-black text-zinc-400">{menus.reduce((a, m) => a + (m.items?.length ?? 0), 0)}</div>
-          <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Submenus</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnEdit,
+  actionBtnDelete,
+  btnConfirmDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  dashboardStatusBadgeClass,
+  getTableStatusBadgeClass,
+  btnCreatePage,
+} from "@/lib/dashboard-ui";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MenuManagementPage() {
@@ -239,6 +71,9 @@ export default function MenuManagementPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [iconSearch, setIconSearch] = useState("");
   const { showToast } = useToast();
 
@@ -297,6 +132,7 @@ export default function MenuManagementPage() {
       setIsMenuDialogOpen(false);
       setEditingMenu(null);
       fetchMenus();
+      menuApi.clearMenuCache(); // bust all role caches — menu structure changed
       window.dispatchEvent(new CustomEvent("sidebar-menu-updated"));
     } catch (error) {
       console.error("Failed to save menu:", error);
@@ -318,6 +154,7 @@ export default function MenuManagementPage() {
         showToast("Submenu deleted successfully", "success");
       }
       fetchMenus();
+      menuApi.clearMenuCache(); // bust all role caches — menu structure changed
       window.dispatchEvent(new CustomEvent("sidebar-menu-updated"));
       setIsDeleteDialogOpen(false);
       setItemToDelete(null);
@@ -331,21 +168,39 @@ export default function MenuManagementPage() {
 
   const filteredMenus = useMemo(
     () =>
-      menus.filter(
-        (m) =>
+      menus.filter((m) => {
+        const matchesSearch =
           m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          m.url.toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    [menus, searchQuery]
+          m.url.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus =
+          statusFilter === "all" ||
+          (statusFilter === "active" && m.isActive !== false) ||
+          (statusFilter === "inactive" && m.isActive === false);
+        return matchesSearch && matchesStatus;
+      }),
+    [menus, searchQuery, statusFilter]
   );
 
+  const totalPages = Math.ceil(filteredMenus.length / pageSize) || 1;
+  const paginatedMenus = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredMenus.slice(start, start + pageSize);
+  }, [filteredMenus, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, pageSize]);
+
   const filteredIcons = useMemo(
-    () =>
-      ALL_ICONS.filter((name) =>
-        name.toLowerCase().includes(iconSearch.toLowerCase())
-      ),
+    () => searchLucideIconNames(iconSearch, iconSearch.trim() ? 120 : 64),
     [iconSearch]
   );
+
+  const iconSearchTotal = useMemo(() => {
+    const q = iconSearch.trim().toLowerCase();
+    if (!q) return LUCIDE_ICON_NAMES.length;
+    return LUCIDE_ICON_NAMES.filter((name) => name.toLowerCase().includes(q)).length;
+  }, [iconSearch]);
 
   const openNew = () => {
     setEditingMenu({
@@ -375,92 +230,79 @@ export default function MenuManagementPage() {
   };
 
   const selectedIcon = editingMenu?.icon || "LayoutDashboard";
-  const SelectedIconComp = getIcon(selectedIcon);
+  const SelectedIconComp = getLucideIcon(selectedIcon);
 
   return (
-    <div className="animate-in fade-in duration-500 font-sans">
-      {/* Page Header */}
-      <div className="mb-6 px-1 flex flex-col md:flex-row md:items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-[#1e293b] uppercase tracking-tight">
-            Sidebar Configuration
-          </h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium italic">
-            Configure main navigation, sub-modules and display order.
-          </p>
-        </div>
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
+      <div className="mb-6 px-4">
+        <h1 className={pageHeaderTitleClass}>Menu Configuration</h1>
+        <p className={pageHeaderSubtitleClass}>
+          Manage sidebar navigation links, URLs, order and sub-modules.
+        </p>
       </div>
 
-      {/* Two-column layout */}
-      <div className="flex gap-5 items-start">
-        {/* LEFT — management table */}
-        <div className="flex-1 min-w-0 bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-          {/* Controls Row */}
-          <div className="px-6 py-4 flex flex-wrap items-center gap-4 border-b border-zinc-100 bg-zinc-50/30">
-            <div className="flex items-center gap-3">
-              <div className="size-9 rounded-lg bg-white border border-zinc-200 flex items-center justify-center shadow-sm">
-                <Settings className="size-4 text-[#605DFF]" />
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+          <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+                <span>Show</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
               </div>
-              <div>
-                <h3 className="text-[13px] font-bold text-zinc-800 uppercase tracking-tight">
-                  Navigation Structure
-                </h3>
-                <p className="text-[10px] text-zinc-400 font-medium">
-                  {menus.length} menus · {menus.reduce((a, m) => a + (m.items?.length ?? 0), 0)} submenus
-                </p>
+
+              <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+                <span>Filter Status</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-32 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                >
+                  <option value="all">All</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
               </div>
             </div>
 
             <div className="flex-1" />
 
             <div className="flex items-center gap-3">
-              <div className="relative w-60 group">
-                <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <div className="relative w-64 group">
+                <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search menus..."
-                  className="w-full h-10 pl-9 pr-4 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-[13px] text-zinc-600"
+                  className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
                 />
               </div>
 
-              <Button
-                onClick={openNew}
-                className="h-10 px-5 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-lg flex items-center gap-2 transition-colors font-bold text-[11px] uppercase tracking-widest shadow-sm border-none"
-              >
-                <Plus className="size-3.5" />
+              <Button onClick={openNew} className={btnCreatePage}>
+                <Plus className="size-4" />
                 Add Menu
               </Button>
             </div>
           </div>
 
-          {/* Table */}
+          <div className="border-t border-zinc-100 overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-5 py-3.5 text-[11px] font-black uppercase text-white border-none w-16">
-                    #
-                  </TableHead>
-                  <TableHead className="px-5 py-3.5 text-[11px] font-black uppercase text-white border-none w-14 text-center">
-                    Icon
-                  </TableHead>
-                  <TableHead className="px-5 py-3.5 text-[11px] font-black uppercase text-white border-none">
-                    Menu
-                  </TableHead>
-                  <TableHead className="px-5 py-3.5 text-[11px] font-black uppercase text-white border-none">
-                    URL
-                  </TableHead>
-                  <TableHead className="px-5 py-3.5 text-[11px] font-black uppercase text-white border-none">
-                    Sub-Modules
-                  </TableHead>
-                  <TableHead className="px-5 py-3.5 text-[11px] font-black uppercase text-white border-none text-center w-24">
-                    Status
-                  </TableHead>
-                  <TableHead className="px-5 py-3.5 text-[11px] font-black uppercase text-white border-none text-right w-24">
-                    Actions
-                  </TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left w-16")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Menu</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>URL</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Sub-Modules</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-center w-24")}>Status</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right w-24")}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -470,44 +312,31 @@ export default function MenuManagementPage() {
                       <TableCell colSpan={7} />
                     </TableRow>
                   ))
-                ) : filteredMenus.length > 0 ? (
-                  filteredMenus.map((menu) => {
-                    const Icon = getIcon(menu.icon);
-                    return (
+                ) : paginatedMenus.length > 0 ? (
+                  paginatedMenus.map((menu, index) => (
                       <TableRow
                         key={menu.id}
-                        className="border-zinc-50 hover:bg-zinc-50/50 transition-colors group"
+                        className={dashboardTableBodyRowClass}
                       >
-                        <TableCell className="px-5 py-4">
-                          <div className="flex items-center gap-1.5">
-                            <GripVertical className="size-3 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <span className="text-[12px] font-bold text-zinc-400">
-                              {menu.order}
-                            </span>
-                          </div>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] font-bold text-primary">
+                            {(currentPage - 1) * pageSize + index + 1}
+                          </span>
                         </TableCell>
 
-                        <TableCell className="px-5 py-4 text-center">
-                          <div className="flex items-center justify-center">
-                            <div className="w-8 h-8 rounded-lg bg-[#605DFF]/8 flex items-center justify-center">
-                              <Icon className="size-4 text-[#605DFF]" strokeWidth={1.8} />
-                            </div>
-                          </div>
-                        </TableCell>
-
-                        <TableCell className="px-5 py-4">
-                          <span className="text-[13px] font-semibold text-zinc-800">
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] font-medium text-zinc-800">
                             {menu.title}
                           </span>
                         </TableCell>
 
-                        <TableCell className="px-5 py-4">
-                          <span className="text-[11px] font-mono font-bold text-zinc-400 bg-zinc-50 px-2 py-1 rounded border border-zinc-100">
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[11px] font-mono font-medium text-zinc-500">
                             {menu.url}
                           </span>
                         </TableCell>
 
-                        <TableCell className="px-5 py-4">
+                        <TableCell className={dashboardTableCellClass}>
                           {menu.items && menu.items.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {menu.items.map((sub, idx) => (
@@ -520,37 +349,26 @@ export default function MenuManagementPage() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-zinc-300 text-[10px] font-bold uppercase italic tracking-widest">
-                              — direct link
-                            </span>
+                            <span className="text-zinc-400 text-[11px] font-medium">—</span>
                           )}
                         </TableCell>
 
-                        <TableCell className="px-5 py-4 text-center">
-                          {menu.isActive !== false ? (
-                            <div className="flex items-center justify-center gap-1 text-emerald-600">
-                              <CheckCircle2 className="size-3.5" />
-                              <span className="text-[10px] font-black uppercase tracking-widest">
-                                Live
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center gap-1 text-zinc-300">
-                              <XCircle className="size-3.5" />
-                              <span className="text-[10px] font-black uppercase tracking-widest">
-                                Hidden
-                              </span>
-                            </div>
-                          )}
+                        <TableCell className={cn(dashboardTableCellClass, "text-center")}>
+                          <span className={cn(
+                            dashboardStatusBadgeClass,
+                            getTableStatusBadgeClass(menu.isActive !== false ? "active" : "inactive")
+                          )}>
+                            {menu.isActive !== false ? "Active" : "Inactive"}
+                          </span>
                         </TableCell>
 
-                        <TableCell className="px-5 py-4 text-right">
+                        <TableCell className={cn(dashboardTableCellClass, "text-right")}>
                           <div className="flex justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => openEdit(menu)}
-                              className="h-8 w-8 p-0 text-zinc-400 hover:text-[#605DFF] hover:bg-[#605DFF]/5 rounded-lg transition-colors"
+                              className={actionBtnEdit}
                             >
                               <Edit className="size-3.5" />
                             </Button>
@@ -565,18 +383,17 @@ export default function MenuManagementPage() {
                                 });
                                 setIsDeleteDialogOpen(true);
                               }}
-                              className="h-8 w-8 p-0 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              className={actionBtnDelete}
                             >
                               <Trash2 className="size-3.5" />
                             </Button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    );
-                  })
+                  ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="px-6 py-20 text-center">
+                    <TableCell colSpan={6} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <LayoutGrid className="size-10 text-zinc-100" />
                         <p className="text-zinc-400 font-black uppercase text-[11px] tracking-widest">
@@ -589,21 +406,37 @@ export default function MenuManagementPage() {
               </TableBody>
             </Table>
           </div>
-        </div>
-
-        {/* RIGHT — live sidebar preview */}
-        <div className="w-[220px] shrink-0 sticky top-6">
-          <div className="bg-zinc-50 rounded-xl border border-zinc-200 p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Eye className="size-3.5 text-[#605DFF]" />
-              <span className="text-[11px] font-black uppercase tracking-widest text-zinc-600">
-                Sidebar Preview
-              </span>
-            </div>
-            <SidebarPreview menus={menus} />
           </div>
+
+          {filteredMenus.length > 0 && (
+            <div className="px-8 py-3 border-t border-zinc-100 flex items-center justify-between text-[12px] text-zinc-500">
+              <span>
+                Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredMenus.length)} of {filteredMenus.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  className="h-8 text-xs"
+                >
+                  Previous
+                </Button>
+                <span className="text-xs font-medium">{currentPage} / {totalPages}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  className="h-8 text-xs"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
 
       {/* ─── ADD / EDIT MODAL ─── */}
       <Dialog
@@ -612,8 +445,8 @@ export default function MenuManagementPage() {
           if (!open) setIsMenuDialogOpen(false);
         }}
       >
-        <DialogContent className="sm:max-w-[780px] bg-white border-none p-0 overflow-hidden rounded-2xl shadow-2xl">
-          <div className="p-7 border-b border-zinc-100 bg-gradient-to-r from-[#605DFF]/5 to-transparent">
+        <DialogContent className="sm:max-w-[640px] bg-white border-none p-0 overflow-hidden rounded-2xl shadow-2xl">
+          <div className="p-7 border-b border-zinc-100 bg-gradient-to-r from-primary/5 to-transparent">
             <DialogHeader>
               <DialogTitle className="text-xl font-black text-[#1e293b] uppercase tracking-tight">
                 {editingMenu?.id ? "Edit Menu Module" : "New Menu Module"}
@@ -624,9 +457,7 @@ export default function MenuManagementPage() {
             </DialogHeader>
           </div>
 
-          <div className="flex gap-0 max-h-[75vh] overflow-hidden">
-            {/* Form */}
-            <div className="flex-1 px-7 py-6 space-y-5 overflow-y-auto">
+          <div className="max-h-[75vh] overflow-y-auto px-7 py-6 space-y-5">
               {/* Row 1: Title + URL */}
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1.5">
@@ -643,7 +474,7 @@ export default function MenuManagementPage() {
                       }))
                     }
                     placeholder="e.g. Finance"
-                    className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[14px] font-medium placeholder:text-zinc-300"
+                    className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-medium placeholder:text-zinc-300"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -660,7 +491,7 @@ export default function MenuManagementPage() {
                       }))
                     }
                     placeholder="e.g. /finance"
-                    className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[14px] font-mono font-medium placeholder:text-zinc-300"
+                    className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-mono font-medium placeholder:text-zinc-300"
                   />
                 </div>
               </div>
@@ -680,7 +511,7 @@ export default function MenuManagementPage() {
                         order: parseInt(e.target.value),
                       }))
                     }
-                    className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[14px] font-medium"
+                    className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[14px] font-medium"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -695,7 +526,7 @@ export default function MenuManagementPage() {
                         isActive: e.target.value === "active",
                       }))
                     }
-                    className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] transition-all text-[14px] font-medium appearance-none cursor-pointer"
+                    className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[14px] font-medium appearance-none cursor-pointer"
                   >
                     <option value="active">Active (Visible)</option>
                     <option value="inactive">Inactive (Hidden)</option>
@@ -711,7 +542,7 @@ export default function MenuManagementPage() {
                 <div className="border border-zinc-200 rounded-xl overflow-hidden">
                   {/* Current selection banner */}
                   <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#605DFF] flex items-center justify-center shadow-sm shadow-[#605DFF]/20">
+                    <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm shadow-primary/20">
                       <SelectedIconComp className="size-4 text-white" strokeWidth={1.8} />
                     </div>
                     <div>
@@ -722,24 +553,40 @@ export default function MenuManagementPage() {
                     </div>
                   </div>
 
-                  {/* Search */}
-                  <div className="px-3 pt-3">
+                  {/* Search + manual name */}
+                  <div className="px-3 pt-3 space-y-2">
                     <div className="relative">
                       <Search className="size-3 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
                       <input
                         type="text"
                         value={iconSearch}
                         onChange={(e) => setIconSearch(e.target.value)}
-                        placeholder="Search icons..."
-                        className="w-full h-8 pl-8 pr-3 bg-zinc-50 border border-zinc-200 rounded-lg text-[12px] outline-none focus:border-[#605DFF] transition-all"
+                        placeholder="Search all Lucide icons (e.g. door, user, home)..."
+                        className="w-full h-8 pl-8 pr-3 bg-zinc-50 border border-zinc-200 rounded-lg text-[12px] outline-none focus:border-primary transition-all"
                       />
                     </div>
+                    <input
+                      type="text"
+                      value={selectedIcon}
+                      onChange={(e) =>
+                        setEditingMenu((prev) => ({
+                          ...prev!,
+                          icon: e.target.value,
+                        }))
+                      }
+                      placeholder="Or type icon name exactly (e.g. DoorOpen)"
+                      className="w-full h-8 px-3 bg-white border border-zinc-200 rounded-lg text-[12px] font-mono outline-none focus:border-primary transition-all"
+                    />
+                    <p className="text-[10px] text-zinc-400 px-0.5">
+                      Showing {filteredIcons.length} of {iconSearchTotal} icons
+                      {LUCIDE_ICON_NAMES.length > 0 && ` · ${LUCIDE_ICON_NAMES.length} total available`}
+                    </p>
                   </div>
 
                   {/* Grid */}
-                  <div className="grid grid-cols-8 gap-1 p-3 max-h-28 overflow-y-auto">
+                  <div className="grid grid-cols-8 gap-1 p-3 max-h-44 overflow-y-auto">
                     {filteredIcons.map((iconName) => {
-                      const IconComp = getIcon(iconName);
+                      const IconComp = getLucideIcon(iconName);
                       const isSelected = selectedIcon === iconName;
                       return (
                         <button
@@ -755,7 +602,7 @@ export default function MenuManagementPage() {
                           className={cn(
                             "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
                             isSelected
-                              ? "bg-[#605DFF] shadow-sm shadow-[#605DFF]/20"
+                              ? "bg-primary shadow-sm shadow-primary/20"
                               : "hover:bg-zinc-100"
                           )}
                         >
@@ -784,7 +631,7 @@ export default function MenuManagementPage() {
                       className={cn(
                         "size-5 rounded border-2 flex items-center justify-center transition-all",
                         hasSubmenus
-                          ? "bg-[#605DFF] border-[#605DFF]"
+                          ? "bg-primary border-primary"
                           : "border-zinc-300"
                       )}
                     >
@@ -823,7 +670,7 @@ export default function MenuManagementPage() {
                           },
                         ])
                       }
-                      className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-[#605DFF] hover:bg-[#605DFF]/5"
+                      className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5"
                     >
                       <PlusCircle className="size-3 mr-1.5" />
                       Add Sub-module
@@ -836,7 +683,7 @@ export default function MenuManagementPage() {
                     {menuSubmenus.map((sm, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 bg-zinc-50/60 p-3 rounded-xl border border-zinc-100 group hover:border-[#605DFF]/20 transition-all"
+                        className="flex items-center gap-2 bg-zinc-50/60 p-3 rounded-xl border border-zinc-100 group hover:border-primary/20 transition-all"
                       >
                         <div className="w-5 h-5 rounded bg-zinc-200 flex items-center justify-center shrink-0">
                           <span className="text-[9px] font-black text-zinc-500">{idx + 1}</span>
@@ -851,7 +698,7 @@ export default function MenuManagementPage() {
                               n[idx].title = e.target.value;
                               setMenuSubmenus(n);
                             }}
-                            className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-[12px] font-medium text-zinc-800 outline-none focus:border-[#605DFF] transition-all placeholder:text-zinc-300"
+                            className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-[12px] font-medium text-zinc-800 outline-none focus:border-primary transition-all placeholder:text-zinc-300"
                           />
                           <input
                             type="text"
@@ -862,7 +709,7 @@ export default function MenuManagementPage() {
                               n[idx].url = e.target.value;
                               setMenuSubmenus(n);
                             }}
-                            className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-[12px] font-mono text-zinc-800 outline-none focus:border-[#605DFF] transition-all placeholder:text-zinc-300"
+                            className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-[12px] font-mono text-zinc-800 outline-none focus:border-primary transition-all placeholder:text-zinc-300"
                           />
                         </div>
                         <Button
@@ -883,53 +730,6 @@ export default function MenuManagementPage() {
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Mini live preview inside dialog */}
-            <div className="w-[180px] shrink-0 border-l border-zinc-100 bg-zinc-50/60 p-4 flex flex-col">
-              <div className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">
-                Preview
-              </div>
-              <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm flex-1 flex flex-col">
-                {/* header */}
-                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-zinc-100">
-                  <div className="w-5 h-5 rounded bg-[#605DFF] flex items-center justify-center">
-                    <UtensilsCrossed className="size-3 text-white" />
-                  </div>
-                  <span className="text-[9px] font-black text-zinc-600 uppercase tracking-tight truncate">Restaurant</span>
-                </div>
-
-                {/* items preview from current form state */}
-                <div className="flex-1 px-2 py-2 space-y-1">
-                  {/* existing menus */}
-                  {menus
-                    .filter((m) => m.id !== editingMenu?.id && m.isActive !== false)
-                    .slice(0, 3)
-                    .map((m) => {
-                      const I = getIcon(m.icon);
-                      return (
-                        <div key={m.id} className="flex items-center gap-1.5 px-2 py-1 rounded-md text-zinc-400">
-                          <I className="size-3 shrink-0" strokeWidth={1.8} />
-                          <span className="text-[9px] font-medium truncate">{m.title}</span>
-                        </div>
-                      );
-                    })}
-                  {menus.filter(m => m.id !== editingMenu?.id && m.isActive !== false).length > 3 && (
-                    <div className="text-[8px] text-zinc-300 px-2 font-bold">···</div>
-                  )}
-
-                  {/* current editing item highlighted */}
-                  {editingMenu?.title && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#605DFF]/10 border border-[#605DFF]/20">
-                      <SelectedIconComp className="size-3 shrink-0 text-[#605DFF]" strokeWidth={2} />
-                      <span className="text-[9px] font-bold text-[#605DFF] truncate">
-                        {editingMenu.title || "…"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
 
           <DialogFooter className="px-7 py-5 bg-zinc-50/50 border-t border-zinc-100 flex items-center sm:justify-end gap-3">
@@ -943,7 +743,7 @@ export default function MenuManagementPage() {
             <Button
               onClick={handleSaveMenu}
               disabled={isSaving}
-              className="px-8 h-10 rounded-lg font-bold bg-[#605DFF] hover:bg-[#4E4BCB] text-white shadow-lg shadow-[#605DFF]/20 border-none text-[12px]"
+              className="px-8 h-10 rounded-lg font-bold bg-primary !text-white hover:bg-primary/90 hover:!text-white shadow-lg shadow-primary/20 border-none text-[12px]"
             >
               {isSaving
                 ? editingMenu?.id
@@ -965,6 +765,7 @@ export default function MenuManagementPage() {
         }}
       >
         <DialogContent className="sm:max-w-[460px] bg-white border-none p-0 overflow-hidden rounded-2xl shadow-xl">
+          <DialogTitle className="sr-only">Remove Module</DialogTitle>
           <div className="p-8 flex items-start gap-5 pt-10">
             <div className="w-12 h-12 shrink-0 rounded-full bg-rose-50 flex items-center justify-center border border-rose-100">
               <Trash2 className="size-5 text-rose-600" />
@@ -991,7 +792,7 @@ export default function MenuManagementPage() {
             </Button>
             <Button
               onClick={confirmDelete}
-              className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-10 shadow-lg shadow-rose-600/10 text-[12px]"
+              className={cn(btnConfirmDelete, "px-8 h-10 text-[12px]")}
               disabled={isDeleting}
             >
               {isDeleting ? "Deleting..." : "Confirm Delete"}

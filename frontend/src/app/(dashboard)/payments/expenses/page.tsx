@@ -20,6 +20,17 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnEdit,
+  actionBtnDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+} from "@/lib/dashboard-ui";
+import {
   Table,
   TableBody,
   TableCell,
@@ -144,12 +155,12 @@ export default function ExpensesPage() {
   }, [filtered, pageSize]);
 
   return (
-    <div className="animate-in fade-in duration-700 font-sans mx-1 pt-0 pb-8 space-y-6">
+    <div className={`${dashboardPageClass} space-y-6`} style={dashboardPageStyle}>
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Expenses Management</h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Record and track operational costs, salaries, and company spending.</p>
+          <h1 className={pageHeaderTitleClass}>Expenses Management</h1>
+          <p className={pageHeaderSubtitleClass}>Record and track operational costs, salaries, and company spending.</p>
         </div>
       </div>
 
@@ -163,7 +174,7 @@ export default function ExpensesPage() {
               <select 
                 value={pageSize} 
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -177,13 +188,13 @@ export default function ExpensesPage() {
 
           <div className="flex items-center gap-3">
             <div className="relative w-64 group">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
                 placeholder="Search expenses..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-all text-sm font-normal text-zinc-600"
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary transition-all text-sm font-normal text-zinc-600"
               />
             </div>
 
@@ -200,7 +211,7 @@ export default function ExpensesPage() {
                 });
                 setIsAddOpen(true);
               }}
-              className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
+              className="h-[42px] px-6 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
             >
               <Plus className="size-4" />
               Add Expense
@@ -212,14 +223,14 @@ export default function ExpensesPage() {
         <div className="overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-8 py-5 text-[11px] font-black uppercase text-white border-none tracking-widest">Expense Details</TableHead>
-                  <TableHead className="px-8 py-5 text-[11px] font-black uppercase text-white border-none tracking-widest">Receiver</TableHead>
-                  <TableHead className="px-8 py-5 text-[11px] font-black uppercase text-white border-none tracking-widest">Creator</TableHead>
-                  <TableHead className="px-8 py-5 text-[11px] font-black uppercase text-white border-none tracking-widest">Date</TableHead>
-                  <TableHead className="px-8 py-5 text-[11px] font-black uppercase text-white border-none text-right pr-12 tracking-widest">Amount</TableHead>
-                  <TableHead className="px-8 py-5 text-[11px] font-black uppercase text-white border-none text-right tracking-widest">Actions</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Expense Details</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Receiver</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Creator</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Date</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Amount</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -245,7 +256,7 @@ export default function ExpensesPage() {
                       <TableCell className="px-8 py-4">
                         <div className="flex flex-col">
                           <span className="text-[13px] font-bold text-[#1E293B] uppercase tracking-tight">{e.title}</span>
-                          <span className="text-[10px] font-black text-[#605DFF] uppercase tracking-widest mt-1">{e.category}</span>
+                          <span className="text-[10px] font-black text-primary uppercase tracking-widest mt-1">{e.category}</span>
                         </div>
                       </TableCell>
                       <TableCell className="px-8 py-4">
@@ -282,7 +293,7 @@ export default function ExpensesPage() {
                               });
                               setIsEditOpen(true);
                             }}
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            className={actionBtnEdit}
                           >
                             <Edit2 className="size-3.5" />
                           </Button>
@@ -290,7 +301,7 @@ export default function ExpensesPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => { setSelectedExpense(e); setIsDeleteOpen(true); }}
-                            className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            className={actionBtnDelete}
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
@@ -338,7 +349,7 @@ export default function ExpensesPage() {
                 value={formData.title}
                 onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="e.g. Monthly Electricity"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all font-medium text-sm"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all font-medium text-sm"
               />
             </div>
 
@@ -349,7 +360,7 @@ export default function ExpensesPage() {
                 value={formData.receiver}
                 onChange={(e) => setFormData(prev => ({ ...prev, receiver: e.target.value }))}
                 placeholder="e.g. Somnet Corp or Ali Mohamed"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all font-medium text-sm"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all font-medium text-sm"
               />
             </div>
 
@@ -362,7 +373,7 @@ export default function ExpensesPage() {
                     type="number"
                     value={formData.amount}
                     onChange={(e) => setFormData(prev => ({ ...prev, amount: parseFloat(e.target.value) }))}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all font-medium text-sm"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all font-medium text-sm"
                   />
                 </div>
               </div>
@@ -372,7 +383,7 @@ export default function ExpensesPage() {
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all font-medium text-sm"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all font-medium text-sm"
                 />
               </div>
             </div>
@@ -383,7 +394,7 @@ export default function ExpensesPage() {
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all font-medium text-sm appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all font-medium text-sm appearance-none cursor-pointer"
                 >
                   <option>Utilities</option>
                   <option>Rent</option>
@@ -398,7 +409,7 @@ export default function ExpensesPage() {
                 <select
                   value={formData.paymentMethod}
                   onChange={(e) => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all font-medium text-sm appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all font-medium text-sm appearance-none cursor-pointer"
                 >
                   <option>Cash</option>
                   <option>Bank Transfer</option>
@@ -416,7 +427,7 @@ export default function ExpensesPage() {
             <Button 
                 onClick={isEditOpen ? handleUpdateExpense : handleAddExpense} 
                 disabled={isProcessing}
-                className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-[#605DFF]/20"
+                className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-primary/20"
             >
               {isProcessing ? <Loader2 className="size-4 animate-spin" /> : isEditOpen ? "Update Record" : "Save Expense"}
             </Button>
@@ -427,6 +438,7 @@ export default function ExpensesPage() {
       {/* DELETE MODAL */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent className="sm:max-w-[480px] bg-white border-zinc-100 p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Delete Expense</DialogTitle>
           <div className="p-8 flex items-start gap-6">
             <div className="w-14 h-14 shrink-0 rounded-full bg-rose-50 flex items-center justify-center border border-rose-100 text-rose-600">
               <Trash2 className="size-6" />
@@ -442,7 +454,7 @@ export default function ExpensesPage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11" disabled={isProcessing}>
               Cancel
             </Button>
-            <Button onClick={handleDeleteExpense} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={isProcessing}>
+            <Button onClick={handleDeleteExpense} className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={isProcessing}>
               {isProcessing ? <Loader2 className="size-4 animate-spin" /> : "Yes, Delete"}
             </Button>
           </DialogFooter>

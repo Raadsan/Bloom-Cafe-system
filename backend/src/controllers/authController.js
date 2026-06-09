@@ -1,4 +1,5 @@
 import prisma from '../config/db.js'
+import { getCachedUser } from '../middlewares/authMiddleware.js'
 import bcrypt from 'bcryptjs'
 import generateToken from '../utils/generateToken.js'
 
@@ -199,13 +200,10 @@ export const updateProfile = async (req, res) => {
   }
 }
 
-// GET CURRENT LOGGED-IN USER
+// GET CURRENT LOGGED-IN USER (uses auth cache — no extra DB round-trip when warm)
 export const getMe = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      include: { role: true }
-    })
+    const user = await getCachedUser(req.user.id)
 
     if (!user) {
       return res.status(404).json({

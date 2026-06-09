@@ -1,6 +1,19 @@
 import prisma from '../config/db.js';
 import bcrypt from 'bcryptjs';
 import { logAudit } from '../utils/auditHelper.js';
+import { clearAuthCaches } from '../middlewares/authMiddleware.js';
+
+// Backend in-memory cache to bypass remote DB latency for the users list
+let cachedUsersList = null;
+let cachedUsersAt = 0;
+let usersFetchInflight = null;
+const USERS_LIST_TTL = 2 * 60 * 1000;
+
+export const clearUsersCache = () => {
+  cachedUsersList = null;
+  cachedUsersAt = 0;
+  usersFetchInflight = null;
+};
 
 // CREATE USER
 export const createUser = async (req, res) => {
@@ -88,6 +101,8 @@ export const createUser = async (req, res) => {
     const { password: _, ...userWithoutPassword } = user
 
     logAudit({ userId: req.user?.id, action: 'Created', entity: 'User', entityId: user.id, description: `Created user "${user.fullName}"` })
+    clearAuthCaches()
+    clearUsersCache()
 
     return res.status(201).json({
       success: true,
@@ -218,6 +233,8 @@ export const updateUser = async (req, res) => {
     const { password: _, ...userWithoutPassword } = updatedUser
 
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'User', entityId: updatedUser.id, description: `Updated user "${updatedUser.fullName}"` })
+    clearAuthCaches()
+    clearUsersCache()
 
     return res.status(200).json({
       success: true,
@@ -235,33 +252,68 @@ export const updateUser = async (req, res) => {
 }
 
 // GET ALL USERS
- export const getAllUsers = async (req, res) => {
+export const getAllUsers = async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      include: {
-        role: true
-      },
-      orderBy: {
-        id: 'asc'
-      }
-    })
+    const now = Date.now();
+    if (cachedUsersList && now - cachedUsersAt < USERS_LIST_TTL) {
+      return res.status(200).json({
+        success: true,
+        count: cachedUsersList.length,
+        data: cachedUsersList,
+      });
+    }
 
-    const usersWithoutPasswords = users.map(({ password, ...user }) => user)
+    if (usersFetchInflight) {
+      const data = await usersFetchInflight;
+      return res.status(200).json({
+        success: true,
+        count: data.length,
+        data,
+      });
+    }
+
+    usersFetchInflight = prisma.user
+      .findMany({
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          isActive: true,
+          roleId: true,
+          createdAt: true,
+          updatedAt: true,
+          role: { select: { id: true, name: true } },
+        },
+        orderBy: { id: 'asc' },
+      })
+      .then((users) => {
+        cachedUsersList = users;
+        cachedUsersAt = Date.now();
+        usersFetchInflight = null;
+        return users;
+      })
+      .catch((err) => {
+        usersFetchInflight = null;
+        throw err;
+      });
+
+    const usersWithoutPasswords = await usersFetchInflight;
 
     res.status(200).json({
       success: true,
       count: usersWithoutPasswords.length,
-      data: usersWithoutPasswords
-    })
+      data: usersWithoutPasswords,
+    });
   } catch (error) {
-    console.error('Get Users Error:', error)
+    console.error('[GetAllUsers] Error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch users',
-      error: error.message
-    })
+      error: error.message,
+    });
   }
-}
+};
 
 // DELETE USER
 export const deleteUser = async (req, res) => {
@@ -292,6 +344,8 @@ export const deleteUser = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'User', entityId: userId, description: `Deleted user "${existingUser.fullName}"` })
+    clearAuthCaches()
+    clearUsersCache()
 
     return res.status(200).json({
       success: true,

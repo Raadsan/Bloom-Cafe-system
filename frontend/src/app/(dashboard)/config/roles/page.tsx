@@ -2,20 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { 
-  ShieldCheck, 
   Plus, 
   Search, 
   Edit, 
   Trash2, 
-  Eye,
-  Filter,
-  Users,
-  Calendar,
   Shield,
-  LayoutGrid,
-  Settings,
-  MoreVertical,
-  CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,11 +28,27 @@ import {
 import { roleApi, Role } from "@/lib/api/roleApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnEdit,
+  actionBtnDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  btnCreatePage,
+} from "@/lib/dashboard-ui";
 
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const { showToast } = useToast();
 
   // Modal states
@@ -140,48 +147,58 @@ export default function RolesPage() {
     );
   }, [roles, searchQuery]);
 
+  const totalPages = Math.ceil(filteredRoles.length / pageSize) || 1;
+  const paginatedRoles = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredRoles.slice(start, start + pageSize);
+  }, [filteredRoles, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, pageSize]);
+
   return (
-    <div className="animate-in fade-in duration-500 font-sans mx-1">
-      {/* Page Header */}
-      <div className="mb-6 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-[#1e293b] uppercase tracking-tight flex items-center gap-2">
-            Roles & Access
-          </h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium italic">Define permission levels and staff responsibilities across the system.</p>
-        </div>
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
+      <div className="mb-6 px-4">
+        <h1 className={pageHeaderTitleClass}>Roles</h1>
+        <p className={pageHeaderSubtitleClass}>Create and manage staff roles and their descriptions.</p>
       </div>
 
-      {/* Main Container Box */}
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-        {/* Controls Row */}
-        <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50 bg-zinc-50/10">
+        <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50">
           <div className="flex items-center gap-4">
-            <div className="size-9 rounded-lg bg-white border border-zinc-200 flex items-center justify-center shadow-sm">
-                <Users className="size-4 text-[#605DFF]" />
-            </div>
-            <div>
-                <h3 className="text-[13px] font-bold text-zinc-800 uppercase tracking-tight">System Directories</h3>
+            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+              <span>Show</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
             </div>
           </div>
 
-          <div className="flex-1"></div>
+          <div className="flex-1" />
 
           <div className="flex items-center gap-3">
-            <div className="relative w-72 group">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+            <div className="relative w-64 group">
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search roles..."
-                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
 
             <Button
               onClick={() => setIsAddOpen(true)}
-              className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-bold text-xs uppercase tracking-widest shadow-sm"
+              className={btnCreatePage}
             >
               <Plus className="size-4" />
               Create Role
@@ -189,52 +206,57 @@ export default function RolesPage() {
           </div>
         </div>
 
-        {/* Table Content */}
-        <div className="overflow-x-auto">
+        <div className="border-t border-zinc-100 overflow-hidden bg-white">
+          <div className="overflow-x-auto">
           <Table className="w-full">
-            <TableHeader className="bg-[#605DFF]">
-              <TableRow className="hover:bg-transparent border-none">
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none w-20">ID</TableHead>
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Role Name</TableHead>
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Description</TableHead>
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none">Creation Date</TableHead>
-                <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Actions</TableHead>
+            <TableHeader className={dashboardTableHeaderClass}>
+              <TableRow className={dashboardTableHeadRowClass}>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Role Name</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Description</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Creation Date</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i} className="h-16 animate-pulse bg-muted/5"><TableCell colSpan={5} /></TableRow>
+                [...Array(5)].map((_, i) => (
+                  <TableRow key={i} className="h-14 animate-pulse">
+                    {[...Array(5)].map((_, j) => (
+                      <TableCell key={j} className="px-6 py-3">
+                        <div className="h-4 bg-zinc-100 rounded w-full"></div>
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 ))
-              ) : filteredRoles.length > 0 ? (
-                filteredRoles.map((role) => (
-                  <TableRow key={role.id} className="border-zinc-50 hover:bg-zinc-50/50 transition-colors group">
-                    <TableCell className="px-6 py-4">
-                      <span className="text-[13px] text-zinc-600">
-                        {role.id}
+              ) : paginatedRoles.length > 0 ? (
+                paginatedRoles.map((role, index) => (
+                  <TableRow key={role.id} className={dashboardTableBodyRowClass}>
+                    <TableCell className={dashboardTableCellClass}>
+                      <span className="text-[13px] font-bold text-primary">
+                        {(currentPage - 1) * pageSize + index + 1}
                       </span>
                     </TableCell>
-                    <TableCell className="px-6 py-4">
-                      <span className="text-[13px] font-normal text-zinc-800 uppercase tracking-tight">{role.name}</span>
+                    <TableCell className={dashboardTableCellClass}>
+                      <span className="text-[13px] font-medium text-zinc-800 uppercase tracking-tight">{role.name}</span>
                     </TableCell>
-                    <TableCell className="px-6 py-4">
+                    <TableCell className={dashboardTableCellClass}>
                        <p className="text-[12.5px] font-medium text-zinc-500 max-w-xs truncate leading-relaxed">
-                         {role.description || "No specific description defined for this level."}
+                         {role.description || "—"}
                        </p>
                     </TableCell>
-                    <TableCell className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-zinc-400 font-bold text-[11px] uppercase tracking-widest">
-                            <Calendar className="size-3.5" />
-                            {role.createdAt ? new Date(role.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : "System"}
-                        </div>
+                    <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[11px] text-zinc-500 font-medium">
+                            {role.createdAt ? new Date(role.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : "—"}
+                        </span>
                     </TableCell>
-                    <TableCell className="px-6 py-4 text-right">
+                    <TableCell className={cn(dashboardTableCellClass, "text-right")}>
                         <div className="flex justify-end gap-2">
                            <Button 
                              variant="ghost" 
                              size="sm" 
                              onClick={() => openEditModal(role)}
-                             className="h-8 w-8 p-0 text-[#64748B] hover:text-[#605DFF] hover:bg-[#605DFF]/5 rounded-lg transition-colors"
+                             className={actionBtnEdit}
                            >
                              <Edit className="size-4" />
                            </Button>
@@ -242,7 +264,7 @@ export default function RolesPage() {
                              variant="ghost" 
                              size="sm" 
                              onClick={() => { setSelectedRole(role); setIsDeleteOpen(true); }}
-                             className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                             className={actionBtnDelete}
                            >
                              <Trash2 className="size-4" />
                            </Button>
@@ -262,7 +284,37 @@ export default function RolesPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
+
+        {filteredRoles.length > 0 && (
+          <div className="px-8 py-3 border-t border-zinc-100 flex items-center justify-between text-[12px] text-zinc-500">
+            <span>
+              Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredRoles.length)} of {filteredRoles.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+                className="h-8 text-xs"
+              >
+                Previous
+              </Button>
+              <span className="text-xs font-medium">{currentPage} / {totalPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+                className="h-8 text-xs"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CREATE / EDIT MODAL */}
@@ -288,7 +340,7 @@ export default function RolesPage() {
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
                 placeholder="e.g. Sales Manager"
                 required
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium placeholder:text-zinc-400"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium placeholder:text-zinc-400"
               />
             </div>
             
@@ -299,7 +351,7 @@ export default function RolesPage() {
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
                 placeholder="Describe what this role does..."
                 rows={4}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium placeholder:text-zinc-400 resize-none"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium placeholder:text-zinc-400 resize-none"
               />
             </div>
 
@@ -307,7 +359,7 @@ export default function RolesPage() {
               <Button type="button" variant="outline" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} className="px-6 h-11 rounded-lg font-bold text-zinc-500">
                 Cancel
               </Button>
-              <Button type="submit" className="px-8 h-11 rounded-lg font-bold bg-[#605DFF] hover:bg-[#4E4BCB] text-white shadow-lg shadow-[#605DFF]/20 border-none">
+              <Button type="submit" className="px-8 h-11 rounded-lg font-bold bg-primary !text-white hover:bg-primary/90 hover:!text-white shadow-lg shadow-primary/20 border-none">
                 {isEditOpen ? "Update Role" : "Save Role"}
               </Button>
             </DialogFooter>
@@ -318,6 +370,7 @@ export default function RolesPage() {
       {/* DELETE MODAL */}
       <Dialog open={isDeleteOpen} onOpenChange={(open) => { if(!open) setIsDeleteOpen(false); }}>
         <DialogContent className="sm:max-w-[480px] bg-white border-none p-0 overflow-hidden rounded-2xl shadow-xl">
+          <DialogTitle className="sr-only">Delete Role</DialogTitle>
           <div className="p-8 flex items-start gap-6 pt-10">
             <div className="w-14 h-14 shrink-0 rounded-full bg-rose-50 flex items-center justify-center border border-rose-100">
               <Trash2 className="size-6 text-rose-600" />
@@ -334,7 +387,7 @@ export default function RolesPage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11 text-zinc-500">
               Cancel
             </Button>
-            <Button onClick={handleDeleteRole} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10">
+            <Button onClick={handleDeleteRole} className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10">
               Yes, Delete Role
             </Button>
           </DialogFooter>

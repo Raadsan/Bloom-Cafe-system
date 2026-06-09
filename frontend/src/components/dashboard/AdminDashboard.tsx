@@ -37,6 +37,20 @@ import {
   Pie
 } from "recharts";
 import { Order } from "@/lib/api/orderApi";
+import {
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  dashboardStatIconClass,
+  chartPrimary,
+  chartPrimaryVariants,
+  chartTooltipStyle,
+  dashboardStatusBadgeClass,
+  getOrderStatusBadgeClass,
+  formatStatusLabel,
+} from "@/lib/dashboard-ui";
 
 interface DashboardData {
   totalOrders: number;
@@ -63,7 +77,7 @@ const MOCK_CATEGORY_DATA = [
   { name: 'Drinks', value: 300 },
   { name: 'Desserts', value: 150 },
 ];
-const COLORS = ['#605DFF', '#10b981', '#f59e0b', '#fb7185'];
+const COLORS = [...chartPrimaryVariants];
 
 export default function AdminDashboard({ data, recentOrders }: { data: DashboardData | null, recentOrders: Order[] }) {
   const statCards = [
@@ -71,7 +85,6 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
       title: "Total Orders",
       value: data?.totalOrders || 0,
       icon: Briefcase,
-      color: "bg-primary",
       trend: "+12.5%",
       trendUp: true
     },
@@ -79,7 +92,6 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
       title: "Gross Revenue",
       value: `$${(data?.totalRevenue || 0).toLocaleString()}`,
       icon: DollarSign,
-      color: "bg-emerald-500",
       trend: "+8.2%",
       trendUp: true
     },
@@ -87,7 +99,6 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
       title: "Pending Orders",
       value: data?.totalPendingPayments || 0,
       icon: Clock,
-      color: "bg-amber-500",
       trend: "-2.4%",
       trendUp: false
     },
@@ -95,7 +106,6 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
       title: "Total Customers",
       value: data?.totalCustomers || 0,
       icon: Users,
-      color: "bg-blue-500",
       trend: "+15.1%",
       trendUp: true
     },
@@ -103,28 +113,10 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
       title: "Active Tables",
       value: data?.totalTables || 0,
       icon: Store,
-      color: "bg-purple-500",
       trend: "Stable",
       trendUp: null
     },
   ];
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'paid':
-      case 'served':
-        return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
-      case 'preparing':
-      case 'ready':
-        return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
-      case 'pending':
-        return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
-      case 'cancelled':
-        return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
-      default:
-        return 'bg-slate-500/10 text-slate-600 border-slate-500/20';
-    }
-  };
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -136,11 +128,11 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-3">Track your restaurant performance and daily operations.</p>
         </div>
         {/* <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="text-[11px] font-bold uppercase tracking-widest h-10 rounded-xl bg-white border border-zinc-100 text-[#64748B] hover:bg-zinc-50 hover:text-[#605DFF] transition-all shadow-sm">
+          <Button variant="ghost" size="sm" className="text-[11px] font-bold uppercase tracking-widest h-10 rounded-xl bg-white border border-zinc-100 text-[#64748B] hover:bg-zinc-50 hover:text-primary transition-all shadow-sm">
             <Calendar className="mr-2 size-3.5" />
             Last 7 Days
           </Button>
-          <Button size="sm" className="text-[11px] font-bold uppercase tracking-widest h-10 rounded-xl bg-[#F3F4FF] text-[#605DFF] hover:bg-[#605DFF] hover:text-white transition-all border-none shadow-none px-6">
+          <Button size="sm" className="text-[11px] font-bold uppercase tracking-widest h-10 rounded-xl bg-[#F3F4FF] text-primary hover:bg-primary hover:text-white transition-all border-none shadow-none px-6">
             Generate Report
           </Button>
         </div> */}
@@ -151,8 +143,8 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
         {statCards.map((stat, i) => (
           <div key={i} className="trezo-card p-6 flex flex-col justify-between group hover:border-primary/30 transition-all hover:shadow-md">
             <div className="flex items-start justify-between">
-              <div className={cn("p-2.5 rounded-xl text-white shadow-lg transition-all group-hover:scale-110", stat.color)}>
-                <stat.icon className="size-5" />
+              <div className={dashboardStatIconClass(i)}>
+                <stat.icon className="size-5 text-white" />
               </div>
               {stat.trendUp !== null && (
                 <div className={cn("flex items-center text-[10px] font-black uppercase tracking-widest", stat.trendUp ? "text-emerald-500" : "text-rose-500")}>
@@ -193,8 +185,8 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
               <AreaChart data={MOCK_REVENUE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
+                    <stop offset="5%" stopColor={chartPrimary} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={chartPrimary} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
@@ -211,22 +203,14 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
                   tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1E293B",
-                    borderColor: "#1E293B",
-                    borderRadius: "12px",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    color: "#ffffff",
-                    boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)"
-                  }}
+                  contentStyle={chartTooltipStyle}
                   itemStyle={{ color: "#ffffff" }}
                 />
                 <Area
                   type="monotone"
                   dataKey="revenue"
-                  stroke="#818cf8"
-                  strokeWidth={3}
+                  stroke={chartPrimary}
+                  strokeWidth={2.5}
                   fillOpacity={1}
                   fill="url(#colorRevenue)"
                 />
@@ -257,20 +241,13 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
                 />
                 <YAxis hide />
                 <Tooltip
-                  cursor={{ fill: 'transparent' }}
-                  contentStyle={{
-                    backgroundColor: "#1E293B",
-                    borderColor: "#1E293B",
-                    borderRadius: "12px",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    color: "#ffffff"
-                  }}
+                  cursor={{ fill: 'rgba(91, 16, 23, 0.06)' }}
+                  contentStyle={chartTooltipStyle}
                   itemStyle={{ color: "#ffffff" }}
                 />
                 <Bar dataKey="orders" radius={[4, 4, 0, 0]}>
                   {MOCK_REVENUE_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill="#605DFF" />
+                    <Cell key={`cell-${index}`} fill={chartPrimaryVariants[index % chartPrimaryVariants.length]} />
                   ))}
                 </Bar>
               </BarChart>
@@ -289,14 +266,14 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
             </div>
             <div className="flex items-center gap-3">
               <div className="relative w-48 group">
-                <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+                <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="w-full h-9 pl-9 pr-3 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-xs font-medium text-zinc-600"
+                  className="w-full h-9 pl-9 pr-3 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-xs font-medium text-zinc-600"
                 />
               </div>
-              <Button variant="ghost" size="sm" className="h-9 px-3 bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-[#605DFF] hover:border-[#605DFF]/30">
+              <Button variant="ghost" size="sm" className="h-9 px-3 bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-primary hover:border-primary/30">
                 <Filter className="size-3.5 mr-1.5" />
                 <span className="text-xs font-semibold">Filter</span>
               </Button>
@@ -305,46 +282,45 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
 
           <div className="border-t border-zinc-100 overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none">Order ID</TableHead>
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none">Customer</TableHead>
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none">Table</TableHead>
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none">Status</TableHead>
-                  <TableHead className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white border-none text-right">Total</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Customer</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Table</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Status</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="bg-white">
                 {recentOrders.length > 0 ? recentOrders.map((order) => (
-                  <TableRow key={order.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors group">
-                  <TableCell className="px-6 py-5 text-[13px] font-bold text-[#1E293B]">#{order.id}</TableCell>
-                  <TableCell className="px-6 py-5">
+                  <TableRow key={order.id} className={dashboardTableBodyRowClass}>
+                  <TableCell className={dashboardTableCellClass}>
+                    <span className="text-[13px] font-bold text-primary">{order.id}</span>
+                  </TableCell>
+                  <TableCell className={dashboardTableCellClass}>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[13px] font-bold text-[#1E293B] uppercase tracking-tight">{order.customerName || "Walk-in Guest"}</span>
-                      <span className="text-[10px] font-medium text-[#64748B] uppercase tracking-widest">{order.customerPhone || "No Phone"}</span>
+                      <span className="text-[13px] font-medium text-zinc-700">{order.customerName || "Walk-in Guest"}</span>
+                      <span className="text-[11px] text-zinc-500">{order.customerPhone || "No Phone"}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="px-6 py-5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-zinc-50 text-[#64748B] rounded-lg border border-zinc-100">
+                  <TableCell className={dashboardTableCellClass}>
+                    <span className="text-[13px] font-medium text-zinc-600">
                       Table {order.table?.number || order.tableId}
                     </span>
                   </TableCell>
-                  <TableCell className="px-6 py-5">
-                    <span className={cn(
-                      "text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border shadow-sm",
-                      getStatusColor(order.status)
-                    )}>
-                      {order.status}
+                  <TableCell className={dashboardTableCellClass}>
+                    <span className={cn(dashboardStatusBadgeClass, getOrderStatusBadgeClass(order.status))}>
+                      {formatStatusLabel(order.status)}
                     </span>
                   </TableCell>
-                  <TableCell className="px-6 py-5 text-right">
-                    <span className="text-[13px] font-bold text-[#1E293B]">${order.total.toLocaleString()}</span>
+                  <TableCell className={cn(dashboardTableCellClass, "text-right")}>
+                    <span className="text-[13px] font-bold text-zinc-700">${order.total.toLocaleString()}</span>
                   </TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="px-6 py-16 text-center">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#64748B]">No recent orders found</p>
+                  <TableCell colSpan={5} className="px-6 py-10 text-center text-zinc-500">
+                    No recent orders found
                   </TableCell>
                 </TableRow>
               )}
@@ -352,7 +328,7 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
           </Table>
         </div>
         <div className="p-5 border-t border-zinc-100 bg-white text-center">
-          <button className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#605DFF] hover:underline transition-all">
+          <button className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary hover:underline transition-all">
             View All Transactions
           </button>
         </div>

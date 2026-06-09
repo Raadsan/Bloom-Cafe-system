@@ -2,12 +2,26 @@ import api from './axios';
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled' | 'held' | 'completed';
 
+export interface OrderAddress {
+  id: number;
+  name: string;
+  district: string;
+  street: string;
+  phone: string;
+}
+
 export interface OrderItem {
   id: number;
   menuItemId: number;
   quantity: number;
   unitPrice: number;
-  menuitem?: { id: number; name: string; price: number };
+  menuitem?: { id: number; name: string; price: number; imageUrl?: string; description?: string };
+}
+
+export interface OrderCreator {
+  id: number;
+  fullName: string;
+  role?: { id: number; name: string };
 }
 
 export interface Order {
@@ -20,14 +34,19 @@ export interface Order {
   notes?: string;
   customerName?: string;
   customerPhone?: string;
+  orderType?: string;
   orderitem: OrderItem[];
-  table?: { id: number; number: number };
+  table?: { id: number; number: number; room?: { id: number; name: string } };
+  address?: OrderAddress;
+  user?: OrderCreator | null;
+  source?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface CreateOrderPayload {
   tableId?: number;
+  addressId?: number;
   type?: string;
   customerName?: string;
   customerPhone?: string;
@@ -36,18 +55,75 @@ export interface CreateOrderPayload {
   items: { menuItemId: number; quantity: number }[];
 }
 
+export type GetAllOrdersParams = {
+  status?: string;
+  onlyMine?: boolean;
+  readyPickup?: boolean;
+  waiterHistory?: boolean;
+};
+
+const ORDERS_TTL_MS = 45 * 1000;
+
+const memoryCache = new Map<string, { data: Order[]; at: number }>();
+const inflight = new Map<string, Promise<Order[]>>();
+
+function cacheKey(params?: GetAllOrdersParams): string {
+  return JSON.stringify(params || {});
+}
+
+export function clearOrdersListCache(): void {
+  memoryCache.clear();
+  inflight.clear();
+}
+
+async function fetchOrdersFromNetwork(params?: GetAllOrdersParams): Promise<Order[]> {
+  const key = cacheKey(params);
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  const query = new URLSearchParams();
+  if (params?.status) query.set('status', params.status);
+  if (params?.onlyMine) query.set('onlyMine', 'true');
+  if (params?.readyPickup) query.set('readyPickup', 'true');
+  if (params?.waiterHistory) query.set('waiterHistory', 'true');
+
+  const request = api
+    .get(`/orders/all?${query.toString()}`)
+    .then((res) => {
+      const data: Order[] = res.data.data || [];
+      memoryCache.set(key, { data, at: Date.now() });
+      inflight.delete(key);
+      return data;
+    })
+    .catch((err) => {
+      inflight.delete(key);
+      throw err;
+    });
+
+  inflight.set(key, request);
+  return request;
+}
+
 export const orderApi = {
   createOrder: async (payload: CreateOrderPayload): Promise<Order> => {
     const res = await api.post('/orders', payload);
+    clearOrdersListCache();
     return res.data.data;
   },
 
-  getAllOrders: async (params?: { status?: string; onlyMine?: boolean }): Promise<Order[]> => {
-    const query = new URLSearchParams();
-    if (params?.status) query.set('status', params.status);
-    if (params?.onlyMine) query.set('onlyMine', 'true');
-    const res = await api.get(`/orders/all?${query.toString()}`);
-    return res.data.data || [];
+  getAllOrders: async (
+    params?: GetAllOrdersParams,
+    forceRefresh = false
+  ): Promise<Order[]> => {
+    const key = cacheKey(params);
+    const now = Date.now();
+    const cached = memoryCache.get(key);
+
+    if (!forceRefresh && cached && now - cached.at < ORDERS_TTL_MS) {
+      return cached.data;
+    }
+
+    return fetchOrdersFromNetwork(params);
   },
 
   getOrdersByTable: async (tableId: number): Promise<Order[]> => {
@@ -62,15 +138,18 @@ export const orderApi = {
 
   updateOrder: async (id: number, payload: CreateOrderPayload): Promise<Order> => {
     const res = await api.put(`/orders/${id}`, payload);
+    clearOrdersListCache();
     return res.data.data;
   },
 
   updateStatus: async (id: number, status: OrderStatus): Promise<Order> => {
     const res = await api.patch(`/orders/${id}/status`, { status });
+    clearOrdersListCache();
     return res.data.data;
   },
 
   deleteOrder: async (id: number): Promise<void> => {
     await api.delete(`/orders/${id}`);
-  }
+    clearOrdersListCache();
+  },
 };

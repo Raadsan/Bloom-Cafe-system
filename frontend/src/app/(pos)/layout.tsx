@@ -92,7 +92,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
         <header className="h-[56px] shrink-0 bg-white border-b border-gray-200 flex items-center px-6 gap-6 shadow-sm z-50">
           {/* Logo */}
           <Link href="/pos-terminal" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-[#605DFF] rounded-lg flex items-center justify-center shadow-sm">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm">
               <UtensilsCrossed className="size-4 text-white" />
             </div>
             <div>
@@ -105,7 +105,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
           {/* Clock */}
           <div className="flex items-center gap-2 text-gray-500">
-            <Clock className="size-4 text-[#605DFF]" />
+            <Clock className="size-4 text-primary" />
             <div>
               <span className="text-[13px] font-bold text-[#1E293B] tabular-nums">
                 {isMounted ? formatTime(time) : "--:--:--"}
@@ -135,14 +135,14 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
               href="/pos-terminal"
               className={cn(
                 "size-8 rounded-xl flex items-center justify-center transition-all relative border",
-                pathname === '/pos-terminal' ? "bg-[#605DFF] text-white border-[#605DFF] shadow-sm" : 
-                cartCount > 0 ? "bg-[#605DFF]/10 text-[#605DFF] border-[#605DFF]/20" : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
+                pathname === '/pos-terminal' ? "bg-primary text-white border-primary shadow-sm" : 
+                cartCount > 0 ? "bg-primary/10 text-primary border-primary/20" : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
               )}
             >
               <ShoppingCart className="size-4" />
               {cartCount > 0 && (
                 <span className={cn("absolute -top-1.5 -right-1.5 text-[9px] font-black h-4 w-4 flex items-center justify-center rounded-full shadow-md border",
-                  pathname === '/pos-terminal' ? "bg-white text-[#605DFF] border-[#605DFF]" : "bg-[#605DFF] text-white border-white"
+                  pathname === '/pos-terminal' ? "bg-white text-primary border-primary" : "bg-primary text-white border-white"
                 )}>
                   {cartCount}
                 </span>
@@ -153,7 +153,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
               href="/my-sales" 
               className={cn(
                 "size-8 rounded-xl flex items-center justify-center transition-all border group",
-                pathname === '/my-sales' ? "bg-[#605DFF] text-white border-[#605DFF] shadow-sm" : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-[#605DFF] hover:text-white"
+                pathname === '/my-sales' ? "bg-primary text-white border-primary shadow-sm" : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-primary hover:text-white"
               )}
             >
               <CircleDollarSign className="size-4" />
@@ -171,12 +171,12 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
               onClick={() => window.dispatchEvent(new CustomEvent('open-held-orders'))}
               className={cn(
                 "size-8 rounded-xl flex items-center justify-center transition-all relative border",
-                heldCount > 0 ? "bg-[#605DFF] text-white border-[#605DFF] shadow-sm" : "bg-gray-50 text-gray-400 border-gray-100"
+                heldCount > 0 ? "bg-primary text-white border-primary shadow-sm" : "bg-gray-50 text-gray-400 border-gray-100"
               )}
             >
               <History className="size-4" />
               {heldCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-white text-[#605DFF] text-[9px] font-black h-4 w-4 flex items-center justify-center rounded-full shadow-md border border-[#605DFF]">
+                <span className="absolute -top-1.5 -right-1.5 bg-white text-primary text-[9px] font-black h-4 w-4 flex items-center justify-center rounded-full shadow-md border border-primary">
                   {heldCount}
                 </span>
               )}
@@ -191,8 +191,8 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-3">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 pl-1 cursor-pointer group outline-none bg-gray-50 border border-gray-100 hover:border-[#605DFF]/30 pr-3 py-1.5 rounded-xl transition-all">
-                    <div className="w-8 h-8 rounded-xl bg-[#605DFF] text-white flex items-center justify-center text-[13px] font-bold shadow-sm overflow-hidden">
+                  <button className="flex items-center gap-2 pl-1 cursor-pointer group outline-none bg-gray-50 border border-gray-100 hover:border-primary/30 pr-3 py-1.5 rounded-xl transition-all">
+                    <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center text-[13px] font-bold shadow-sm overflow-hidden">
                       {user?.avatarUrl ? (
                         <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                       ) : (
@@ -203,13 +203,13 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
                       <span className="text-[12px] font-bold uppercase tracking-tight text-[#1E293B] leading-tight">{user?.fullName}</span>
                       <span className="text-[10px] font-medium uppercase tracking-widest text-gray-500 leading-tight">{user?.role}</span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 ml-1 text-gray-400 group-hover:text-[#605DFF] transition-colors" />
+                    <ChevronDown className="w-3.5 h-3.5 ml-1 text-gray-400 group-hover:text-primary transition-colors" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-64 mt-2 rounded-xl shadow-2xl border-gray-100" align="end">
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-3 px-2 py-3 text-left text-sm">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#605DFF] text-white font-bold text-[15px] overflow-hidden">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white font-bold text-[15px] overflow-hidden">
                         {user?.avatarUrl ? (
                           <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
@@ -225,18 +225,18 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
                   <DropdownMenuSeparator className="bg-gray-100" />
                   <DropdownMenuGroup>
                     <DropdownMenuItem asChild>
-                      <Link href="/my-profile" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-[#605DFF] hover:bg-[#605DFF]/5 focus:text-[#605DFF] focus:bg-[#605DFF]/5">
+                      <Link href="/my-profile" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
                         <UserIcon className="mr-2.5 size-4" />
                         My Profile
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/dashboard/settings" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-[#605DFF] hover:bg-[#605DFF]/5 focus:text-[#605DFF] focus:bg-[#605DFF]/5">
+                      <Link href="/dashboard/settings" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
                         <Settings2 className="mr-2.5 size-4" />
                         Settings
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-[#605DFF] hover:bg-[#605DFF]/5 focus:text-[#605DFF] focus:bg-[#605DFF]/5">
+                    <DropdownMenuItem className="text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
                       <FileText className="mr-2.5 size-4" />
                       Privacy Policy
                     </DropdownMenuItem>

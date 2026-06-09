@@ -1,19 +1,30 @@
 import * as React from "react"
 
-const MOBILE_BREAKPOINT = 768
+/** Phones + tablets (iPad) — sidebar uses overlay hamburger below this width */
+export const COMPACT_VIEWPORT_MAX_WIDTH = 1023
+
+const COMPACT_VIEWPORT_QUERY = `(max-width: ${COMPACT_VIEWPORT_MAX_WIDTH}px)`
+
+function subscribe(onChange: () => void) {
+  const mql = window.matchMedia(COMPACT_VIEWPORT_QUERY)
+  mql.addEventListener("change", onChange)
+  return () => mql.removeEventListener("change", onChange)
+}
+
+function getSnapshot() {
+  return window.innerWidth <= COMPACT_VIEWPORT_MAX_WIDTH
+}
+
+/** Server + hydration snapshot — always desktop layout to avoid mismatch */
+function getServerSnapshot() {
+  return false
+}
 
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+  return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+}
 
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
-
-  return !!isMobile
+export function isCompactViewport() {
+  if (typeof window === "undefined") return false
+  return window.innerWidth <= COMPACT_VIEWPORT_MAX_WIDTH
 }

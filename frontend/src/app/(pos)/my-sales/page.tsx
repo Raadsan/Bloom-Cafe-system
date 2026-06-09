@@ -20,6 +20,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import {
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardStatusBadgeClass,
+  getOrderStatusBadgeClass,
+  formatStatusLabel,
+} from "@/lib/dashboard-ui";
+import {
   Table,
   TableBody,
   TableCell,
@@ -97,9 +105,9 @@ export default function MySalesPage() {
 
       {/* Top 4 Summary Boxes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm hover:border-[#605DFF]/20 transition-all group flex flex-col gap-4">
-          <div className="p-2.5 bg-[#605DFF]/10 rounded-lg w-fit group-hover:bg-[#605DFF] transition-colors">
-            <ClipboardList className="size-4 text-[#605DFF] group-hover:text-white transition-colors" />
+        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm hover:border-primary/20 transition-all group flex flex-col gap-4">
+          <div className="p-2.5 bg-primary/10 rounded-lg w-fit group-hover:bg-primary transition-colors">
+            <ClipboardList className="size-4 text-primary group-hover:text-white transition-colors" />
           </div>
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Total Orders</p>
@@ -148,7 +156,7 @@ export default function MySalesPage() {
                 <select 
                     value={pageSize} 
                     onChange={(e) => setPageSize(Number(e.target.value))}
-                    className="w-16 h-[38px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                    className="w-16 h-[38px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
                 >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -162,13 +170,13 @@ export default function MySalesPage() {
 
           <div className="flex items-center gap-3">
             <div className="relative w-64 group">
-                <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+                <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
                 <input 
                     type="text" 
                     placeholder="Search ID or Customer..." 
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full h-[38px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-all text-sm font-normal text-zinc-600"
+                    className="w-full h-[38px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary transition-all text-sm font-normal text-zinc-600"
                 />
             </div>
             <Button variant="outline" className="h-[38px] px-4 border-zinc-200 text-zinc-600 hover:bg-zinc-50 rounded-md flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
@@ -182,13 +190,13 @@ export default function MySalesPage() {
         <div className="overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none tracking-widest">Order ID</TableHead>
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none tracking-widest">Date & Time</TableHead>
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none tracking-widest">Customer</TableHead>
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none tracking-widest">Status</TableHead>
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none text-right pr-12 tracking-widest">Total</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Date & Time</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Customer</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Status</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -216,7 +224,7 @@ export default function MySalesPage() {
                     <TableRow key={order.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
                       <TableCell className="px-8 py-3">
                         <div className="flex flex-col">
-                          <span className="text-[13px] font-bold text-[#1E293B] uppercase tracking-tight">#{order.id}</span>
+                          <span className="text-[13px] font-bold text-primary">{order.id}</span>
                         </div>
                       </TableCell>
                       <TableCell className="px-8 py-3">
@@ -228,13 +236,8 @@ export default function MySalesPage() {
                         <span className="text-[13px] font-medium text-zinc-600">{order.customerName || 'Walk-in Guest'}</span>
                       </TableCell>
                       <TableCell className="px-8 py-3">
-                        <span className={cn(
-                          "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md border",
-                          order.status === 'paid' ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                          order.status === 'cancelled' ? "bg-rose-50 text-rose-600 border-rose-100" :
-                          "bg-blue-50 text-blue-600 border-blue-100"
-                        )}>
-                          {order.status}
+                        <span className={cn(dashboardStatusBadgeClass, getOrderStatusBadgeClass(order.status))}>
+                          {formatStatusLabel(order.status)}
                         </span>
                       </TableCell>
                       <TableCell className="px-8 py-3 text-right pr-12">
@@ -256,7 +259,7 @@ export default function MySalesPage() {
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                     <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Filtered Sales:</p>
-                    <p className="text-sm font-black text-[#605DFF]">{formatCurrency(filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0))}</p>
+                    <p className="text-sm font-black text-primary">{formatCurrency(filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0))}</p>
                 </div>
             </div>
         </div>

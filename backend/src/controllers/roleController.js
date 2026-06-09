@@ -1,6 +1,13 @@
 import prisma from '../config/db.js'
 import { logAudit } from '../utils/auditHelper.js'
 
+// Backend in-memory cache to completely bypass remote DB latency for fetching the roles list
+let cachedRolesList = null;
+
+export const clearRolesCache = () => {
+  cachedRolesList = null;
+};
+
 // CREATE ROLE
 export const createRole = async (req, res) => {
   try {
@@ -35,6 +42,7 @@ export const createRole = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Created', entity: 'Role', entityId: role.id, description: `Created role "${role.name}"` })
+    clearRolesCache()
 
     return res.status(201).json({
       success: true,
@@ -54,11 +62,21 @@ export const createRole = async (req, res) => {
 // GET ALL ROLES
 export const getAllRoles = async (req, res) => {
   try {
+    if (cachedRolesList) {
+      return res.status(200).json({
+        success: true,
+        count: cachedRolesList.length,
+        data: cachedRolesList
+      })
+    }
+
     const roles = await prisma.role.findMany({
       orderBy: {
         id: 'asc'
       }
     })
+
+    cachedRolesList = roles // populate cache
 
     res.status(200).json({
       success: true,
@@ -129,6 +147,7 @@ export const updateRole = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Role', entityId: updatedRole.id, description: `Updated role "${updatedRole.name}"` })
+    clearRolesCache()
 
     return res.status(200).json({
       success: true,
@@ -184,6 +203,7 @@ export const deleteRole = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Role', entityId: roleId, description: `Deleted role "${existingRole.name}"` })
+    clearRolesCache()
 
     return res.status(200).json({
       success: true,

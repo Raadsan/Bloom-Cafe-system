@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import {
   LayoutGrid,
   Plus,
@@ -8,15 +9,11 @@ import {
   Edit,
   Trash2,
   Users,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
   QrCode,
-  Filter,
   Eye,
-  MoreVertical,
   Printer,
-  Download
+  DoorOpen,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,13 +37,40 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { tableApi, Table as RestaurantTable, TableStatus } from "@/lib/api/tableApi";
+import { roomApi, Room } from "@/lib/api/roomApi";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnView,
+  actionBtnEdit,
+  actionBtnDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardStatusBadgeClass,
+  getTableStatusBadgeClass,
+  getTableStatusLabel,
+} from "@/lib/dashboard-ui";
+
+function getQrImageUrl(qrCode: string, size = 280) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(qrCode)}`;
+}
+
+const formSubmitBtnClass =
+  "bg-primary !text-white hover:bg-primary/90 hover:!text-white hover:shadow-lg hover:shadow-primary/20 rounded-lg font-bold border-none px-8 h-11 shadow-md shadow-primary/15 disabled:opacity-70 disabled:cursor-not-allowed transition-all";
 
 export default function TablesPage() {
   const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [roomFilter, setRoomFilter] = useState<string>("all");
   const { showToast } = useToast();
   const { canAdd: checkAdd, canEdit: checkEdit, canDelete: checkDelete } = usePermissions();
   const canAdd = checkAdd("/tables");
@@ -64,6 +88,8 @@ export default function TablesPage() {
   const [formData, setFormData] = useState({
     number: "",
     name: "",
+    description: "",
+    roomId: "",
     capacity: "4",
     status: "active" as TableStatus
   });
@@ -72,17 +98,32 @@ export default function TablesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const fetchTables = async () => {
+  const fetchTables = async (silent = false) => {
     try {
-      setLoading(true);
-      const data = await tableApi.getAllTables();
-      setTables(data || []);
+      if (!silent) setLoading(true);
+      const [tablesData, roomsData] = await Promise.all([
+        tableApi.getAllTables(),
+        roomApi.getAllRooms()
+      ]);
+      setTables(tablesData || []);
+      setRooms(roomsData || []);
     } catch (error) {
       console.error("Failed to fetch tables:", error);
       showToast("Failed to load tables", "error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  };
+
+  const upsertTableInState = (table: RestaurantTable) => {
+    setTables(prev => {
+      const idx = prev.findIndex(t => t.id === table.id);
+      if (idx === -1) return [...prev, table].sort((a, b) => a.number - b.number);
+      const next = [...prev];
+      next[idx] = table;
+      return next;
+    });
+    setSelectedTable(prev => (prev?.id === table.id ? table : prev));
   };
 
   useEffect(() => {
@@ -91,49 +132,73 @@ export default function TablesPage() {
 
   const handleAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.roomId) {
+      showToast("Please select a room", "error");
+      return;
+    }
+    setSubmitting(true);
     try {
-      await tableApi.createTable({
+      const created = await tableApi.createTable({
         number: parseInt(formData.number),
         name: formData.name || `Table ${formData.number}`,
+        description: formData.description.trim(),
+        roomId: parseInt(formData.roomId),
         capacity: parseInt(formData.capacity),
         status: formData.status
       });
+      upsertTableInState(created);
       showToast("Table created successfully", "success");
       setIsAddOpen(false);
       resetForm();
-      fetchTables();
+      await fetchTables(true);
     } catch (error: any) {
       showToast(error.response?.data?.message || "Failed to create table", "error");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleUpdateTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTable) return;
+    if (!formData.roomId) {
+      showToast("Please select a room", "error");
+      return;
+    }
+    setSubmitting(true);
     try {
-      await tableApi.updateTable(selectedTable.id.toString(), {
+      const updated = await tableApi.updateTable(selectedTable.id.toString(), {
         number: parseInt(formData.number),
         name: formData.name,
+        description: formData.description.trim(),
+        roomId: parseInt(formData.roomId),
         capacity: parseInt(formData.capacity),
         status: formData.status
       });
+      upsertTableInState(updated);
       showToast("Table updated successfully", "success");
       setIsEditOpen(false);
-      fetchTables();
+      await fetchTables(true);
     } catch (error: any) {
       showToast(error.response?.data?.message || "Failed to update table", "error");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDeleteTable = async () => {
     if (!selectedTable) return;
+    setDeleting(true);
     try {
       await tableApi.deleteTable(selectedTable.id.toString());
+      setTables(prev => prev.filter(t => t.id !== selectedTable.id));
       showToast("Table deleted successfully", "success");
       setIsDeleteOpen(false);
-      fetchTables();
+      setSelectedTable(null);
     } catch (error: any) {
       showToast(error.response?.data?.message || "Failed to delete table", "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -141,6 +206,8 @@ export default function TablesPage() {
     setFormData({
       number: "",
       name: "",
+      description: "",
+      roomId: rooms[0]?.id?.toString() || "",
       capacity: "4",
       status: "active"
     });
@@ -151,20 +218,28 @@ export default function TablesPage() {
     setFormData({
       number: table.number.toString(),
       name: table.name || "",
+      description: table.description || "",
+      roomId: table.roomId?.toString() || table.room?.id?.toString() || "",
       capacity: table.capacity?.toString() || "4",
       status: table.status
     });
     setIsEditOpen(true);
   };
 
+  const openAddModal = () => {
+    resetForm();
+    setIsAddOpen(true);
+  };
+
   const openViewModal = (table: RestaurantTable) => {
-    setSelectedTable(table);
+    const latest = tables.find(t => t.id === table.id) ?? table;
+    setSelectedTable(latest);
     setIsViewOpen(true);
   };
 
   const handlePrint = () => {
-    if (!selectedTable) return;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(selectedTable.qrCode || '')}`;
+    if (!selectedTable?.qrCode) return;
+    const qrUrl = getQrImageUrl(selectedTable.qrCode, 300);
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(`
@@ -240,7 +315,7 @@ export default function TablesPage() {
             <div class="print-card">
               <div class="logo">Restaurant POS</div>
               <div class="qr-container">
-                <img src="${qrUrl}" />
+                <img src="${qrUrl}" alt="Table QR Code" />
               </div>
               <h1 class="table-num">Table ${selectedTable.number}</h1>
               <p class="table-name">${selectedTable.name || 'Seating Area'}</p>
@@ -261,38 +336,43 @@ export default function TablesPage() {
     }
   };
 
-  const filteredTables = (tables || []).filter(table =>
-    table.number.toString().includes(searchQuery) ||
-    table.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTables = useMemo(() => {
+    return (tables || []).filter(table => {
+      const matchesSearch =
+        searchQuery === "" ||
+        table.number.toString().includes(searchQuery) ||
+        table.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        table.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        table.room?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesRoom =
+        roomFilter === "all" ||
+        String(table.roomId) === roomFilter ||
+        String(table.room?.id) === roomFilter;
+      return matchesSearch && matchesRoom;
+    });
+  }, [tables, searchQuery, roomFilter]);
 
   const totalPages = Math.ceil(filteredTables.length / pageSize);
-  const paginatedTables = React.useMemo(() => {
+  const paginatedTables = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredTables.slice(start, start + pageSize);
   }, [filteredTables, currentPage, pageSize]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, pageSize]);
+  }, [searchQuery, roomFilter, pageSize]);
 
-  const getStatusInfo = (status: TableStatus) => {
-    switch (status) {
-      case "active":
-        return { label: "Active", color: "bg-emerald-50 text-emerald-600 border-emerald-100" };
-      case "inactive":
-        return { label: "Inactive", color: "bg-rose-50 text-rose-600 border-rose-100" };
-      default:
-        return { label: "Active", color: "bg-emerald-50 text-emerald-600 border-emerald-100" };
-    }
-  };
+  const getStatusInfo = (status: TableStatus | string) => ({
+    label: getTableStatusLabel(status),
+    color: getTableStatusBadgeClass(status),
+  });
 
   return (
-    <div className="animate-in fade-in duration-500 font-sans mx-1 pt-0 pb-8">
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Page Header: Outside the box */}
       <div className="mb-6 px-4">
-        <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Tables Management</h1>
-        <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Manage restaurant floor plans, table statuses, and QR code assignments.</p>
+        <h1 className={pageHeaderTitleClass}>Tables Management</h1>
+        <p className={pageHeaderSubtitleClass}>Manage restaurant floor plans, table statuses, and QR code assignments.</p>
       </div>
 
       {/* Main Container Box */}
@@ -305,7 +385,7 @@ export default function TablesPage() {
               <select 
                 value={pageSize} 
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -318,21 +398,31 @@ export default function TablesPage() {
           <div className="flex-1"></div>
 
           <div className="flex items-center gap-3">
+            <select
+              value={roomFilter}
+              onChange={e => setRoomFilter(e.target.value)}
+              className="h-[42px] px-3 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary text-sm text-zinc-600 min-w-[140px]"
+            >
+              <option value="all">All Rooms</option>
+              {rooms.map(room => (
+                <option key={room.id} value={room.id}>{room.name}</option>
+              ))}
+            </select>
             <div className="relative w-64 group">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
                 placeholder="Search tables..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
 
             {canAdd && (
               <Button 
-                onClick={() => setIsAddOpen(true)}
-                className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
+                onClick={openAddModal}
+                className="h-[42px] px-6 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md flex items-center gap-2 transition-all font-medium text-sm shadow-sm hover:shadow-md hover:shadow-primary/20"
               >
                 <Plus className="size-4" />
                 Add Table
@@ -345,21 +435,22 @@ export default function TablesPage() {
         <div className="border-t border-zinc-100 overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-                  <TableHeader className="bg-[#605DFF]">
-                    <TableRow className="hover:bg-transparent border-none">
-                      <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-left">Table ID</TableHead>
-                      <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-left">Table Name</TableHead>
-                      <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-left">Pars</TableHead>
-                      <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-center">QR Code</TableHead>
-                      <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Status</TableHead>
-                      <TableHead className="px-6 py-4 text-[12px] font-black uppercase text-white border-none text-right">Actions</TableHead>
+                  <TableHeader className={dashboardTableHeaderClass}>
+                    <TableRow className={dashboardTableHeadRowClass}>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Table No</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Name</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Room</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Description</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>QR Code</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Status</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
               <TableBody>
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i} className="h-14 animate-pulse">
-                      {[...Array(6)].map((_, j) => (
+                      {[...Array(7)].map((_, j) => (
                         <TableCell key={j} className="px-6 py-4">
                           <div className="h-4 bg-zinc-100 rounded w-full"></div>
                         </TableCell>
@@ -368,34 +459,46 @@ export default function TablesPage() {
                   ))
                 ) : paginatedTables.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="px-6 py-10 text-center text-zinc-500">
+                    <TableCell colSpan={7} className="px-6 py-10 text-center text-zinc-500">
                       No tables found
                     </TableCell>
                   </TableRow>
                 ) : (
                   paginatedTables.map((table) => {
                     const statusInfo = getStatusInfo(table.status);
-                    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(table.qrCode || '')}`;
 
                     return (
                       <TableRow key={table.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
-                        <TableCell className="px-6 py-3 text-[13px] text-zinc-500 font-medium">ID: {table.id}</TableCell>
+                        <TableCell className="px-6 py-3">
+                          <span className="text-[13px] font-bold text-primary">{table.number}</span>
+                        </TableCell>
                         <TableCell className="px-6 py-3">
                           <span className="text-[13px] font-medium text-zinc-700">{table.name || `Table ${table.number}`}</span>
                         </TableCell>
                         <TableCell className="px-6 py-3">
-                          <div className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-600">
-                            {table.capacity || 4} Pars
-                          </div>
+                          <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-zinc-600">
+                            <DoorOpen className="size-3.5 text-primary shrink-0" />
+                            {table.room?.name || "—"}
+                          </span>
                         </TableCell>
-                        <TableCell className="px-6 py-3 text-[13px] text-zinc-500 font-medium text-center">
-                          {table.qrCode || "No QR"}
+                        <TableCell className="px-6 py-3">
+                          <span
+                            className="text-[13px] text-zinc-600 line-clamp-2 max-w-[220px]"
+                            title={table.description || undefined}
+                          >
+                            {table.description || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-6 py-3">
+                          <span
+                            className="text-[13px] text-zinc-600 truncate max-w-[200px] block"
+                            title={table.qrCode || undefined}
+                          >
+                            {table.qrCode || "—"}
+                          </span>
                         </TableCell>
                         <TableCell className="px-6 py-3 text-right">
-                          <span className={cn(
-                            "px-3 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider border",
-                            statusInfo.color
-                          )}>
+                          <span className={cn(dashboardStatusBadgeClass, statusInfo.color)}>
                             {statusInfo.label}
                           </span>
                         </TableCell>
@@ -405,7 +508,7 @@ export default function TablesPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => openViewModal(table)}
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              className={actionBtnView}
                             >
                               <Eye className="size-4" />
                             </Button>
@@ -414,7 +517,7 @@ export default function TablesPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => openEditModal(table)}
-                                className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                className={actionBtnEdit}
                               >
                                 <Edit className="size-4" />
                               </Button>
@@ -424,7 +527,7 @@ export default function TablesPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => { setSelectedTable(table); setIsDeleteOpen(true); }}
-                                className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                className={actionBtnDelete}
                               >
                                 <Trash2 className="size-4" />
                               </Button>
@@ -487,7 +590,7 @@ export default function TablesPage() {
                 onChange={(e) => setFormData({ ...formData, number: e.target.value })}
                 placeholder="e.g. 5"
                 required
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
             <div className="space-y-2">
@@ -498,8 +601,29 @@ export default function TablesPage() {
                 onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
                 placeholder="4"
                 required
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <label className="text-sm font-bold text-[#1E293B]">Room *</label>
+              <select
+                value={formData.roomId}
+                onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
+                required
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
+              >
+                <option value="">Select a room</option>
+                {rooms.filter(r => r.isActive).map(room => (
+                  <option key={room.id} value={room.id}>{room.name}</option>
+                ))}
+              </select>
+              {rooms.length === 0 && (
+                <p className="text-xs text-amber-600">
+                  No rooms found.{" "}
+                  <Link href="/rooms" className="font-bold underline hover:text-primary">Create rooms first</Link>
+                  {" "}before adding tables.
+                </p>
+              )}
             </div>
             <div className="col-span-2 space-y-2">
               <label className="text-sm font-bold text-[#1E293B]">Display Name (Optional)</label>
@@ -507,7 +631,17 @@ export default function TablesPage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g. VIP Booth 1"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <label className="text-sm font-bold text-[#1E293B]">Description (Optional)</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="e.g. Near window, quiet corner, best for families..."
+                rows={3}
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium resize-none"
               />
             </div>
             <div className="col-span-2 space-y-2">
@@ -515,15 +649,36 @@ export default function TablesPage() {
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as TableStatus })}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </div>
             <DialogFooter className="col-span-2 pt-6 border-t border-zinc-100 mt-4 -mx-8 px-8 bg-zinc-50/50 gap-3">
-              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)} className="rounded-lg font-bold px-6 h-11">Cancel</Button>
-              <Button type="submit" className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-[#605DFF]/20">Save Table</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddOpen(false)}
+                disabled={submitting}
+                className="rounded-lg font-bold px-6 h-11"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className={formSubmitBtnClass}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Save Table"
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -547,7 +702,7 @@ export default function TablesPage() {
                 value={formData.number}
                 onChange={(e) => setFormData({ ...formData, number: e.target.value })}
                 required
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
             <div className="space-y-2">
@@ -557,15 +712,39 @@ export default function TablesPage() {
                 value={formData.capacity}
                 onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
                 required
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <label className="text-sm font-bold text-[#1E293B]">Room *</label>
+              <select
+                value={formData.roomId}
+                onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
+                required
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
+              >
+                <option value="">Select a room</option>
+                {rooms.filter(r => r.isActive).map(room => (
+                  <option key={room.id} value={room.id}>{room.name}</option>
+                ))}
+              </select>
             </div>
             <div className="col-span-2 space-y-2">
               <label className="text-sm font-bold text-[#1E293B]">Display Name</label>
               <input
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <label className="text-sm font-bold text-[#1E293B]">Description</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Table location notes, seating notes..."
+                rows={3}
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium resize-none"
               />
             </div>
             <div className="col-span-2 space-y-2">
@@ -573,15 +752,36 @@ export default function TablesPage() {
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as TableStatus })}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </div>
             <DialogFooter className="col-span-2 pt-6 border-t border-zinc-100 mt-4 -mx-8 px-8 bg-zinc-50/50 gap-3">
-              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} className="rounded-lg font-bold px-6 h-11">Cancel</Button>
-              <Button type="submit" className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-[#605DFF]/20">Update Table</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditOpen(false)}
+                disabled={submitting}
+                className="rounded-lg font-bold px-6 h-11"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className={formSubmitBtnClass}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Update Table"
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -589,72 +789,112 @@ export default function TablesPage() {
 
       {/* VIEW MODAL */}
       <Dialog open={isViewOpen} onOpenChange={(open) => { if (!open) setIsViewOpen(false); }}>
-        <DialogContent className="sm:max-w-[540px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl">
+        <DialogContent className="sm:max-w-[640px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl">
           <DialogTitle className="sr-only">Table View Details</DialogTitle>
-          <DialogTitle className="sr-only">Table Details</DialogTitle>
           {selectedTable && (
             <>
-              <div className="p-8 pb-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-2xl font-black text-[#1E293B] uppercase tracking-tight flex items-center gap-2">
-                      <span className="text-[#605DFF]">#</span>Table {selectedTable.number}
+              <div className="px-8 pt-8 pb-5 border-b border-zinc-100">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-primary mb-1">
+                      <LayoutGrid className="size-4 shrink-0" />
+                      <span className="text-[11px] font-black uppercase tracking-[0.2em]">Table Details</span>
+                    </div>
+                    <h2 className="text-2xl font-bold text-[#1E293B] tracking-tight">
+                      {selectedTable.name || `Table ${selectedTable.number}`}
                     </h2>
-                    <p className="text-[13px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">
-                      System Identifier: {selectedTable.id}
+                    <p className="text-[13px] text-zinc-500 mt-1">
+                      Table #{selectedTable.number} · ID {selectedTable.id}
                     </p>
                   </div>
-                  <div className={cn(
-                    "px-4 py-1.5 rounded-full text-[13px] font-black uppercase tracking-widest border",
-                    getStatusInfo(selectedTable.status).color
-                  )}>
+                  <span
+                    className={cn(dashboardStatusBadgeClass, getStatusInfo(selectedTable.status).color, "shrink-0")}
+                  >
                     {getStatusInfo(selectedTable.status).label}
-                  </div>
+                  </span>
                 </div>
               </div>
 
-              <div className="px-8 py-6 bg-zinc-50/50 border-y border-zinc-100 flex gap-8">
-                <div className="flex-1 space-y-5">
-                  <div>
-                    <label className="text-[12px] font-black text-muted-foreground uppercase tracking-widest block mb-1.5">Table Name</label>
-                    <p className="text-[15px] font-bold text-[#1E293B]">{selectedTable.name || "Main Seating Area"}</p>
-                  </div>
-                  <div className="flex gap-6">
-                    <div>
-                      <label className="text-[12px] font-black text-muted-foreground uppercase tracking-widest block mb-1.5">Capacity</label>
-                      <div className="flex items-center gap-2 text-[15px] font-bold text-[#1E293B]">
-                        <Users className="size-4 text-[#605DFF]" />
-                        {selectedTable.capacity || 4} Pers
+              <div className="px-8 py-6 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-8 items-start">
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-2">
+                        Room
+                      </label>
+                      <div className="flex items-center gap-2 text-[14px] font-bold text-[#1E293B]">
+                        <DoorOpen className="size-4 text-primary shrink-0" />
+                        <span className="truncate">{selectedTable.room?.name || "Not assigned"}</span>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-2">
+                        Seats
+                      </label>
+                      <div className="flex items-center gap-2 text-[14px] font-bold text-[#1E293B]">
+                        <Users className="size-4 text-primary shrink-0" />
+                        {selectedTable.capacity || 4}
                       </div>
                     </div>
                   </div>
+
+                  <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-2">
+                      Description
+                    </label>
+                    <p className="text-[14px] text-zinc-700 leading-relaxed">
+                      {selectedTable.description || "No description provided."}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="size-44 bg-white p-3 rounded-2xl border border-zinc-200 shadow-sm flex items-center justify-center group relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[#605DFF]/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(selectedTable.qrCode || '')}`}
-                    alt="QR"
-                    className="w-full h-full object-contain relative z-10"
-                  />
+                <div className="flex flex-col items-center sm:items-stretch">
+                  <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.06)] flex flex-col items-center">
+                    <div className="flex items-center gap-2 mb-4 self-start">
+                      <QrCode className="size-4 text-primary" />
+                      <span className="text-[11px] font-black text-zinc-500 uppercase tracking-widest">
+                        Scan QR Code
+                      </span>
+                    </div>
+                    {selectedTable.qrCode ? (
+                      <>
+                        <div className="rounded-xl border border-zinc-100 bg-white p-3">
+                          <img
+                            src={getQrImageUrl(selectedTable.qrCode, 220)}
+                            alt={`QR code for table ${selectedTable.number}`}
+                            className="size-[220px] object-contain"
+                          />
+                        </div>
+                        <p className="text-[11px] text-zinc-400 mt-4 text-center uppercase tracking-wider font-semibold">
+                          Scan to open menu
+                        </p>
+                      </>
+                    ) : (
+                      <div className="size-[220px] rounded-xl border border-dashed border-zinc-200 flex items-center justify-center text-sm text-zinc-400">
+                        No QR code
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="p-6 bg-white flex justify-end gap-3">
+              <div className="px-8 py-5 bg-zinc-50/50 border-t border-zinc-100 flex justify-end gap-3">
                 <Button
                   variant="outline"
                   onClick={() => setIsViewOpen(false)}
-                  className="rounded-xl font-bold border-zinc-200 px-6 h-12 text-[11px] uppercase tracking-widest hover:bg-zinc-50"
+                  className="rounded-xl font-bold border-zinc-200 px-6 h-11 text-[11px] uppercase tracking-widest hover:bg-white"
                 >
-                  Close Detail
+                  Close
                 </Button>
-                <Button
-                  onClick={handlePrint}
-                  className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-xl font-bold border-none px-8 h-12 text-[11px] uppercase tracking-widest shadow-lg shadow-primary/20 flex items-center gap-2"
-                >
-                  <Printer className="size-4" />
-                  Print QR Code
-                </Button>
+                {selectedTable.qrCode && (
+                  <Button
+                    onClick={handlePrint}
+                    className="bg-primary !text-white hover:bg-primary/90 hover:!text-white hover:shadow-lg hover:shadow-primary/20 rounded-xl font-bold border-none px-8 h-11 text-[11px] uppercase tracking-widest shadow-md shadow-primary/15 flex items-center gap-2"
+                  >
+                    <Printer className="size-4" />
+                    Print QR Code
+                  </Button>
+                )}
               </div>
             </>
           )}
@@ -678,11 +918,27 @@ export default function TablesPage() {
             </div>
           </div>
           <DialogFooter className="p-6 bg-zinc-50/50 border-t border-zinc-100 gap-3">
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11">
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteOpen(false)}
+              disabled={deleting}
+              className="rounded-lg font-bold px-6 h-11"
+            >
               Cancel
             </Button>
-            <Button onClick={handleDeleteTable} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10">
-              Yes, Delete Table
+            <Button
+              onClick={handleDeleteTable}
+              disabled={deleting}
+              className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10 disabled:opacity-70"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Yes, Delete Table"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

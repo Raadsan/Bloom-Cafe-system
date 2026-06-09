@@ -23,6 +23,7 @@ model auditlog {
 model category {
   id          Int        @id @default(autoincrement())
   name        String     @unique
+  isActive    Boolean    @default(true)
   createdAt   DateTime   @default(now())
   description String?
   imageUrl    String?    @db.Text
@@ -115,7 +116,7 @@ model menu {
 model menuitem {
   id          Int           @id @default(autoincrement())
   name        String
-  description String?
+  description String?       @db.Text
   costPrice   Float?
   price       Float
   tax         Float         @default(0)
@@ -182,6 +183,7 @@ model order {
   address       address?    @relation(fields: [addressId], references: [id])
   customer      customer?   @relation(fields: [customerId], references: [id])
   table         table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  user          user?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   orderitem     orderitem[]
 
   payment       payment?
@@ -190,6 +192,9 @@ model order {
 
   @@index([tableId], map: "Order_tableId_fkey")
   @@index([customerId], map: "order_customerId_fkey")
+  @@index([userId], map: "order_userId_fkey")
+  @@index([userId, status])
+  @@index([status, createdAt])
 }
 
 model orderitem {
@@ -294,15 +299,30 @@ model submenu {
   @@index([menuId], map: "submenu_menuId_fkey")
 }
 
+model room {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  table       table[]
+}
+
 model table {
   id        Int       @id @default(autoincrement())
   number    Int       @unique
   status    String    @default("active")
   createdAt DateTime  @default(now())
-  name      String?
+  name        String?
+  description String?   @db.Text
+  roomId      Int?
   qrCode    String    @unique
   updatedAt DateTime? @updatedAt
   order     order[]
+  room      room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([roomId], map: "table_roomId_fkey")
 }
 
 model user {
@@ -322,6 +342,7 @@ model user {
   auditlog  auditlog[]
   notification notification[]
   expense   expense[]
+  order     order[]
   role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
 
   @@index([roleId], map: "User_roleId_fkey")

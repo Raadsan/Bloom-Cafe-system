@@ -22,6 +22,12 @@ export const initSocket = (server) => {
       console.log(`Joined order room: ${orderId}`)
     })
 
+    // JOIN USER (personal alerts for waiters)
+    socket.on('join_user', (userId) => {
+      socket.join(`user_${userId}`)
+      console.log(`Joined user room: ${userId}`)
+    })
+
     // LEAVE ROOM (optional)
     socket.on('leave_room', (room) => {
       socket.leave(room)

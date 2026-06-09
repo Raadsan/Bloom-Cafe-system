@@ -165,7 +165,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center bg-transparent">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#605DFF]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -178,7 +178,7 @@ export default function ProfilePage() {
         <div className="w-full md:w-[300px] shrink-0 bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col h-fit">
           <div className="flex flex-col items-center mb-10 mt-4">
             <div className="relative group cursor-pointer" onClick={triggerFileUpload}>
-              <div className="w-32 h-32 bg-gray-50 text-[#605DFF] rounded-full flex items-center justify-center text-5xl font-black border-4 border-white shadow-sm overflow-hidden relative">
+              <div className="w-32 h-32 bg-gray-50 text-primary rounded-full flex items-center justify-center text-5xl font-black border-4 border-white shadow-sm overflow-hidden relative">
                 {formData.avatarUrl ? (
                   <img src={formData.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
@@ -192,7 +192,7 @@ export default function ProfilePage() {
               </div>
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
               {isEditing && (
-                <button className="absolute bottom-0 right-2 w-9 h-9 bg-[#605DFF] text-white rounded-full flex items-center justify-center border-2 border-white shadow-md hover:bg-[#4F46E5] transition-colors z-10">
+                <button className="absolute bottom-0 right-2 w-9 h-9 bg-primary text-white rounded-full flex items-center justify-center border-2 border-white shadow-md hover:bg-secondary transition-colors z-10">
                   <Edit2 className="size-4" />
                 </button>
               )}
@@ -206,7 +206,7 @@ export default function ProfilePage() {
               onClick={() => { setActiveTab('personal'); setIsEditing(false); }}
               className={cn(
                 "flex items-center gap-4 px-5 py-4 rounded-lg font-bold text-[14px] transition-colors",
-                activeTab === 'personal' ? "bg-[#F0F0FF] text-[#605DFF]" : "text-gray-500 hover:bg-gray-50"
+                activeTab === 'personal' ? "bg-[#F0F0FF] text-primary" : "text-gray-500 hover:bg-gray-50"
               )}
             >
               <UserIcon className="size-4" />
@@ -216,7 +216,7 @@ export default function ProfilePage() {
               onClick={() => { setActiveTab('security'); setIsEditing(false); }}
               className={cn(
                 "flex items-center gap-4 px-5 py-4 rounded-lg font-bold text-[14px] transition-colors",
-                activeTab === 'security' ? "bg-[#F0F0FF] text-[#605DFF]" : "text-gray-500 hover:bg-gray-50"
+                activeTab === 'security' ? "bg-[#F0F0FF] text-primary" : "text-gray-500 hover:bg-gray-50"
               )}
             >
               <Lock className="size-4" />
@@ -241,7 +241,7 @@ export default function ProfilePage() {
             {!isEditing ? (
               <button 
                 onClick={() => setIsEditing(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-[#F0F0FF] text-[#605DFF] rounded-lg font-bold text-[13px] hover:bg-[#E5E5FF] transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-[#F0F0FF] text-primary rounded-lg font-bold text-[13px] hover:bg-[#E5E5FF] transition-colors"
               >
                 <Edit2 className="size-3.5" /> Edit Profile
               </button>
@@ -261,15 +261,15 @@ export default function ProfilePage() {
               <div className="flex items-center gap-8">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="radio" name="gender" value="Male" checked={formData.gender === "Male"} onChange={handleInputChange} disabled={!isEditing} className="hidden peer" />
-                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors", formData.gender === "Male" ? "border-[#605DFF]" : "border-gray-300", !isEditing && "opacity-70 cursor-not-allowed")}>
-                    <div className={cn("w-2.5 h-2.5 rounded-full bg-[#605DFF]", formData.gender === "Male" ? "block" : "hidden")}></div>
+                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors", formData.gender === "Male" ? "border-primary" : "border-gray-300", !isEditing && "opacity-70 cursor-not-allowed")}>
+                    <div className={cn("w-2.5 h-2.5 rounded-full bg-primary", formData.gender === "Male" ? "block" : "hidden")}></div>
                   </div>
                   <span className={cn("text-[14px] font-bold", formData.gender === "Male" ? "text-gray-800" : "text-gray-400")}>Male</span>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="radio" name="gender" value="Female" checked={formData.gender === "Female"} onChange={handleInputChange} disabled={!isEditing} className="hidden peer" />
-                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors", formData.gender === "Female" ? "border-[#605DFF]" : "border-gray-300", !isEditing && "opacity-70 cursor-not-allowed")}>
-                    <div className={cn("w-2.5 h-2.5 rounded-full bg-[#605DFF]", formData.gender === "Female" ? "block" : "hidden")}></div>
+                  <div className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors", formData.gender === "Female" ? "border-primary" : "border-gray-300", !isEditing && "opacity-70 cursor-not-allowed")}>
+                    <div className={cn("w-2.5 h-2.5 rounded-full bg-primary", formData.gender === "Female" ? "block" : "hidden")}></div>
                   </div>
                   <span className={cn("text-[14px] font-bold", formData.gender === "Female" ? "text-gray-800" : "text-gray-400")}>Female</span>
                 </label>
@@ -277,17 +277,17 @@ export default function ProfilePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-7">
                 <InputWrapper label="First Name">
-                  <input type="text" name="firstName" value={formData.firstName} onChange={handleInputChange} readOnly={!isEditing} className={cn("h-[52px] px-5 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20" : "bg-transparent border border-gray-100")} />
+                  <input type="text" name="firstName" value={formData.firstName} onChange={handleInputChange} readOnly={!isEditing} className={cn("h-[52px] px-5 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20" : "bg-transparent border border-gray-100")} />
                 </InputWrapper>
                 
                 <InputWrapper label="Last Name">
-                  <input type="text" name="lastName" value={formData.lastName} onChange={handleInputChange} readOnly={!isEditing} className={cn("h-[52px] px-5 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20" : "bg-transparent border border-gray-100")} />
+                  <input type="text" name="lastName" value={formData.lastName} onChange={handleInputChange} readOnly={!isEditing} className={cn("h-[52px] px-5 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20" : "bg-transparent border border-gray-100")} />
                 </InputWrapper>
 
                 <div className="col-span-1 md:col-span-2">
                   <InputWrapper label="Email Address">
                     <div className="relative">
-                      <input type="email" name="email" value={formData.email} onChange={handleInputChange} readOnly={!isEditing} className={cn("h-[52px] pl-5 pr-24 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20" : "bg-transparent border border-gray-100")} />
+                      <input type="email" name="email" value={formData.email} onChange={handleInputChange} readOnly={!isEditing} className={cn("h-[52px] pl-5 pr-24 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20" : "bg-transparent border border-gray-100")} />
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-emerald-500 text-[11px] font-black uppercase tracking-wider bg-emerald-50 px-2 py-1 rounded">
                         <CheckCircle2 className="size-3.5" /> Verified
                       </div>
@@ -295,19 +295,19 @@ export default function ProfilePage() {
                   </InputWrapper>
                 </div>
                 <InputWrapper label="Phone Number">
-                  <input type="text" name="phone" value={formData.phone} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Enter phone number" : "No phone provided"} className={cn("h-[52px] px-5 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20" : "bg-transparent border border-gray-100")} />
+                  <input type="text" name="phone" value={formData.phone} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Enter phone number" : "No phone provided"} className={cn("h-[52px] px-5 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20" : "bg-transparent border border-gray-100")} />
                 </InputWrapper>
                 
                 <InputWrapper label="Date of Birth">
                   <div className="relative">
-                    <input type={isEditing ? "date" : "text"} name="dateOfBirth" value={isEditing ? formData.dateOfBirth : (formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString() : "Not provided")} onChange={handleInputChange} readOnly={!isEditing} className={cn("h-[52px] pl-5 pr-12 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full appearance-none", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20 cursor-pointer" : "bg-transparent border border-gray-100")} />
+                    <input type={isEditing ? "date" : "text"} name="dateOfBirth" value={isEditing ? formData.dateOfBirth : (formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString() : "Not provided")} onChange={handleInputChange} readOnly={!isEditing} className={cn("h-[52px] pl-5 pr-12 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full appearance-none", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20 cursor-pointer" : "bg-transparent border border-gray-100")} />
                     {!isEditing && <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 size-[18px] text-gray-400" />}
                   </div>
                 </InputWrapper>
 
                 <div className="col-span-1 md:col-span-2">
                   <InputWrapper label="Address">
-                    <input type="text" name="address" value={formData.address} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Enter your full address" : "No address provided"} className={cn("h-[52px] px-5 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20" : "bg-transparent border border-gray-100")} />
+                    <input type="text" name="address" value={formData.address} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Enter your full address" : "No address provided"} className={cn("h-[52px] px-5 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20" : "bg-transparent border border-gray-100")} />
                   </InputWrapper>
                 </div>
 
@@ -323,7 +323,7 @@ export default function ProfilePage() {
               <InputWrapper label="Current Password">
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-[18px] text-gray-400" />
-                  <input type={showCurrentPassword ? "text" : "password"} name="currentPassword" value={formData.currentPassword} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Enter current password" : "••••••••"} className={cn("h-[52px] pl-12 pr-12 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20" : "bg-transparent border border-gray-100")} />
+                  <input type={showCurrentPassword ? "text" : "password"} name="currentPassword" value={formData.currentPassword} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Enter current password" : "••••••••"} className={cn("h-[52px] pl-12 pr-12 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20" : "bg-transparent border border-gray-100")} />
                   {isEditing && (
                     <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
                       {showCurrentPassword ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
@@ -335,7 +335,7 @@ export default function ProfilePage() {
               <InputWrapper label="New Password">
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-[18px] text-gray-400" />
-                  <input type={showNewPassword ? "text" : "password"} name="newPassword" value={formData.newPassword} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Enter new password" : "••••••••"} className={cn("h-[52px] pl-12 pr-12 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20" : "bg-transparent border border-gray-100")} />
+                  <input type={showNewPassword ? "text" : "password"} name="newPassword" value={formData.newPassword} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Enter new password" : "••••••••"} className={cn("h-[52px] pl-12 pr-12 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20" : "bg-transparent border border-gray-100")} />
                   {isEditing && (
                     <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
                       {showNewPassword ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
@@ -347,7 +347,7 @@ export default function ProfilePage() {
               <InputWrapper label="Confirm New Password">
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-[18px] text-gray-400" />
-                  <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Confirm new password" : "••••••••"} className={cn("h-[52px] pl-12 pr-12 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-[#605DFF]/20" : "bg-transparent border border-gray-100")} />
+                  <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} readOnly={!isEditing} placeholder={isEditing ? "Confirm new password" : "••••••••"} className={cn("h-[52px] pl-12 pr-12 rounded-md text-[14px] font-bold text-[#1E293B] outline-none transition-all w-full", isEditing ? "bg-[#f4f5f9] border-none focus:ring-2 focus:ring-primary/20" : "bg-transparent border border-gray-100")} />
                   {isEditing && (
                     <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
                       {showConfirmPassword ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
@@ -363,7 +363,7 @@ export default function ProfilePage() {
               <button onClick={() => { setIsEditing(false); fetchUser(); }} className="flex-1 max-w-[200px] h-[52px] bg-white border-2 border-gray-200 text-gray-600 rounded-md font-bold text-[14px] hover:bg-gray-50 transition-colors">
                 Discard Changes
               </button>
-              <button onClick={handleSave} disabled={saving} className="flex-1 max-w-[200px] h-[52px] bg-[#605DFF] text-white rounded-md font-bold text-[14px] hover:bg-[#4F46E5] transition-all shadow-lg shadow-[#605DFF]/30 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              <button onClick={handleSave} disabled={saving} className="flex-1 max-w-[200px] h-[52px] bg-primary text-white rounded-md font-bold text-[14px] hover:bg-secondary transition-all shadow-lg shadow-primary/30 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 {saving ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (

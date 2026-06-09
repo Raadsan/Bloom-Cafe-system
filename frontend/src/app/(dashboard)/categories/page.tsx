@@ -9,6 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { categoryApi, Category, CategoryWithItems } from "@/lib/api/categoryApi";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnEdit,
+  actionBtnDelete,
+} from "@/lib/dashboard-ui";
 
 export default function MenuCategoriesPage() {
   const { showToast } = useToast();
@@ -31,6 +39,7 @@ export default function MenuCategoriesPage() {
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formImage, setFormImage] = useState("");
+  const [formActive, setFormActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -70,6 +79,7 @@ export default function MenuCategoriesPage() {
     setFormName("");
     setFormDesc("");
     setFormImage("");
+    setFormActive(true);
     setIsAddOpen(true);
   };
 
@@ -78,6 +88,7 @@ export default function MenuCategoriesPage() {
     setFormName(cat.name);
     setFormDesc(cat.description || "");
     setFormImage(cat.imageUrl || "");
+    setFormActive(cat.isActive !== false);
     setIsEditOpen(true);
   };
 
@@ -98,7 +109,8 @@ export default function MenuCategoriesPage() {
       const payload = {
         name: formName.trim(),
         description: formDesc.trim(),
-        imageUrl: formImage.trim() || undefined
+        imageUrl: formImage.trim() || undefined,
+        isActive: formActive,
       };
 
       if (isEditOpen && selected) {
@@ -149,120 +161,120 @@ export default function MenuCategoriesPage() {
     }
   };
   return (
-    <div className="animate-in fade-in duration-500 font-sans mx-1 pt-0 pb-8">
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Standard Pro Header: Title and Button on the same row */}
       <div className="mb-8 px-4 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Categories Management</h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium italic">Organize your food and beverage items into distinct searchable categories.</p>
+          <h1 className={pageHeaderTitleClass}>Categories Management</h1>
+          <p className={pageHeaderSubtitleClass}>Organize your food and beverage items into distinct searchable categories.</p>
         </div>
-        
+
         {canAdd && (
-          <Button onClick={openAdd} className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-md">
+          <Button onClick={openAdd} className="h-[42px] px-6 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-md">
             <Plus className="size-4" /> Add Category
           </Button>
         )}
       </div>
 
       <div className="px-4 min-h-[400px] mt-2">          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-zinc-200 h-64 animate-pulse"></div>
-              ))}
-            </div>
-          ) : paginated.length === 0 ? (
-            <div className="py-20 text-center flex flex-col items-center gap-3">
-              <div className="size-16 rounded-full bg-zinc-50 flex items-center justify-center border border-zinc-100">
-                <Tag className="size-8 text-zinc-200" />
-              </div>
-              <p className="text-zinc-400 font-medium text-sm">No categories found in your catalog.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {paginated.map((cat) => (
-                <div key={cat.id} className="group bg-white rounded-2xl border border-zinc-200 overflow-hidden hover:shadow-xl hover:shadow-[#605DFF]/5 hover:border-[#605DFF]/20 transition-all duration-300 flex flex-col">
-                  {/* Category Image Area */}
-                  <div className="relative h-44 overflow-hidden bg-zinc-100 border-b border-zinc-100">
-                    {cat.imageUrl ? (
-                      <img src={cat.imageUrl} alt={cat.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-zinc-300">
-                        <ImageIcon className="size-10" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">No Preview</span>
-                      </div>
-                    )}
-                    
-                    {/* Status Badge Over Image */}
-                    <div className="absolute top-3 right-3">
-                      <span className={cn(
-                        "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm bg-white/90 backdrop-blur-sm",
-                        cat.isActive ? "text-emerald-600 border-emerald-100" : "text-rose-600 border-rose-100"
-                      )}>
-                        {cat.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </div>
-
-                    {/* Simple View Details Trigger - No blue overlay */}
-                    <button 
-                      onClick={() => openView(cat)}
-                      className="absolute inset-0 z-10 w-full h-full bg-transparent"
-                    />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-zinc-200 h-64 animate-pulse"></div>
+          ))}
+        </div>
+      ) : paginated.length === 0 ? (
+        <div className="py-20 text-center flex flex-col items-center gap-3">
+          <div className="size-16 rounded-full bg-zinc-50 flex items-center justify-center border border-zinc-100">
+            <Tag className="size-8 text-zinc-200" />
+          </div>
+          <p className="text-zinc-400 font-medium text-sm">No categories found in your catalog.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {paginated.map((cat) => (
+            <div key={cat.id} className="group bg-white rounded-2xl border border-zinc-200 overflow-hidden hover:shadow-xl hover:shadow-primary/5 hover:border-primary/20 transition-all duration-300 flex flex-col">
+              {/* Category Image Area */}
+              <div className="relative h-44 overflow-hidden bg-zinc-100 border-b border-zinc-100">
+                {cat.imageUrl ? (
+                  <img src={cat.imageUrl} alt={cat.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-zinc-300">
+                    <ImageIcon className="size-10" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">No Preview</span>
                   </div>
+                )}
 
-                  {/* Category Content */}
-                  <div className="p-5 flex-1 flex flex-col">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-[15px] font-bold text-zinc-800 leading-tight group-hover:text-[#605DFF] transition-colors line-clamp-1">{cat.name}</h3>
-                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200">
-                        <UtensilsCrossed className="size-3 text-zinc-500" />
-                        <span className="text-[11px] font-black text-zinc-600">{cat.menuitem?.length || 0}</span>
-                      </div>
-                    </div>
-                    
-                    <p className="text-[12px] text-zinc-500 line-clamp-2 mb-4 h-9 leading-relaxed">
-                      {cat.description || "No description provided for this menu category."}
-                    </p>
+                {/* Status Badge Over Image */}
+                <div className="absolute top-3 right-3">
+                  <span className={cn(
+                    "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm bg-white/90 backdrop-blur-sm",
+                    cat.isActive !== false ? "text-emerald-600 border-emerald-100" : "text-rose-600 border-rose-100"
+                  )}>
+                    {cat.isActive !== false ? "Active" : "Inactive"}
+                  </span>
+                </div>
 
-                    <div className="mt-auto pt-4 border-t border-zinc-50 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="size-7 rounded-full bg-[#605DFF]/5 flex items-center justify-center border border-[#605DFF]/10">
-                           <RefreshCw className="size-3 text-[#605DFF]" />
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Creator</p>
-                          <p className="text-[11px] font-semibold text-zinc-700">Admin System</p>
-                        </div>
-                      </div>
+                {/* Simple View Details Trigger - No blue overlay */}
+                <button
+                  onClick={() => openView(cat)}
+                  className="absolute inset-0 z-10 w-full h-full bg-transparent"
+                />
+              </div>
 
-                      <div className="flex gap-1.5">
-                        {canEdit && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => openEdit(cat)}
-                            className="size-8 p-0 rounded-lg text-zinc-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                          >
-                            <Edit className="size-4" />
-                          </Button>
-                        )}
-                        {canDelete && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => openDelete(cat)}
-                            className="size-8 p-0 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
+              {/* Category Content */}
+              <div className="p-5 flex-1 flex flex-col">
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-[15px] font-bold text-zinc-800 leading-tight group-hover:text-primary transition-colors line-clamp-1">{cat.name}</h3>
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200">
+                    <UtensilsCrossed className="size-3 text-zinc-500" />
+                    <span className="text-[11px] font-black text-zinc-600">{cat.menuitem?.length || 0}</span>
                   </div>
                 </div>
-              ))}
+
+                <p className="text-[12px] text-zinc-500 line-clamp-2 mb-4 h-9 leading-relaxed">
+                  {cat.description || "No description provided for this menu category."}
+                </p>
+
+                <div className="mt-auto pt-4 border-t border-zinc-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="size-7 rounded-full bg-primary/5 flex items-center justify-center border border-primary/10">
+                      <RefreshCw className="size-3 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Creator</p>
+                      <p className="text-[11px] font-semibold text-zinc-700">Admin System</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-1.5">
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEdit(cat)}
+                        className={actionBtnEdit}
+                      >
+                        <Edit className="size-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openDelete(cat)}
+                        className={actionBtnDelete}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          ))}
         </div>
+      )}
+      </div>
 
 
 
@@ -287,7 +299,7 @@ export default function MenuCategoriesPage() {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g. Appetizers, Main Course..."
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
 
@@ -313,17 +325,29 @@ export default function MenuCategoriesPage() {
                       value={formImage}
                       onChange={(e) => setFormImage(e.target.value)}
                       placeholder="Paste image URL here..."
-                      className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[14px] font-medium"
+                      className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-medium"
                     />
                   </div>
                   <label className="cursor-pointer shrink-0">
                     <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                    <div className="h-[48px] px-6 rounded-lg bg-[#605DFF]/10 text-[#605DFF] hover:bg-[#605DFF]/20 flex items-center justify-center font-bold text-[13px] transition-colors">
+                    <div className="h-[48px] px-6 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center font-bold text-[13px] transition-colors">
                       Browse
                     </div>
                   </label>
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-[#1E293B]">Status</label>
+              <select
+                value={formActive ? "active" : "inactive"}
+                onChange={(e) => setFormActive(e.target.value === "active")}
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
             </div>
 
             <div className="space-y-2">
@@ -333,7 +357,7 @@ export default function MenuCategoriesPage() {
                 onChange={(e) => setFormDesc(e.target.value)}
                 placeholder="Brief description of the category..."
                 rows={3}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium resize-none"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium resize-none"
               />
             </div>
           </div>
@@ -341,7 +365,7 @@ export default function MenuCategoriesPage() {
             <Button variant="outline" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11" disabled={saving}>
+            <Button onClick={handleSave} className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold border-none px-8 h-11" disabled={saving}>
               {saving ? "Saving..." : isEditOpen ? "Update Category" : "Create Category"}
             </Button>
           </DialogFooter>
@@ -368,7 +392,7 @@ export default function MenuCategoriesPage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11" disabled={deleting}>
               Cancel
             </Button>
-            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={deleting}>
+            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={deleting}>
               {deleting ? "Deleting..." : "Yes, Delete Category"}
             </Button>
           </DialogFooter>
@@ -385,9 +409,19 @@ export default function MenuCategoriesPage() {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-2xl font-bold text-[#1E293B]">{selected.name}</h3>
-                    <p className="text-sm font-medium text-[#605DFF] mt-1 uppercase tracking-wider">
+                    <p className="text-sm font-medium text-primary mt-1 uppercase tracking-wider">
                       {selected.menuitem?.length || 0} Registered Items
                     </p>
+                    <span
+                      className={cn(
+                        "inline-flex mt-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
+                        selected.isActive !== false
+                          ? "text-emerald-600 border-emerald-100 bg-emerald-50"
+                          : "text-rose-600 border-rose-100 bg-rose-50"
+                      )}
+                    >
+                      {selected.isActive !== false ? "Active" : "Inactive"}
+                    </span>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-1">Created At</p>
@@ -415,7 +449,7 @@ export default function MenuCategoriesPage() {
                       selected.menuitem?.map((item) => (
                         <div key={item.id} className="flex justify-between items-center py-3.5 px-5 bg-zinc-50 hover:bg-zinc-100 transition-colors rounded-xl border border-zinc-100">
                           <span className="text-sm font-semibold text-zinc-700">{item.name}</span>
-                          <span className="text-sm font-bold text-[#605DFF]">${item.price.toFixed(2)}</span>
+                          <span className="text-sm font-bold text-primary">${item.price.toFixed(2)}</span>
                         </div>
                       ))
                     )}

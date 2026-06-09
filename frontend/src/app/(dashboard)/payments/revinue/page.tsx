@@ -17,6 +17,15 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+} from "@/lib/dashboard-ui";
+import {
   Table,
   TableBody,
   TableCell,
@@ -76,18 +85,18 @@ export default function RevenuePage() {
   }, [filteredItems, pageSize]);
 
   return (
-    <div className="animate-in fade-in duration-700 font-sans mx-1 pt-0 pb-8 space-y-3">
+    <div className={`${dashboardPageClass} space-y-3`} style={dashboardPageStyle}>
       {/* Page Header */}
       <div className="px-4 mb-1">
-        <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Revinue Analytics</h1>
-        <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Detailed tracking of sales, costs, and net profitability.</p>
+        <h1 className={pageHeaderTitleClass}>Revinue Analytics</h1>
+        <p className={pageHeaderSubtitleClass}>Detailed tracking of sales, costs, and net profitability.</p>
       </div>
 
       {/* Top 3 Summary Boxes - Icon on top, Text/Total on row below */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4">
-        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm hover:border-[#605DFF]/20 transition-all group flex flex-col gap-4">
-          <div className="p-2.5 bg-[#605DFF]/10 rounded-lg w-fit group-hover:bg-[#605DFF] transition-colors">
-            <ClipboardList className="size-4 text-[#605DFF] group-hover:text-white transition-colors" />
+        <div className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm hover:border-primary/20 transition-all group flex flex-col gap-4">
+          <div className="p-2.5 bg-primary/10 rounded-lg w-fit group-hover:bg-primary transition-colors">
+            <ClipboardList className="size-4 text-primary group-hover:text-white transition-colors" />
           </div>
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Total Orders</p>
@@ -126,7 +135,7 @@ export default function RevenuePage() {
                 <select 
                     value={pageSize} 
                     onChange={(e) => setPageSize(Number(e.target.value))}
-                    className="w-16 h-[38px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                    className="w-16 h-[38px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
                 >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -142,7 +151,7 @@ export default function RevenuePage() {
                         type="date" 
                         value={dateRange.startDate}
                         onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                        className="h-[38px] px-3 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-all text-sm font-medium text-zinc-600 bg-zinc-50/50" 
+                        className="h-[38px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-all text-sm font-medium text-zinc-600 bg-zinc-50/50" 
                     />
                 </div>
                 <span className="text-zinc-300">to</span>
@@ -152,7 +161,7 @@ export default function RevenuePage() {
                         type="date" 
                         value={dateRange.endDate}
                         onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                        className="h-[38px] px-3 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-all text-sm font-medium text-zinc-600 bg-zinc-50/50" 
+                        className="h-[38px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-all text-sm font-medium text-zinc-600 bg-zinc-50/50" 
                     />
                 </div>
             </div>
@@ -162,13 +171,13 @@ export default function RevenuePage() {
 
           <div className="flex items-center gap-3">
             <div className="relative w-64 group">
-                <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+                <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
                 <input 
                     type="text" 
                     placeholder="Search items..." 
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full h-[38px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-all text-sm font-normal text-zinc-600"
+                    className="w-full h-[38px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary transition-all text-sm font-normal text-zinc-600"
                 />
             </div>
             <Button variant="outline" className="h-[38px] px-4 border-zinc-200 text-zinc-600 hover:bg-zinc-50 rounded-md flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
@@ -182,13 +191,13 @@ export default function RevenuePage() {
         <div className="overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none tracking-widest">Order Item</TableHead>
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none tracking-widest">Quantity</TableHead>
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none tracking-widest">Current Price</TableHead>
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none tracking-widest">Ceiling Price</TableHead>
-                  <TableHead className="px-8 py-4 text-[11px] font-black uppercase text-white border-none text-right pr-12 tracking-widest">Revinue (Profit)</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Order Item</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Quantity</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Current Price</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Ceiling Price</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Revinue (Profit)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -217,7 +226,7 @@ export default function RevenuePage() {
                       <TableCell className="px-8 py-3">
                         <div className="flex flex-col">
                           <span className="text-[13px] font-bold text-[#1E293B] uppercase tracking-tight">{item.name}</span>
-                          <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">Order #{item.orderId} • {new Date(item.date).toLocaleDateString()}</span>
+                          <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">Order {item.orderId} • {new Date(item.date).toLocaleDateString()}</span>
                         </div>
                       </TableCell>
                       <TableCell className="px-8 py-3">

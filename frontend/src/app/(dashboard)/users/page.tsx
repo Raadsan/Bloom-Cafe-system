@@ -40,6 +40,27 @@ import { Button } from "@/components/ui/button";
 import { userApi, User } from "@/lib/api/userApi";
 import { roleApi, Role } from "@/lib/api/roleApi";
 import { useToast } from "@/components/ui/toast";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  actionBtnView,
+  actionBtnEdit,
+  actionBtnDelete,
+  dashboardTableHeaderClass,
+  dashboardTableHeadRowClass,
+  dashboardTableHeadClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  dashboardStatusBadgeClass,
+  getTableStatusBadgeClass,
+  btnCreatePage,
+} from "@/lib/dashboard-ui";
+
+// Module-level in-memory cache to persist between React page transitions
+let _usersCache: User[] | null = null;
+let _rolesCache: Role[] | null = null;
 
 export default function UsersPage() {
   const { showToast } = useToast();
@@ -75,25 +96,60 @@ export default function UsersPage() {
   const [pageSize, setPageSize] = useState(10);
   const [roleFilter, setRoleFilter] = useState("all");
 
-  const fetchData = async () => {
+  const fetchData = async (force = false) => {
     try {
-      setLoading(true);
-      const [userData, roleData] = await Promise.all([
-        userApi.getAllUsers(),
-        roleApi.getAllRoles()
-      ]);
+      // Fetch users first from API (background revalidation)
+      const userData = await userApi.getAllUsers(force);
+      _usersCache = userData;
       setUsers(userData);
+      setLoading(false);
+
+      // Fetch roles in the background
+      const roleData = await roleApi.getAllRoles(force);
+      _rolesCache = roleData;
       setRoles(roleData);
     } catch (error) {
       console.error("Failed to fetch user data:", error);
       showToast("Failed to load staff data", "error");
-    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    // 1. Synchronously seed from cache on mount (client-side only)
+    let initialUsers = _usersCache;
+    let initialRoles = _rolesCache;
+
+    if (!initialUsers && typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("users_list");
+        if (raw) {
+          initialUsers = JSON.parse(raw) as User[];
+          _usersCache = initialUsers;
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (!initialRoles && typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("roles_list");
+        if (raw) {
+          initialRoles = JSON.parse(raw) as Role[];
+          _rolesCache = initialRoles;
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (initialUsers) {
+      setUsers(initialUsers);
+      setLoading(false);
+    }
+    if (initialRoles) {
+      setRoles(initialRoles);
+    }
+
+    // Only hit network when cache is stale; show cached data instantly when available
+    fetchData(false);
   }, []);
 
   const filteredUsers = useMemo(() => {
@@ -179,7 +235,8 @@ export default function UsersPage() {
       }
       setIsAddOpen(false);
       setIsEditOpen(false);
-      fetchData();
+      _usersCache = null; // bust cache
+      fetchData(true); // force network fetch
     } catch (error: any) {
       console.error("Failed to save user:", error);
       showToast(error.response?.data?.message || "Failed to save user", "error");
@@ -195,7 +252,8 @@ export default function UsersPage() {
       await userApi.deleteUser(selectedUser.id);
       showToast("Staff member removed", "success");
       setIsDeleteOpen(false);
-      fetchData();
+      _usersCache = null; // bust cache
+      fetchData(true); // force network fetch
     } catch (error: any) {
       console.error("Failed to delete user:", error);
       showToast(error.response?.data?.message || "Failed to delete record", "error");
@@ -205,11 +263,11 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="animate-in fade-in duration-700 font-sans mx-1 pt-0 pb-8">
+    <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Page Header: Outside the box */}
       <div className="mb-6 px-4">
-        <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Admins Management</h1>
-        <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Manage system administrators, roles, and security permissions in one place.</p>
+        <h1 className={pageHeaderTitleClass}>Users management</h1>
+        <p className={pageHeaderSubtitleClass}>Manage system administrators, roles, and security permissions in one place.</p>
       </div>
 
       {/* Main Container Box */}
@@ -222,7 +280,7 @@ export default function UsersPage() {
               <select 
                 value={pageSize} 
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -236,7 +294,7 @@ export default function UsersPage() {
               <select 
                 value={roleFilter} 
                 onChange={(e) => setRoleFilter(e.target.value)}
-                className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value="all">All Roles</option>
                 {roles.map(r => (
@@ -250,21 +308,18 @@ export default function UsersPage() {
 
           <div className="flex items-center gap-3">
             <div className="relative w-64 group">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-[#605DFF] transition-colors" />
+              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
                 placeholder="Search admins..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-[#605DFF] focus:ring-1 focus:ring-[#605DFF]/10 transition-all text-sm font-normal text-zinc-600"
+                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
 
             {canAdd && (
-              <Button 
-                onClick={openAddModal}
-                className="h-[42px] px-6 bg-[#605DFF] hover:bg-[#4f4cef] text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-sm"
-              >
+              <Button onClick={openAddModal} className={btnCreatePage}>
                 <Plus className="size-4" />
                 Add Admin
               </Button>
@@ -276,21 +331,22 @@ export default function UsersPage() {
         <div className="border-t border-zinc-100 overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
-              <TableHeader className="bg-[#605DFF]">
-                <TableRow className="hover:bg-transparent border-none">
-                  <TableHead className="px-14 py-4 text-[12px] font-black uppercase text-white border-none">Full Name</TableHead>
-                  <TableHead className="px-14 py-4 text-[12px] font-black uppercase text-white border-none">Email</TableHead>
-                  <TableHead className="px-14 py-4 text-[12px] font-black uppercase text-white border-none">Phone</TableHead>
-                  <TableHead className="px-14 py-4 text-[12px] font-black uppercase text-white border-none text-center">Role</TableHead>
-                  <TableHead className="px-14 py-4 text-[12px] font-black uppercase text-white border-none text-right pr-20">Status</TableHead>
-                  <TableHead className="px-14 py-4 text-[12px] font-black uppercase text-white border-none text-right">Actions</TableHead>
+              <TableHeader className={dashboardTableHeaderClass}>
+                <TableRow className={dashboardTableHeadRowClass}>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Name</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Email</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Phone</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Role</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Status</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   [...Array(5)].map((_, i) => (
                     <TableRow key={i} className="h-14 animate-pulse">
-                      {[...Array(6)].map((_, j) => (
+                      {[...Array(7)].map((_, j) => (
                         <TableCell key={j} className="px-6 py-4">
                           <div className="h-4 bg-zinc-100 rounded w-full"></div>
                         </TableCell>
@@ -299,72 +355,72 @@ export default function UsersPage() {
                   ))
                 ) : paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="px-6 py-10 text-center text-zinc-500">
+                    <TableCell colSpan={7} className="px-6 py-10 text-center text-zinc-500">
                       No users found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedUsers.map((u) => {
-                    return (
-                      <TableRow key={u.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
-                        <TableCell className="px-6 py-3 text-[13px] text-zinc-700 font-medium">{u.fullName}</TableCell>
-                        <TableCell className="px-6 py-3 text-[13px] text-zinc-700 font-medium">{u.email}</TableCell>
-                        <TableCell className="px-6 py-3 text-[13px] text-zinc-700 font-medium">{u.phone || "-"}</TableCell>
-                        <TableCell className="px-14 py-3 text-center">
-                          <span className={cn(
-                            "px-3 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider border",
-                            u.role?.name?.toLowerCase() === 'admin' ? "bg-indigo-50 text-indigo-600 border-indigo-100" :
-                              u.role?.name?.toLowerCase() === 'manager' ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                u.role?.name?.toLowerCase() === 'waiter' ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                                  u.role?.name?.toLowerCase() === 'cashier' ? "bg-blue-50 text-blue-600 border-blue-100" :
-                                    "bg-zinc-100 text-zinc-600 border-zinc-200"
-                          )}>
-                            {u.role?.name || "No Role"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-6 py-3 text-right pr-10">
-                          <span className={cn(
-                            "px-3 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider",
-                            u.isActive ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-rose-50 text-rose-600 border border-rose-100"
-                          )}>
-                            {u.isActive ? "Active" : "Inactive"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
+                  paginatedUsers.map((u) => (
+                    <TableRow key={u.id} className={dashboardTableBodyRowClass}>
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[13px] font-bold text-primary">{u.id}</span>
+                      </TableCell>
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[13px] font-medium text-zinc-700">{u.fullName}</span>
+                      </TableCell>
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[13px] font-medium text-zinc-600">{u.email}</span>
+                      </TableCell>
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[13px] font-medium text-zinc-600">{u.phone || "—"}</span>
+                      </TableCell>
+                      <TableCell className={dashboardTableCellClass}>
+                        <span className="text-[13px] font-medium text-zinc-600">
+                          {u.role?.name || "No Role"}
+                        </span>
+                      </TableCell>
+                      <TableCell className={cn(dashboardTableCellClass, "text-right")}>
+                        <span className={cn(
+                          dashboardStatusBadgeClass,
+                          getTableStatusBadgeClass(u.isActive ? "active" : "inactive")
+                        )}>
+                          {u.isActive ? "Staff" : "Inactive"}
+                        </span>
+                      </TableCell>
+                      <TableCell className={cn(dashboardTableCellClass, "text-right")}>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openViewModal(u)}
+                            className={actionBtnView}
+                          >
+                            <Eye className="size-4" />
+                          </Button>
+                          {canEdit && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => openViewModal(u)}
-                              className="h-8 w-8 p-0 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              onClick={() => openEditModal(u)}
+                              className={actionBtnEdit}
                             >
-                              <Eye className="size-4" />
+                              <Edit className="size-4" />
                             </Button>
-                            {canEdit && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => openEditModal(u)}
-                                className="h-8 w-8 p-0 text-[#64748B] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              >
-                                <Edit className="size-4" />
-                              </Button>
-                            )}
-                            {canDelete && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => openDeleteModal(u)}
-                                className="h-8 w-8 p-0 text-[#64748B] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openDeleteModal(u)}
+                              className={actionBtnDelete}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
@@ -420,7 +476,7 @@ export default function UsersPage() {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g. Mohamed Ali"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
 
@@ -431,7 +487,7 @@ export default function UsersPage() {
                 value={formEmail}
                 onChange={(e) => setFormEmail(e.target.value)}
                 placeholder="staff@example.com"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
 
@@ -442,7 +498,7 @@ export default function UsersPage() {
                 value={formPhone}
                 onChange={(e) => setFormPhone(e.target.value)}
                 placeholder="+252..."
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
               />
             </div>
 
@@ -451,7 +507,7 @@ export default function UsersPage() {
               <select
                 value={formRoleId}
                 onChange={(e) => setFormRoleId(Number(e.target.value))}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
               >
                 <option value={0}>Select a role...</option>
                 {roles.map((r) => (
@@ -465,7 +521,7 @@ export default function UsersPage() {
               <select
                 value={formIsActive ? "active" : "inactive"}
                 onChange={(e) => setFormIsActive(e.target.value === "active")}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
               >
                 <option value="active">Active (Grant Access)</option>
                 <option value="inactive">Inactive (Revoke Access)</option>
@@ -483,17 +539,17 @@ export default function UsersPage() {
                   value={formPassword}
                   onChange={(e) => setFormPassword(e.target.value)}
                   placeholder={isEditOpen ? "Leave blank to keep current" : "Min. 6 characters"}
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-[#605DFF]/30 focus:ring-4 focus:ring-[#605DFF]/5 transition-all text-[15px] font-medium"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
                 />
               </div>
             </div>
           </div>
 
           <DialogFooter className="p-6 bg-zinc-50/50 border-t border-zinc-100 gap-3">
-            <Button variant="outline" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
+            <Button variant="outline" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} className="rounded-md font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-[#605DFF]/20" disabled={saving}>
+            <Button onClick={handleSave} className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md font-bold border-none px-8 h-11 shadow-lg shadow-primary/20" disabled={saving}>
               {saving ? "Processing..." : isEditOpen ? "Update Account" : "Register User"}
             </Button>
           </DialogFooter>
@@ -508,22 +564,20 @@ export default function UsersPage() {
             <div className="flex justify-between items-start mb-8">
               <div>
                 <h3 className="text-2xl font-bold text-[#1E293B]">{selectedUser?.fullName}</h3>
-                <p className="text-sm font-medium text-[#605DFF] mt-1 uppercase tracking-wider">{selectedUser?.role?.name || "Staff Member"}</p>
+                <p className="text-sm font-medium text-primary mt-1 uppercase tracking-wider">{selectedUser?.role?.name || "Staff Member"}</p>
               </div>
               <span className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border",
-                selectedUser?.isActive
-                  ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                  : "bg-rose-50 text-rose-600 border-rose-100"
+                dashboardStatusBadgeClass,
+                getTableStatusBadgeClass(selectedUser?.isActive ? "active" : "inactive")
               )}>
-                {selectedUser?.isActive ? "Active Account" : "Inactive Account"}
+                {selectedUser?.isActive ? "Staff" : "Inactive"}
               </span>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
               <div className="flex gap-4">
-                <div className="flex-1 p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center gap-3 group hover:border-[#605DFF]/30 transition-colors">
-                  <div className="size-9 rounded-lg bg-white flex items-center justify-center shadow-sm group-hover:text-[#605DFF] shrink-0">
+                <div className="flex-1 p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center gap-3 group hover:border-primary/30 transition-colors">
+                  <div className="size-9 rounded-lg bg-white flex items-center justify-center shadow-sm group-hover:text-primary shrink-0">
                     <Mail className="size-4" />
                   </div>
                   <div className="min-w-0">
@@ -532,8 +586,8 @@ export default function UsersPage() {
                   </div>
                 </div>
 
-                <div className="flex-1 p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center gap-3 group hover:border-[#605DFF]/30 transition-colors">
-                  <div className="size-9 rounded-lg bg-white flex items-center justify-center shadow-sm group-hover:text-[#605DFF] shrink-0">
+                <div className="flex-1 p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center gap-3 group hover:border-primary/30 transition-colors">
+                  <div className="size-9 rounded-lg bg-white flex items-center justify-center shadow-sm group-hover:text-primary shrink-0">
                     <Phone className="size-4" />
                   </div>
                   <div className="min-w-0">
@@ -565,12 +619,12 @@ export default function UsersPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-[#605DFF]/5 border border-[#605DFF]/10 flex items-center gap-4">
-                <div className="size-10 rounded-lg bg-white flex items-center justify-center shadow-sm text-[#605DFF]">
+              <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-center gap-4">
+                <div className="size-10 rounded-lg bg-white flex items-center justify-center shadow-sm text-primary">
                   <Lock className="size-5" />
                 </div>
                 <div>
-                  <p className="text-[11px] text-[#605DFF] font-bold uppercase tracking-wider">Security Access</p>
+                  <p className="text-[11px] text-primary font-bold uppercase tracking-wider">Security Access</p>
                   <p className="text-sm font-medium text-[#1E293B]">Restricted to {selectedUser?.role?.name} Panel</p>
                 </div>
               </div>
@@ -579,7 +633,7 @@ export default function UsersPage() {
             <DialogFooter className="mt-8 pt-6 border-t border-zinc-100">
               <Button
                 onClick={() => setIsViewOpen(false)}
-                className="w-full bg-[#605DFF] hover:bg-[#4E4BCB] text-white rounded-xl font-bold border-none h-12 shadow-lg shadow-[#605DFF]/20"
+                className="w-full bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md font-bold border-none h-12 shadow-lg shadow-primary/20"
               >
                 Done
               </Button>
@@ -605,10 +659,10 @@ export default function UsersPage() {
             </div>
           </div>
           <DialogFooter className="p-6 bg-zinc-50/50 border-t border-zinc-100 gap-3">
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-md font-bold px-6 h-11" disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={saving}>
+            <Button onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 !text-white hover:!text-white rounded-md font-bold border-none px-8 h-11 shadow-lg shadow-rose-600/10" disabled={saving}>
               {saving ? "Deleting..." : "Yes, Remove User"}
             </Button>
           </DialogFooter>

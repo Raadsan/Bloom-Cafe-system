@@ -285,16 +285,16 @@ export default function PosTerminalPage() {
               className={cn(
                 "flex flex-col items-center justify-center gap-1 rounded-lg border transition-all shrink-0 w-20 h-20 relative bg-white shadow-sm",
                 selectedCategory === "All"
-                  ? "border-[#605DFF] ring-2 ring-blue-50 shadow-md z-10"
+                  ? "border-primary ring-2 ring-blue-50 shadow-md z-10"
                   : "border-gray-100 hover:border-blue-100 hover:shadow-md"
               )}
             >
-              <div className="absolute -top-1 -right-1 bg-[#605DFF] text-white text-[9px] font-black h-5 w-5 min-w-[20px] px-1 flex items-center justify-center rounded-full shadow-lg border-2 border-white z-10">
+              <div className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black h-5 w-5 min-w-[20px] px-1 flex items-center justify-center rounded-full shadow-lg border-2 border-white z-10">
                 {products.length}
               </div>
               <div className="flex flex-col items-center justify-center gap-0.5">
-                <LayoutGrid className={cn("size-6", selectedCategory === "All" ? "text-[#605DFF]" : "text-gray-400")} strokeWidth={1.5} />
-                <span className={cn("text-[9px] font-bold leading-tight text-center", selectedCategory === "All" ? "text-[#605DFF]" : "text-gray-500")}>
+                <LayoutGrid className={cn("size-6", selectedCategory === "All" ? "text-primary" : "text-gray-400")} strokeWidth={1.5} />
+                <span className={cn("text-[9px] font-bold leading-tight text-center", selectedCategory === "All" ? "text-primary" : "text-gray-500")}>
                   All<br />Categ...
                 </span>
               </div>
@@ -310,21 +310,21 @@ export default function PosTerminalPage() {
                   className={cn(
                     "flex flex-col items-center justify-center gap-1 rounded-lg border transition-all shrink-0 w-20 h-20 relative bg-white shadow-sm",
                     isActive
-                      ? "border-[#605DFF] ring-2 ring-blue-50 shadow-md z-10"
+                      ? "border-primary ring-2 ring-blue-50 shadow-md z-10"
                       : "border-gray-100 hover:border-blue-100 hover:shadow-md"
                   )}
                 >
-                  <div className="absolute -top-1 -right-1 bg-[#605DFF] text-white text-[9px] font-black h-5 w-5 min-w-[20px] px-1 flex items-center justify-center rounded-full shadow-lg border-2 border-white z-10">
+                  <div className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black h-5 w-5 min-w-[20px] px-1 flex items-center justify-center rounded-full shadow-lg border-2 border-white z-10">
                     {count}
                   </div>
                   <div className="w-12 h-12 flex items-center justify-center">
                     {cat.imageUrl ? (
                       <img src={cat.imageUrl} alt={cat.name} className="max-w-full max-h-full object-contain rounded" />
                     ) : (
-                      <Utensils className={cn("size-6", isActive ? "text-[#605DFF]" : "text-gray-300")} />
+                      <Utensils className={cn("size-6", isActive ? "text-primary" : "text-gray-300")} />
                     )}
                   </div>
-                  <span className={cn("text-[9px] font-bold truncate w-full text-center px-1 leading-tight", isActive ? "text-[#605DFF]" : "text-gray-600")}>
+                  <span className={cn("text-[9px] font-bold truncate w-full text-center px-1 leading-tight", isActive ? "text-primary" : "text-gray-600")}>
                     {cat.name}
                   </span>
                 </button>
@@ -341,19 +341,19 @@ export default function PosTerminalPage() {
               <h2 className="text-xl font-bold text-gray-800 tracking-tight">Products</h2>
               <div className="flex items-center gap-2">
                 <div className="relative group">
-                  <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#605DFF] transition-colors" />
+                  <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-primary transition-colors" />
                   <input
                     type="text"
                     placeholder="Search Product"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-10 pl-9 pr-4 text-[12px] bg-white border border-gray-100 rounded-lg outline-none focus:border-[#605DFF] w-100 transition-all shadow-sm"
+                    className="h-10 pl-9 pr-4 text-[12px] bg-white border border-gray-100 rounded-lg outline-none focus:border-primary w-100 transition-all shadow-sm"
                   />
                 </div>
                 {/* <Button
                   variant="outline"
                   onClick={fetchData}
-                  className="h-9 gap-1.5 border-blue-100 bg-white hover:bg-blue-50 text-[#605DFF] text-[11px] font-bold px-4 shadow-sm transition-all"
+                  className="h-9 gap-1.5 border-blue-100 bg-white hover:bg-blue-50 text-primary text-[11px] font-bold px-4 shadow-sm transition-all"
                 >
                   <RefreshCw className="size-3.5" /> Refresh
                 </Button> */}
@@ -364,7 +364,7 @@ export default function PosTerminalPage() {
                 </div> */}
 
                 <Button variant="outline" className="h-9 w-9 p-0 border-gray-100 bg-white shadow-sm hover:bg-gray-50 group">
-                  <ChevronDown className="size-4 text-gray-400 rotate-180 group-hover:text-[#605DFF] transition-all" />
+                  <ChevronDown className="size-4 text-gray-400 rotate-180 group-hover:text-primary transition-all" />
                 </Button>
               </div>
             </div>
@@ -383,7 +383,7 @@ export default function PosTerminalPage() {
                     <button
                       key={product.id}
                       onClick={() => addToCart(product)}
-                      className="bg-white rounded-lg border border-gray-100 hover:border-[#605DFF] transition-all text-left flex flex-col overflow-hidden group active:scale-95 shadow-sm h-36"
+                      className="bg-white rounded-lg border border-gray-100 hover:border-primary transition-all text-left flex flex-col overflow-hidden group active:scale-95 shadow-sm h-36"
                     >
                       {/* Top: Price Badge (Tight) */}
                       <div className="p-1.5 shrink-0">
@@ -462,7 +462,7 @@ export default function PosTerminalPage() {
                     className={cn(
                       "h-8 w-8 rounded text-[11px] font-bold transition-all",
                       currentPage === i + 1
-                        ? "bg-[#605DFF] text-white shadow-md shadow-blue-200"
+                        ? "bg-primary text-white shadow-md shadow-blue-200"
                         : "bg-gray-50 text-gray-500 hover:bg-gray-100"
                     )}
                   >
@@ -495,7 +495,7 @@ export default function PosTerminalPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-50 rounded-xl">
-                  <ShoppingCart className="size-5 text-[#605DFF]" />
+                  <ShoppingCart className="size-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-[14px] font-black text-gray-800">Point Of Sale Cart</p>
@@ -519,11 +519,11 @@ export default function PosTerminalPage() {
             {/* Customer & Table Selector Card */}
             <div className="space-y-3">
               <div className="relative group">
-                <User className="size-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#605DFF]" />
+                <User className="size-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary" />
                 <select
                   value={selectedCustomer || ""}
                   onChange={(e) => setSelectedCustomer(Number(e.target.value) || null)}
-                  className="w-full h-11 pl-10 pr-12 text-[12px] font-bold bg-white border border-gray-200 rounded-xl outline-none focus:border-[#605DFF] focus:ring-4 focus:ring-blue-50 appearance-none shadow-sm transition-all"
+                  className="w-full h-11 pl-10 pr-12 text-[12px] font-bold bg-white border border-gray-200 rounded-xl outline-none focus:border-primary focus:ring-4 focus:ring-blue-50 appearance-none shadow-sm transition-all"
                 >
                   <option value="">Select Customer</option>
                   {customers.map((c) => (
@@ -549,7 +549,7 @@ export default function PosTerminalPage() {
                       className={cn(
                         "h-8 px-4 rounded-xl text-[10px] font-black border transition-all",
                         selectedTable === table.id
-                          ? "bg-[#605DFF] border-[#605DFF] text-white shadow-md shadow-blue-200"
+                          ? "bg-primary border-primary text-white shadow-md shadow-blue-200"
                           : "bg-white border-gray-200 text-gray-500 hover:border-blue-300"
                       )}
                     >
@@ -585,14 +585,14 @@ export default function PosTerminalPage() {
                       <div className="flex items-center gap-1.5 p-0.5 bg-gray-50 rounded-lg border border-gray-100">
                         <button
                           onClick={() => updateQuantity(item.id, -1)}
-                          className="size-6 flex items-center justify-center text-gray-400 hover:text-[#605DFF] hover:bg-blue-50 rounded-md transition-all"
+                          className="size-6 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-blue-50 rounded-md transition-all"
                         >
                           <Minus className="size-3" />
                         </button>
                         <span className="text-[11px] font-black text-gray-800 w-5 text-center">{item.quantity}</span>
                         <button
                           onClick={() => updateQuantity(item.id, 1)}
-                          className="size-6 flex items-center justify-center text-gray-400 hover:text-[#605DFF] hover:bg-blue-50 rounded-md transition-all"
+                          className="size-6 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-blue-50 rounded-md transition-all"
                         >
                           <Plus className="size-3" />
                         </button>
@@ -631,8 +631,8 @@ export default function PosTerminalPage() {
                 </div>
               )}
               <div className="pt-2.5 flex justify-between items-center">
-                <span className="text-[14px] font-black text-[#003B73]">Net Total</span>
-                <span className="text-[20px] font-black text-[#003B73] tabular-nums">${total.toFixed(2)}</span>
+                <span className="text-[14px] font-black text-secondary">Net Total</span>
+                <span className="text-[20px] font-black text-secondary tabular-nums">${total.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -643,7 +643,7 @@ export default function PosTerminalPage() {
           <div className="grid grid-cols-4 gap-2.5">
             <button
               onClick={() => setIsDiscountModalOpen(true)}
-              className="h-11 rounded-lg bg-white border border-gray-300 hover:border-[#003B73] text-[#003B73] font-black text-[11px] shadow-sm transition-all flex items-center justify-center gap-2 group"
+              className="h-11 rounded-lg bg-white border border-gray-300 hover:border-secondary text-secondary font-black text-[11px] shadow-sm transition-all flex items-center justify-center gap-2 group"
             >
               <span className="text-[13px]">%</span>
               Discount
@@ -658,7 +658,7 @@ export default function PosTerminalPage() {
             <button
               onClick={handleHoldOrder}
               disabled={isProcessing}
-              className="h-11 rounded-lg bg-[#605DFF] hover:bg-[#4F46E5] text-white font-black text-[11px] shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-2 group"
+              className="h-11 rounded-lg bg-primary hover:bg-secondary text-white font-black text-[11px] shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-2 group"
             >
               {isProcessing ? <Loader2 className="size-4 animate-spin" /> : <Pause className="size-4" />}
               Hold
@@ -742,7 +742,7 @@ export default function PosTerminalPage() {
                 onClick={() => setDiscountType("percentage")}
                 className={cn(
                   "flex-1 py-2 text-xs font-bold rounded-md transition-all",
-                  discountType === "percentage" ? "bg-white shadow-sm text-[#605DFF]" : "text-gray-500"
+                  discountType === "percentage" ? "bg-white shadow-sm text-primary" : "text-gray-500"
                 )}
               >
                 Percentage (%)
@@ -751,7 +751,7 @@ export default function PosTerminalPage() {
                 onClick={() => setDiscountType("fixed")}
                 className={cn(
                   "flex-1 py-2 text-xs font-bold rounded-md transition-all",
-                  discountType === "fixed" ? "bg-white shadow-sm text-[#605DFF]" : "text-gray-500"
+                  discountType === "fixed" ? "bg-white shadow-sm text-primary" : "text-gray-500"
                 )}
               >
                 Fixed Amount ($)
@@ -763,7 +763,7 @@ export default function PosTerminalPage() {
                 type="number"
                 value={tempDiscount}
                 onChange={(e) => setTempDiscount(e.target.value)}
-                className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-4 text-sm font-bold focus:ring-2 focus:ring-[#605DFF]/20 focus:border-[#605DFF] outline-none"
+                className="w-full h-12 bg-gray-50 border border-gray-100 rounded-xl px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
                 placeholder="0.00"
               />
             </div>
@@ -775,7 +775,7 @@ export default function PosTerminalPage() {
                 setDiscount(parseFloat(tempDiscount) || 0);
                 setIsDiscountModalOpen(false);
               }}
-              className="bg-[#605DFF] hover:bg-[#4F46E5]"
+              className="bg-primary hover:bg-secondary"
             >
               Apply Discount
             </Button>
@@ -808,8 +808,8 @@ export default function PosTerminalPage() {
           </div>
         </div>
         <div className="border-b border-dashed mb-2 pb-2">
-          <p>Date: {new Date().toLocaleString()}</p>
-          <p>Cashier: {typeof window !== 'undefined' ? localStorage.getItem('user-name') || 'Admin' : 'Admin'}</p>
+          <p suppressHydrationWarning>Date: {new Date().toLocaleString()}</p>
+          <p suppressHydrationWarning>Cashier: {typeof window !== 'undefined' ? localStorage.getItem('user-name') || 'Admin' : 'Admin'}</p>
           <p>Table: {tables.find(t => t.id === selectedTable)?.number || 'Walk-in'}</p>
         </div>
         <div className="mb-2">
@@ -858,12 +858,12 @@ export default function PosTerminalPage() {
               recentOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-[#605DFF] transition-all cursor-pointer group"
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-primary transition-all cursor-pointer group"
                   onClick={() => resumeOrder(order)}
                 >
                   <div className="flex items-center gap-4">
                     <div className="size-10 bg-white rounded-lg flex items-center justify-center border border-gray-100 group-hover:bg-blue-50 transition-colors">
-                      <History className="size-5 text-[#605DFF]" />
+                      <History className="size-5 text-primary" />
                     </div>
                     <div>
                       <p className="text-sm font-black text-gray-800">Order #{order.id}</p>
@@ -873,7 +873,7 @@ export default function PosTerminalPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-black text-[#605DFF]">${order.total.toFixed(2)}</p>
+                    <p className="text-sm font-black text-primary">${order.total.toFixed(2)}</p>
                     <p className="text-[10px] text-gray-400 font-bold">{new Date(order.createdAt).toLocaleTimeString()}</p>
                   </div>
                 </div>

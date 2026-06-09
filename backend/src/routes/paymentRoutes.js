@@ -24,11 +24,11 @@ router.post('/waafi',          processWaafiPayment)   // Waafi mobile money
 router.post('/checkout-pay',   protect, processCheckoutPayment) // Direct Waafi Checkout payment-first
 
 // PROTECTED ROUTES
-// Create payment — accessible to pos role too
+// Create payment — accessible to pos & waiter (order checkout)
 router.post(
   '/',
   protect,
-  authorize('admin', 'manager', 'cashier', 'pos'),
+  authorize('admin', 'manager', 'cashier', 'pos', 'waiter'),
   createPayment
 )
 
