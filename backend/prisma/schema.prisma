@@ -123,6 +123,7 @@ model menuitem {
   imageUrl    String?       @db.Text
   isAvailable Boolean       @default(true)
   isRecommended Boolean     @default(false)
+  options     Json?
   categoryId  Int
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @default(now()) @updatedAt
@@ -158,9 +159,14 @@ model notification {
   createdAt  DateTime @default(now())
   userId     Int?
   customerId Int?
-  user       user?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderId        Int?
+  senderName      String?
+  senderAvatarUrl String?  @db.Text
+  user            user?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender          user?    @relation("sentNotifications", fields: [senderId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([senderId])
 }
 
 model order {
@@ -169,6 +175,9 @@ model order {
   total         Float       @default(0)
   taxAmount     Float       @default(0)
   subTotal      Float       @default(0)
+  discountAmount Float      @default(0)
+  discountType  String?
+  discountValue Float       @default(0)
   tableId       Int?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @default(now()) @updatedAt
@@ -339,9 +348,10 @@ model user {
   avatarUrl String?    @db.LongText
   updatedAt DateTime   @default(now()) @updatedAt
   roleId    Int
-  auditlog  auditlog[]
-  notification notification[]
-  expense   expense[]
+  auditlog          auditlog[]
+  notification      notification[]
+  sentNotifications notification[] @relation("sentNotifications")
+  expense           expense[]
   order     order[]
   role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
 

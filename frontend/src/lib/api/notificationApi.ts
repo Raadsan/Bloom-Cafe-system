@@ -1,5 +1,11 @@
 import api from './axios';
 
+export interface NotificationSender {
+  id: number;
+  fullName: string;
+  avatarUrl?: string | null;
+}
+
 export interface Notification {
   id: number;
   title: string;
@@ -9,6 +15,10 @@ export interface Notification {
   orderId?: number;
   customerId?: number;
   userId?: number | null;
+  senderId?: number | null;
+  senderName?: string | null;
+  senderAvatarUrl?: string | null;
+  sender?: NotificationSender | null;
   createdAt?: string;
 }
 

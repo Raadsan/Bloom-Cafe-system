@@ -380,9 +380,9 @@ export default function AllOrdersPage() {
     checkDelete("/orders");
 
   // fetch data
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (forceRefresh = false) => {
     try {
-      const data = await orderApi.getAllOrders();
+      const data = await orderApi.getAllOrders(undefined, forceRefresh);
       setOrders(data || []);
     } catch (err) {
       console.error("Failed to fetch orders", err);
@@ -468,11 +468,11 @@ export default function AllOrdersPage() {
     authApi.getMe().then(user => setUserRole(user.role?.toLowerCase() ?? ""));
 
     const removeOrdersListener = onDebouncedEvent<OrderSocketPayload>(ORDERS_CHANGED, (detail) => {
-      fetchOrders();
+      fetchOrders(true);
       if (detail?.status === "served" || detail?.action === "update") {
         fetchHistoryOrders(true);
       }
-    }, 700);
+    }, 300);
 
     return () => removeOrdersListener();
   }, [fetchOrders, fetchHistoryOrders]);

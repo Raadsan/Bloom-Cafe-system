@@ -1,25 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { cn } from "@/lib/utils";
-import {
-  Search,
-  Plus,
-  Edit,
-  Trash2,
-  UserPlus,
-  Shield,
-  Mail,
-  Phone,
-  UserCheck,
-  UserX,
-  Lock,
-  ChevronDown,
-  RefreshCw,
-  MoreHorizontal,
-  Eye
-} from "lucide-react";
+import { Search, Plus, Trash2, Lock, Edit, Eye, Mail, Phone, RefreshCw, Shield } from "lucide-react";
 import { usePermissions } from "@/context/PermissionContext";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -327,7 +311,7 @@ export default function UsersPage() {
           </div>
         </div>
 
-        {/* Table - Flush to sides */}
+        {/* Table */}
         <div className="border-t border-zinc-100 overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
@@ -348,7 +332,7 @@ export default function UsersPage() {
                     <TableRow key={i} className="h-14 animate-pulse">
                       {[...Array(7)].map((_, j) => (
                         <TableCell key={j} className="px-6 py-4">
-                          <div className="h-4 bg-zinc-100 rounded w-full"></div>
+                          <div className="h-4 bg-zinc-100 rounded w-full" />
                         </TableCell>
                       ))}
                     </TableRow>
@@ -375,15 +359,17 @@ export default function UsersPage() {
                         <span className="text-[13px] font-medium text-zinc-600">{u.phone || "—"}</span>
                       </TableCell>
                       <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-medium text-zinc-600">
+                        <span className="text-[13px] font-medium text-zinc-600 capitalize">
                           {u.role?.name || "No Role"}
                         </span>
                       </TableCell>
                       <TableCell className={cn(dashboardTableCellClass, "text-right")}>
-                        <span className={cn(
-                          dashboardStatusBadgeClass,
-                          getTableStatusBadgeClass(u.isActive ? "active" : "inactive")
-                        )}>
+                        <span
+                          className={cn(
+                            dashboardStatusBadgeClass,
+                            getTableStatusBadgeClass(u.isActive ? "active" : "inactive")
+                          )}
+                        >
                           {u.isActive ? "Staff" : "Inactive"}
                         </span>
                       </TableCell>
@@ -564,12 +550,16 @@ export default function UsersPage() {
             <div className="flex justify-between items-start mb-8">
               <div>
                 <h3 className="text-2xl font-bold text-[#1E293B]">{selectedUser?.fullName}</h3>
-                <p className="text-sm font-medium text-primary mt-1 uppercase tracking-wider">{selectedUser?.role?.name || "Staff Member"}</p>
+                <p className="text-sm font-medium text-primary mt-1 uppercase tracking-wider">
+                  {selectedUser?.role?.name || "Staff Member"}
+                </p>
               </div>
-              <span className={cn(
-                dashboardStatusBadgeClass,
-                getTableStatusBadgeClass(selectedUser?.isActive ? "active" : "inactive")
-              )}>
+              <span
+                className={cn(
+                  dashboardStatusBadgeClass,
+                  getTableStatusBadgeClass(selectedUser?.isActive ? "active" : "inactive")
+                )}
+              >
                 {selectedUser?.isActive ? "Staff" : "Inactive"}
               </span>
             </div>
@@ -604,7 +594,9 @@ export default function UsersPage() {
                   </div>
                   <div>
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Created At</p>
-                    <p className="text-sm font-medium text-zinc-700">{selectedUser?.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : "N/A"}</p>
+                    <p className="text-sm font-medium text-zinc-700">
+                      {selectedUser?.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : "N/A"}
+                    </p>
                   </div>
                 </div>
 
@@ -614,7 +606,9 @@ export default function UsersPage() {
                   </div>
                   <div>
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Last Update</p>
-                    <p className="text-sm font-medium text-zinc-700">{selectedUser?.updatedAt ? new Date(selectedUser.updatedAt).toLocaleDateString() : "Just Now"}</p>
+                    <p className="text-sm font-medium text-zinc-700">
+                      {selectedUser?.updatedAt ? new Date(selectedUser.updatedAt).toLocaleDateString() : "Just Now"}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -625,15 +619,30 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <p className="text-[11px] text-primary font-bold uppercase tracking-wider">Security Access</p>
-                  <p className="text-sm font-medium text-[#1E293B]">Restricted to {selectedUser?.role?.name} Panel</p>
+                  <p className="text-sm font-medium text-[#1E293B]">
+                    Restricted to {selectedUser?.role?.name} Panel
+                  </p>
                 </div>
               </div>
             </div>
 
-            <DialogFooter className="mt-8 pt-6 border-t border-zinc-100">
+            <DialogFooter className="mt-8 pt-6 border-t border-zinc-100 px-0 pb-0">
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsViewOpen(false);
+                    if (selectedUser) openEditModal(selectedUser);
+                  }}
+                  className="rounded-md font-bold px-6 h-11 mr-2"
+                >
+                  <Edit className="size-4 mr-2" />
+                  Edit
+                </Button>
+              )}
               <Button
                 onClick={() => setIsViewOpen(false)}
-                className="w-full bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md font-bold border-none h-12 shadow-lg shadow-primary/20"
+                className="flex-1 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md font-bold border-none h-12 shadow-lg shadow-primary/20"
               >
                 Done
               </Button>

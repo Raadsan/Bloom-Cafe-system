@@ -1,10 +1,32 @@
 import prisma from '../config/db.js'
 import { logAudit } from '../utils/auditHelper.js'
 
+function normalizeOptionsInput(raw) {
+  if (raw === undefined) return undefined
+  if (raw === null || raw === '') return null
+  if (Array.isArray(raw)) {
+    const list = raw.map(String).map(s => s.trim()).filter(Boolean)
+    return list.length ? list : null
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        const list = parsed.map(String).map(s => s.trim()).filter(Boolean)
+        return list.length ? list : null
+      }
+    } catch {
+      const list = raw.split(',').map(s => s.trim()).filter(Boolean)
+      return list.length ? list : null
+    }
+  }
+  return null
+}
+
 // CREATE MENU ITEM
 export const createMenuItem = async (req, res) => {
   try {
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended, options } = req.body
 
     if (!name || price === undefined || !categoryId) {
       return res.status(400).json({
@@ -34,7 +56,8 @@ export const createMenuItem = async (req, res) => {
         imageUrl: imageUrl || null,
         categoryId: Number(categoryId),
         isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
-        isRecommended: typeof isRecommended === 'boolean' ? isRecommended : false
+        isRecommended: typeof isRecommended === 'boolean' ? isRecommended : false,
+        options: normalizeOptionsInput(options),
       },
       include: {
         category: true
@@ -117,7 +140,7 @@ export const getMenuItemsByCategory = async (req, res) => {
 export const updateMenuItem = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended, options } = req.body
 
     const itemId = Number(id)
     if (isNaN(itemId)) {
@@ -152,7 +175,8 @@ export const updateMenuItem = async (req, res) => {
         imageUrl: imageUrl !== undefined ? imageUrl : existing.imageUrl,
         categoryId: categoryId ? Number(categoryId) : existing.categoryId,
         isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
-        isRecommended: typeof isRecommended === 'boolean' ? isRecommended : (existing.isRecommended ?? false)
+        isRecommended: typeof isRecommended === 'boolean' ? isRecommended : (existing.isRecommended ?? false),
+        ...(options !== undefined ? { options: normalizeOptionsInput(options) } : {}),
       },
       include: {
         category: { select: { id: true, name: true } }

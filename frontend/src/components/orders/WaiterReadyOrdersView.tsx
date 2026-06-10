@@ -34,6 +34,7 @@ import {
   getOrderTitle,
 } from "@/lib/kitchen-order-utils";
 import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
+import { matchesReadyAudience } from "@/lib/order-type-utils";
 
 function getPickupLabel(order: Order) {
   if (order.orderType === "delivery" && order.address) {
@@ -49,7 +50,15 @@ function getPickupLabel(order: Order) {
   return getOrderMeta(order);
 }
 
-export default function WaiterReadyOrdersView() {
+type ReadyOrdersAudience = "waiter" | "pos";
+
+interface WaiterReadyOrdersViewProps {
+  audience?: ReadyOrdersAudience;
+}
+
+export default function WaiterReadyOrdersView({
+  audience = "waiter",
+}: WaiterReadyOrdersViewProps) {
   const { showToast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -65,11 +74,13 @@ export default function WaiterReadyOrdersView() {
         menuItemApi.getAllMenuItems(),
       ]);
       setOrders(
-        (data || []).sort(
-          (a, b) =>
-            new Date(a.createdAt || 0).getTime() -
-            new Date(b.createdAt || 0).getTime()
-        )
+        (data || [])
+          .filter(order => matchesReadyAudience(order, audience))
+          .sort(
+            (a, b) =>
+              new Date(a.createdAt || 0).getTime() -
+              new Date(b.createdAt || 0).getTime()
+          )
       );
       setMenuItems(items || []);
     } catch {
@@ -77,7 +88,7 @@ export default function WaiterReadyOrdersView() {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, audience]);
 
   useEffect(() => {
     fetchReadyOrders(false);
@@ -88,6 +99,18 @@ export default function WaiterReadyOrdersView() {
     }, 700);
     return () => removeListener();
   }, [fetchReadyOrders]);
+
+  const isPos = audience === "pos";
+  const pageTitle = isPos ? "Ready Orders" : "Ready for Service";
+  const pageSubtitle = isPos
+    ? "Takeaway and delivery orders ready to hand to customers."
+    : "Dine-in orders ready to serve at the table.";
+  const pickupHeading = isPos ? "Hand to customer" : "Serve at table";
+  const servedLabel = isPos ? "Handed to Customer" : "Mark as Served";
+  const confirmTitle = isPos ? "Handed to customer?" : "Mark as Served?";
+  const confirmBody = isPos
+    ? "Confirm this takeaway or delivery order was given to the customer."
+    : "Are you sure order was delivered to the table?";
 
   const openConfirmServed = (order: Order) => {
     setConfirmOrder(order);
@@ -114,12 +137,17 @@ export default function WaiterReadyOrdersView() {
   };
 
   return (
-    <div className={dashboardPageClass} style={dashboardPageStyle}>
-      <div className="mb-6 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div
+      className={isPos ? "h-full overflow-y-auto bg-gradient-to-br from-background via-secondary/8 to-secondary/15 p-5 md:p-6" : dashboardPageClass}
+      style={isPos ? undefined : dashboardPageStyle}
+    >
+      <div className={cn("mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4", !isPos && "px-4")}>
         <div>
-          <h1 className={pageHeaderTitleClass}>Ready for Pickup</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Pick up finished orders from the kitchen and deliver to the table or customer.
+          <h1 className={isPos ? "text-xl font-black text-foreground tracking-tight" : pageHeaderTitleClass}>
+            {pageTitle}
+          </h1>
+          <p className={isPos ? "text-sm text-muted-foreground mt-1" : pageHeaderSubtitleClass}>
+            {pageSubtitle}
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-zinc-500">
@@ -128,7 +156,7 @@ export default function WaiterReadyOrdersView() {
         </div>
       </div>
 
-      <div className="px-4 pb-8">
+      <div className={cn("pb-8", !isPos && "px-4")}>
         {loading ? (
           <div className="space-y-5 w-full">
             {[...Array(3)].map((_, i) => (
@@ -200,7 +228,7 @@ export default function WaiterReadyOrdersView() {
                       <MapPin className="size-5 text-primary shrink-0 mt-0.5" />
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-primary/70">
-                          Pick up & deliver to
+                          {pickupHeading}
                         </p>
                         <p className="text-base font-bold text-[#1e293b] mt-0.5">
                           {getPickupLabel(order)}
@@ -250,7 +278,7 @@ export default function WaiterReadyOrdersView() {
                         ) : (
                           <CheckCircle2 className="size-4" />
                         )}
-                        Mark as Served
+                        {servedLabel}
                       </Button>
                     </div>
                   </div>
@@ -277,9 +305,9 @@ export default function WaiterReadyOrdersView() {
               <CheckCircle2 className="size-7 text-emerald-600" />
             </div>
             <div className="pt-1 min-w-0">
-              <h3 className="text-xl font-bold text-[#1E293B] mb-2">Mark as Served?</h3>
+              <h3 className="text-xl font-bold text-[#1E293B] mb-2">{confirmTitle}</h3>
               <p className="text-sm text-zinc-500 leading-relaxed">
-                Are you sure order #{confirmOrder?.id} was delivered to the customer?
+                {confirmBody} Order #{confirmOrder?.id}.
               </p>
               {confirmOrder && (
                 <p className="text-sm font-semibold text-zinc-700 mt-3">
@@ -315,7 +343,7 @@ export default function WaiterReadyOrdersView() {
               ) : (
                 <>
                   <CheckCircle2 className="size-4" />
-                  Yes, Mark as Served
+                  {isPos ? "Yes, Handed Over" : "Yes, Mark as Served"}
                 </>
               )}
             </Button>

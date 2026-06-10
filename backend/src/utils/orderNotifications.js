@@ -1,5 +1,6 @@
 import prisma from '../config/db.js'
 import { emitNewOrder, emitOrderReady } from './socketEvents.js'
+import { loadSenderFields, resolveSenderForOrder } from './notificationSender.js'
 
 function getTableLabel(order) {
   if (order.table?.number) return `Table ${order.table.number}`
@@ -12,7 +13,7 @@ function getTableLabel(order) {
 /**
  * New order entered kitchen queue — notify kitchen + all waiters.
  */
-export async function notifyNewOrder(order) {
+export async function notifyNewOrder(order, senderId = null) {
   if (!order?.id) return
 
   const label = getTableLabel(order)
@@ -21,19 +22,25 @@ export async function notifyNewOrder(order) {
     order.orderitem?.length ??
     0
 
+  const sender = await resolveSenderForOrder(order, senderId)
+
+  const base = {
+    title: 'New Order',
+    orderId: order.id,
+    ...sender,
+  }
+
   await prisma.notification.createMany({
     data: [
       {
-        title: 'New Order',
+        ...base,
         message: `Order #${order.id} — ${label}${itemCount ? ` (${itemCount} items)` : ''} waiting in kitchen`,
         role: 'kitchen',
-        orderId: order.id,
       },
       {
-        title: 'New Order',
+        ...base,
         message: `Order #${order.id} — ${label} received and sent to kitchen`,
         role: 'waiter',
-        orderId: order.id,
         userId: null,
       },
     ],
@@ -45,10 +52,12 @@ export async function notifyNewOrder(order) {
 /**
  * Order ready — notify waiters (+ order creator) and dine-in customer.
  */
-export async function notifyOrderReady(order) {
+export async function notifyOrderReady(order, senderId = null) {
   if (!order?.id) return
 
   const label = getTableLabel(order)
+  const sender = await loadSenderFields(senderId || order?.userId || null)
+
   const notifications = [
     {
       title: 'Order Ready',
@@ -56,12 +65,14 @@ export async function notifyOrderReady(order) {
       role: 'waiter',
       orderId: order.id,
       userId: null,
+      ...sender,
     },
     {
       title: 'Order Ready',
       message: `Order #${order.id} for ${label} is ready for pickup`,
       role: 'kitchen',
       orderId: order.id,
+      ...sender,
     },
   ]
 
@@ -75,6 +86,9 @@ export async function notifyOrderReady(order) {
       role: 'customer',
       orderId: order.id,
       customerId: order.customerId || null,
+      senderId: sender.senderId,
+      senderName: sender.senderName,
+      senderAvatarUrl: sender.senderAvatarUrl,
     })
   }
 

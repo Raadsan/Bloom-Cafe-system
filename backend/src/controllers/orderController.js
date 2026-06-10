@@ -749,8 +749,8 @@ const orderListInflight = new Map()
 const ORDER_LIST_TTL_MS = 45 * 1000
 
 function orderListCacheKey(req) {
-  const { status, onlyMine, readyPickup, waiterHistory } = req.query
-  return `${req.user?.id || 0}:${status || ''}:${onlyMine || ''}:${readyPickup || ''}:${waiterHistory || ''}`
+  const { status, onlyMine, readyPickup, waiterHistory, posQueue } = req.query
+  return `${req.user?.id || 0}:${status || ''}:${onlyMine || ''}:${readyPickup || ''}:${waiterHistory || ''}:${posQueue || ''}`
 }
 
 export const clearOrderListCache = () => {
@@ -763,7 +763,18 @@ export const clearOrderListCache = () => {
  */
 export const createOrder = async (req, res) => {
   try {
-    const { tableId, addressId, type, customerName, customerPhone, notes, items } = req.body
+    const {
+      tableId,
+      addressId,
+      type,
+      customerName,
+      customerPhone,
+      notes,
+      items,
+      discountAmount: discountAmountInput,
+      discountType,
+      discountValue,
+    } = req.body
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -796,10 +807,14 @@ export const createOrder = async (req, res) => {
     let taxAmount = 0
     const orderItemsData = []
 
+    const menuItemIds = [...new Set(items.map((item) => Number(item.menuItemId)))]
+    const menuItems = await prisma.menuitem.findMany({
+      where: { id: { in: menuItemIds } }
+    })
+    const menuItemMap = new Map(menuItems.map((menuItem) => [menuItem.id, menuItem]))
+
     for (const item of items) {
-      const menuItem = await prisma.menuitem.findUnique({
-        where: { id: Number(item.menuItemId) }
-      })
+      const menuItem = menuItemMap.get(Number(item.menuItemId))
 
       if (!menuItem || !menuItem.isAvailable) {
         return res.status(400).json({
@@ -839,6 +854,10 @@ export const createOrder = async (req, res) => {
       })
     }
 
+    const discountAmount = Math.max(0, Number(discountAmountInput) || 0)
+    const parsedDiscountValue = Math.max(0, Number(discountValue) || 0)
+    const orderTotal = Math.max(0, subTotal + taxAmount - discountAmount)
+
     const order = await prisma.order.create({
       data: {
         orderType: type || 'dine-in',
@@ -851,7 +870,10 @@ export const createOrder = async (req, res) => {
         notes,
         subTotal,
         taxAmount,
-        total: subTotal + taxAmount,
+        discountAmount,
+        discountType: discountAmount > 0 ? (discountType || null) : null,
+        discountValue: discountAmount > 0 ? parsedDiscountValue : 0,
+        total: orderTotal,
         status: req.body.status || 'pending',
         source: req.body.source || 'pos',
         orderitem: {
@@ -892,10 +914,10 @@ export const createOrder = async (req, res) => {
     */
 
     if (order.status === 'pending' || order.status === 'paid') {
-      await notifyNewOrder(order)
+      await notifyNewOrder(order, req.user?.id)
     }
 
-    logAudit({ userId: req.user?.id, action: 'Created', entity: 'Order', entityId: order.id, description: `Created order #${order.id} for table ${table?.number || 'N/A'}` })
+    await logAudit({ userId: req.user?.id, action: 'Created', entity: 'Order', entityId: order.id, description: `Created order #${order.id} for table ${table?.number || 'N/A'}` })
 
     clearOrderListCache()
 
@@ -952,6 +974,22 @@ export const updateOrderStatus = async (req, res) => {
       }
     }
 
+    if (userRole === 'pos') {
+      const channel =
+        order.orderType ||
+        (order.tableId ? 'dine-in' : order.addressId ? 'delivery' : 'takeaway')
+      const allowed =
+        order.status === 'ready' &&
+        status === 'served' &&
+        (channel === 'takeaway' || channel === 'delivery')
+      if (!allowed) {
+        return res.status(400).json({
+          success: false,
+          message: 'POS can only complete ready takeaway or delivery orders',
+        })
+      }
+    }
+
     const updatedOrder = await prisma.order.update({
       where: { id: order.id },
       data: { status },
@@ -972,7 +1010,7 @@ export const updateOrderStatus = async (req, res) => {
     */
 
     if (status === 'ready') {
-      await notifyOrderReady(updatedOrder)
+      await notifyOrderReady(updatedOrder, req.user?.id)
     }
 
     // 🔥 TABLE FREE
@@ -1193,6 +1231,17 @@ export const getAllOrders = async (req, res) => {
 
     if (userRole === 'waiter' && readyPickup === 'true') {
       where.status = 'ready'
+      where.orderType = 'dine-in'
+      useLightInclude = true
+      takeLimit = 80
+    } else if (userRole === 'pos' && req.query.posQueue === 'true') {
+      where.orderType = { in: ['takeaway', 'delivery'] }
+      where.status = { in: ['pending', 'paid', 'preparing', 'ready'] }
+      useLightInclude = true
+      takeLimit = 120
+    } else if (userRole === 'pos' && readyPickup === 'true') {
+      where.status = 'ready'
+      where.orderType = { in: ['takeaway', 'delivery'] }
       useLightInclude = true
       takeLimit = 80
     } else if (userRole === 'waiter' && isWaiterHistory) {

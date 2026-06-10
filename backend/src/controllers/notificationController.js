@@ -24,6 +24,142 @@ function buildRoleWhere(req) {
   return { role }
 }
 
+const senderSelect = {
+  id: true,
+  fullName: true,
+  avatarUrl: true,
+}
+
+function toSenderDto(user, fallbackName, fallbackAvatar, fallbackId) {
+  if (user) {
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl || null,
+    }
+  }
+  if (fallbackName) {
+    return {
+      id: fallbackId || 0,
+      fullName: fallbackName,
+      avatarUrl: fallbackAvatar || null,
+    }
+  }
+  return null
+}
+
+async function enrichNotificationsWithSenders(notifications) {
+  const needsLookup = notifications.filter(
+    (n) => !n.senderName && !n.sender?.fullName
+  )
+
+  const senderIds = [
+    ...new Set(
+      needsLookup.map((n) => n.senderId).filter(Boolean)
+    ),
+  ]
+
+  const orderIds = [
+    ...new Set(
+      needsLookup.filter((n) => n.orderId).map((n) => n.orderId)
+    ),
+  ]
+
+  const [usersBySenderId, orders, auditLogs] = await Promise.all([
+    senderIds.length
+      ? prisma.user.findMany({
+          where: { id: { in: senderIds } },
+          select: senderSelect,
+        })
+      : [],
+    orderIds.length
+      ? prisma.order.findMany({
+          where: { id: { in: orderIds } },
+          select: {
+            id: true,
+            userId: true,
+            user: { select: senderSelect },
+          },
+        })
+      : [],
+    orderIds.length
+      ? prisma.auditlog.findMany({
+          where: {
+            entity: 'Order',
+            entityId: { in: orderIds },
+            userId: { not: null },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            entityId: true,
+            action: true,
+            description: true,
+            user: { select: senderSelect },
+          },
+        })
+      : [],
+  ])
+
+  const senderIdMap = new Map(usersBySenderId.map((u) => [u.id, u]))
+  const orderUserMap = new Map(
+    orders.filter((o) => o.user).map((o) => [o.id, o.user])
+  )
+
+  const auditByOrder = new Map()
+  for (const log of auditLogs) {
+    if (!log.entityId || !log.user) continue
+    const list = auditByOrder.get(log.entityId) || []
+    list.push(log)
+    auditByOrder.set(log.entityId, list)
+  }
+
+  function pickAuditUser(orderId, title) {
+    const logs = auditByOrder.get(orderId) || []
+    const t = (title || '').toLowerCase()
+
+    if (t.includes('ready')) {
+      const readyLog = logs.find(
+        (l) =>
+          l.action === 'Status Changed' &&
+          (l.description || '').toLowerCase().includes('ready')
+      )
+      if (readyLog?.user) return readyLog.user
+    }
+
+    if (t.includes('new order') || t.includes('payment')) {
+      const createdLog = logs.find((l) => l.action === 'Created')
+      if (createdLog?.user) return createdLog.user
+    }
+
+    const statusLog = logs.find((l) => l.action === 'Status Changed')
+    if (statusLog?.user) return statusLog.user
+
+    return logs[0]?.user || null
+  }
+
+  return notifications.map((n) => {
+    const { sender: _prismaSender, ...rest } = n
+
+    if (n.senderName) {
+      return {
+        ...rest,
+        sender: toSenderDto(null, n.senderName, n.senderAvatarUrl, n.senderId),
+      }
+    }
+
+    let user =
+      n.sender ||
+      (n.senderId ? senderIdMap.get(n.senderId) : null) ||
+      (n.orderId ? orderUserMap.get(n.orderId) : null) ||
+      (n.orderId ? pickAuditUser(n.orderId, n.title) : null)
+
+    return {
+      ...rest,
+      sender: toSenderDto(user, null, null, null),
+    }
+  })
+}
+
 // GET MY NOTIFICATIONS (role-aware)
 export const getMyNotifications = async (req, res) => {
   try {
@@ -38,13 +174,15 @@ export const getMyNotifications = async (req, res) => {
     const notifications = await prisma.notification.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      take: 50,
     })
+
+    const data = await enrichNotificationsWithSenders(notifications)
 
     const payload = {
       success: true,
-      count: notifications.length,
-      data: notifications,
+      count: data.length,
+      data,
     }
 
     notifCache.set(cacheKey, { payload, at: Date.now() })
@@ -172,6 +310,8 @@ export const markNotificationRead = async (req, res) => {
         isRead: true
       }
     })
+
+    notifCache.clear()
 
     res.status(200).json({
       success: true,

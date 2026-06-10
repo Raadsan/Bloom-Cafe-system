@@ -11,6 +11,10 @@ export const clearAuthCaches = () => {
   permissionCache.clear()
 }
 
+export const invalidateUserCache = (userId) => {
+  userCache.delete(userId)
+}
+
 export const clearPermissionCache = () => {
   permissionCache.clear()
 }

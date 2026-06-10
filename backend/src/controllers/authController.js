@@ -1,5 +1,15 @@
 import prisma from '../config/db.js'
-import { getCachedUser } from '../middlewares/authMiddleware.js'
+import { getCachedUser, invalidateUserCache } from '../middlewares/authMiddleware.js'
+
+function formatAuthUser(user) {
+  const { password, role, ...rest } = user
+  return {
+    ...rest,
+    role: role.name,
+    roleId: user.roleId,
+    roleDescription: role.description
+  }
+}
 import bcrypt from 'bcryptjs'
 import generateToken from '../utils/generateToken.js'
 
@@ -164,7 +174,7 @@ export const updateProfile = async (req, res) => {
     if (address !== undefined) updateData.address = address;
     if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (gender !== undefined) updateData.gender = gender;
-    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl || null;
 
     if (currentPassword && newPassword) {
       // Find the user to verify current password
@@ -184,16 +194,12 @@ export const updateProfile = async (req, res) => {
       include: { role: true }
     })
 
+    invalidateUserCache(userId)
+
     res.status(200).json({
       success: true,
       message: 'Profile updated',
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        role: user.role.name
-      }
+      user: formatAuthUser(user)
     })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
@@ -212,16 +218,9 @@ export const getMe = async (req, res) => {
       })
     }
 
-    const { password, ...userWithoutPassword } = user
-
     res.status(200).json({
       success: true,
-      data: {
-        ...userWithoutPassword,
-        role: user.role.name,
-        roleId: user.roleId,
-        roleDescription: user.role.description
-      }
+      data: formatAuthUser(user)
     })
   } catch (error) {
     console.error('Get Me Error:', error)

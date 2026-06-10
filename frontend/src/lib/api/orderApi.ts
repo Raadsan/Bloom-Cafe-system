@@ -31,6 +31,9 @@ export interface Order {
   total: number;
   taxAmount: number;
   subTotal: number;
+  discountAmount?: number;
+  discountType?: 'percentage' | 'fixed' | string | null;
+  discountValue?: number;
   notes?: string;
   customerName?: string;
   customerPhone?: string;
@@ -52,6 +55,9 @@ export interface CreateOrderPayload {
   customerPhone?: string;
   notes?: string;
   status?: string;
+  discountAmount?: number;
+  discountType?: 'percentage' | 'fixed';
+  discountValue?: number;
   items: { menuItemId: number; quantity: number }[];
 }
 
@@ -60,6 +66,7 @@ export type GetAllOrdersParams = {
   onlyMine?: boolean;
   readyPickup?: boolean;
   waiterHistory?: boolean;
+  posQueue?: boolean;
 };
 
 const ORDERS_TTL_MS = 45 * 1000;
@@ -86,6 +93,7 @@ async function fetchOrdersFromNetwork(params?: GetAllOrdersParams): Promise<Orde
   if (params?.onlyMine) query.set('onlyMine', 'true');
   if (params?.readyPickup) query.set('readyPickup', 'true');
   if (params?.waiterHistory) query.set('waiterHistory', 'true');
+  if (params?.posQueue) query.set('posQueue', 'true');
 
   const request = api
     .get(`/orders/all?${query.toString()}`)

@@ -53,6 +53,16 @@ export function isKitchenActiveStatus(status: string) {
   return isKitchenPendingStatus(status) || status === "preparing" || status === "ready";
 }
 
+export function getOrderCreatorName(order: Order) {
+  return order.user?.fullName || order.customerName || "Walk-in guest";
+}
+
+export function getOrderCreatorRole(order: Order) {
+  const roleName = order.user?.role?.name?.trim();
+  if (roleName) return roleName;
+  return getOrderSourceLabel(order);
+}
+
 /** Who placed the order: admin, waiter, POS, client app, etc. */
 export function getOrderSourceLabel(order: Order) {
   const role = order.user?.role?.name?.toLowerCase();

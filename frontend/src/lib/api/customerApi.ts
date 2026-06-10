@@ -28,6 +28,17 @@ export const customerApi = {
     return res.data.data;
   },
 
+  getCustomerByPhone: async (phone: string): Promise<Customer | null> => {
+    const trimmed = phone.trim();
+    if (!trimmed) return null;
+    try {
+      const res = await api.get(`/customers/by-phone/${encodeURIComponent(trimmed)}`);
+      return res.data.data;
+    } catch {
+      return null;
+    }
+  },
+
   createCustomer: async (payload: CreateCustomerPayload): Promise<Customer> => {
     const res = await api.post('/customers', payload);
     return res.data.data;

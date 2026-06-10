@@ -12,6 +12,8 @@ export interface MenuItem {
   isRecommended: boolean;
   categoryId: number;
   category?: { id: number; name: string };
+  /** POS variants e.g. ["Small", "Medium", "Large"] */
+  options?: string[] | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -26,6 +28,7 @@ export interface CreateMenuItemPayload {
   isAvailable?: boolean;
   isRecommended?: boolean;
   categoryId: number;
+  options?: string[] | string | null;
 }
 
 export interface UpdateMenuItemPayload {
@@ -38,6 +41,22 @@ export interface UpdateMenuItemPayload {
   isAvailable?: boolean;
   isRecommended?: boolean;
   categoryId?: number;
+  options?: string[] | string | null;
+}
+
+export function parseMenuItemOptions(product: MenuItem): string[] {
+  const raw = product.options;
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+    } catch {
+      return raw.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
 }
 
 export const menuItemApi = {

@@ -684,8 +684,9 @@
 
 
 import prisma from '../config/db.js'
-import { emitPaymentSuccess } from '../utils/socketEvents.js'
+import { emitOrderUpdate, emitPaymentSuccess } from '../utils/socketEvents.js'
 import { notifyNewOrder } from '../utils/orderNotifications.js'
+import { resolveSenderForOrder } from '../utils/notificationSender.js'
 import { sendWaafiPayment } from '../utils/waafiPayment.js'
 
 // GET AVAILABLE PAYMENT METHODS
@@ -709,6 +710,8 @@ export const getPaymentMethods = async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 }
+
+const MOBILE_WALLET_METHODS = ['evc_plus', 'edahab', 'premier_wallet', 'waafi']
 
 const generateInternalRef = () => {
   const random = Math.floor(1000 + Math.random() * 9000)
@@ -796,13 +799,7 @@ export const processWaafiPayment = async (req, res) => {
         data: { status: 'pending' }
       })
 
-      // Occupy the table since the order is now active and paid
-      if (order.tableId) {
-        await prisma.table.update({
-          where: { id: order.tableId },
-          data: { status: 'active' }
-        })
-      }
+      // Mobile wallet POS payments keep the table open for more orders
     }
 
     const updatedPayment = await prisma.payment.update({
@@ -832,6 +829,10 @@ export const processWaafiPayment = async (req, res) => {
     }
 
     // ── 5. NOTIFICATIONS ────────────────────────────────────────────────────
+    const paymentSender = await resolveSenderForOrder(
+      updatedPayment.order,
+      req.user?.id
+    )
     await prisma.notification.create({
       data: {
         title: 'Payment Successful',
@@ -839,10 +840,11 @@ export const processWaafiPayment = async (req, res) => {
         role: 'customer',
         orderId,
         customerId: updatedPayment.order?.customerId || null,
+        ...paymentSender,
       },
     })
 
-    await notifyNewOrder(updatedPayment.order)
+    await notifyNewOrder(updatedPayment.order, req.user?.id)
 
     // ── 6. SOCKET EVENTS ────────────────────────────────────────────────────
     emitPaymentSuccess(updatedPayment.order)
@@ -998,6 +1000,7 @@ export const processCheckoutPayment = async (req, res) => {
     }
 
     // 6. NOTIFICATIONS
+    const checkoutSender = await resolveSenderForOrder(order, req.user?.id)
     await prisma.notification.create({
       data: {
         title: 'Payment Successful',
@@ -1005,10 +1008,11 @@ export const processCheckoutPayment = async (req, res) => {
         role: 'customer',
         orderId: order.id,
         customerId: order.customerId || null,
+        ...checkoutSender,
       },
     })
 
-    await notifyNewOrder(order)
+    await notifyNewOrder(order, req.user?.id)
 
     // 7. SOCKET EVENTS
     emitPaymentSuccess(order)
@@ -1125,6 +1129,10 @@ export const confirmPublicPayment = async (req, res) => {
       }
 
       // 🔥 NOTIFICATIONS
+      const publicPaySender = await resolveSenderForOrder(
+        payment.order,
+        req.user?.id
+      )
       await prisma.notification.create({
         data: {
           title: 'Payment Successful',
@@ -1132,11 +1140,12 @@ export const confirmPublicPayment = async (req, res) => {
           role: 'customer',
           orderId: payment.order.id,
           customerId: payment.order.customerId,
+          ...publicPaySender,
         },
       })
 
       if (finalOrder) {
-        await notifyNewOrder(finalOrder)
+        await notifyNewOrder(finalOrder, req.user?.id)
         emitPaymentSuccess(finalOrder)
       }
     }
@@ -1185,6 +1194,14 @@ export const createPayment = async (req, res) => {
 
     const previousStatus = order.status
 
+    if (req.user?.id && !order.userId) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { userId: req.user.id },
+      })
+      order.userId = req.user.id
+    }
+
     const payment = await prisma.payment.create({
       data: {
         orderId: order.id,
@@ -1207,22 +1224,28 @@ export const createPayment = async (req, res) => {
       })
     }
 
-    if (order.tableId) {
+    const methodLower = (method || 'cash').toLowerCase()
+    if (order.tableId && !MOBILE_WALLET_METHODS.includes(methodLower)) {
       await prisma.table.update({
         where: { id: order.tableId },
         data: { status: 'active' }
       })
     }
 
-    if (previousStatus === 'unpaid') {
-      const fullOrder = await prisma.order.findUnique({
-        where: { id: order.id },
-        include: {
-          table: true,
-          orderitem: { include: { menuitem: true } },
-        },
-      })
-      if (fullOrder) await notifyNewOrder(fullOrder)
+    const fullOrder = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        table: true,
+        orderitem: { include: { menuitem: true } },
+      },
+    })
+
+    if (fullOrder) {
+      if (previousStatus === 'unpaid') {
+        await notifyNewOrder(fullOrder, req.user?.id)
+      } else {
+        emitOrderUpdate(fullOrder)
+      }
     }
 
     emitPaymentSuccess(payment.order)

@@ -49,6 +49,7 @@ export const emitOrderReady = (order) => {
 
   const io = getIO()
   io.to('waiter').emit('order_ready', payload)
+  io.to('pos').emit('order_ready', payload)
   io.to('kitchen').emit('order_update', payload)
   io.to('admin').emit('order_ready', payload)
   io.to('manager').emit('order_ready', payload)

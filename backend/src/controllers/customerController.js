@@ -84,6 +84,43 @@ export const getAllCustomers = async (req, res) => {
   }
 }
 
+// GET CUSTOMER BY PHONE (POS lookup)
+export const getCustomerByPhone = async (req, res) => {
+  try {
+    const phone = String(req.params.phone || '').trim()
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required'
+      })
+    }
+
+    const customer = await prisma.customer.findUnique({
+      where: { phone }
+    })
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      })
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: customer
+    })
+  } catch (error) {
+    console.error('Get Customer By Phone Error:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch customer',
+      error: error.message
+    })
+  }
+}
+
 // GET CUSTOMER BY ID
 export const getCustomerById = async (req, res) => {
   try {

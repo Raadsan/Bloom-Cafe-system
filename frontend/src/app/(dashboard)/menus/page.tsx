@@ -30,7 +30,7 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
+import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/menuItemApi";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -73,6 +73,7 @@ export default function MenuPage() {
   const [formIsRecommended, setFormIsRecommended] = useState(false);
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formTax, setFormTax] = useState("");
+  const [formOptions, setFormOptions] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Pagination states
@@ -136,6 +137,7 @@ export default function MenuPage() {
     setFormIsRecommended(false);
     setFormImageUrl("");
     setFormTax("0");
+    setFormOptions("");
     setIsAddOpen(true);
   };
 
@@ -150,6 +152,7 @@ export default function MenuPage() {
     setFormIsRecommended(item.isRecommended || false);
     setFormImageUrl(item.imageUrl || "");
     setFormTax(String(item.tax || 0));
+    setFormOptions(parseMenuItemOptions(item).join(", "));
     setIsEditOpen(true);
   };
 
@@ -193,7 +196,10 @@ export default function MenuPage() {
         categoryId: Number(formCategoryId),
         isAvailable: formIsAvailable,
         isRecommended: formIsRecommended,
-        imageUrl: formImageUrl.trim() || undefined
+        imageUrl: formImageUrl.trim() || undefined,
+        options: formOptions.trim()
+          ? formOptions.split(",").map(s => s.trim()).filter(Boolean)
+          : null,
       };
 
       if (isEditOpen && selectedItem) {
@@ -537,6 +543,18 @@ export default function MenuPage() {
                   <option value="no">No</option>
                 </select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-[#1e293b]">POS Options</label>
+              <input
+                type="text"
+                value={formOptions}
+                onChange={(e) => setFormOptions(e.target.value)}
+                placeholder="e.g. Small, Medium, Large (comma separated)"
+                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium"
+              />
+              <p className="text-xs text-zinc-400">Shown on POS terminal for this item. Leave empty if none.</p>
             </div>
 
             {/* Description — shown to kitchen when preparing orders */}

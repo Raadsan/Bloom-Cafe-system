@@ -65,6 +65,31 @@ function clearUserFromStorage(): void {
   }
 }
 
+function mapAuthUser(user: Record<string, unknown>): AuthUser {
+  const dob = user.dateOfBirth;
+  let dateOfBirth: string | undefined;
+  if (dob) {
+    const d = new Date(dob as string);
+    if (!isNaN(d.getTime())) dateOfBirth = d.toISOString();
+  }
+
+  return {
+    id: user.id as number,
+    fullName: (user.fullName as string) || '',
+    email: (user.email as string) || '',
+    phone: (user.phone as string) || undefined,
+    address: (user.address as string) || undefined,
+    gender: (user.gender as string) || undefined,
+    dateOfBirth,
+    avatarUrl: (user.avatarUrl as string) || undefined,
+    role: (user.role as string) || 'staff',
+    roleId: user.roleId as number | undefined,
+    createdAt: user.createdAt
+      ? new Date(user.createdAt as string).toISOString()
+      : undefined,
+  };
+}
+
 export const authApi = {
   /** Login – saves token AND user to localStorage */
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
@@ -103,21 +128,7 @@ export const authApi = {
     }
 
     const res = await api.get('/auth/me');
-    const user = res.data.data;
-
-    const authUser: AuthUser = {
-      id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      phone: user.phone || undefined,
-      address: user.address || undefined,
-      gender: user.gender || undefined,
-      dateOfBirth: user.dateOfBirth || undefined,
-      avatarUrl: user.avatarUrl || undefined,
-      role: user.role,
-      roleId: user.roleId,
-      createdAt: user.createdAt
-    };
+    const authUser = mapAuthUser(res.data.data);
 
     saveUserToStorage(authUser);
     return authUser;
@@ -126,21 +137,7 @@ export const authApi = {
   /** Update profile – updates the db then refreshes localStorage. */
   updateProfile: async (payload: UpdateProfileData): Promise<AuthUser> => {
     const res = await api.patch('/auth/update-profile', payload);
-    const user = res.data.user;
-
-    const authUser: AuthUser = {
-      id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      phone: user.phone || undefined,
-      address: user.address || undefined,
-      gender: user.gender || undefined,
-      dateOfBirth: user.dateOfBirth || undefined,
-      avatarUrl: user.avatarUrl || undefined,
-      role: user.role,
-      roleId: user.roleId,
-      createdAt: user.createdAt
-    };
+    const authUser = mapAuthUser(res.data.user);
 
     saveUserToStorage(authUser);
     return authUser;

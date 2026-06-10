@@ -10,16 +10,18 @@ import {
   ChevronDown,
   FileText,
   Settings2,
-  Clock,
   Calculator,
   Maximize,
-  RotateCw,
   CircleDollarSign,
   Wallet,
   ShoppingCart,
   Printer,
-  History
+  RotateCw,
+  Bell
 } from "lucide-react";
+import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
+import { orderApi } from "@/lib/api/orderApi";
+import { matchesReadyAudience } from "@/lib/order-type-utils";
 import { ToastProvider } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -37,18 +39,18 @@ import {
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [time, setTime] = useState(new Date());
   const [cartCount, setCartCount] = useState(0);
-  const [heldCount, setHeldCount] = useState(0);
-  const [isMounted, setIsMounted] = useState(false);
+  const [readyCount, setReadyCount] = useState(0);
 
   useEffect(() => {
-    setIsMounted(true);
     authApi.getMe().then(setUser).catch(() => {
       window.location.href = "/login";
     });
 
-    const interval = setInterval(() => setTime(new Date()), 1000);
+    const handleProfileUpdate = () => {
+      authApi.getMe(true).then(setUser).catch(() => {});
+    };
+    window.addEventListener("profile_updated", handleProfileUpdate);
 
     const updateCountFromStorage = () => {
       const saved = localStorage.getItem('pos-cart');
@@ -64,30 +66,43 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
     updateCountFromStorage();
     
-    const handleCartEvent = (e: any) => setCartCount(e.detail);
-    const handleHeldEvent = (e: any) => setHeldCount(e.detail);
-    
-    window.addEventListener('cart-updated', handleCartEvent);
-    window.addEventListener('held-updated', handleHeldEvent);
-    window.addEventListener('storage', updateCountFromStorage);
+    const handleCartEvent = (e: Event) => {
+      const detail = (e as CustomEvent<number>).detail;
+      if (typeof detail === "number") setCartCount(detail);
+    };
+
+    window.addEventListener("cart-updated", handleCartEvent);
+    window.addEventListener("storage", updateCountFromStorage);
+
+    const syncReadyCount = async () => {
+      try {
+        const data = await orderApi.getAllOrders({ posQueue: true }, true);
+        setReadyCount(
+          (data || []).filter(
+            order => matchesReadyAudience(order, "pos") && order.status === "ready"
+          ).length
+        );
+      } catch {
+        setReadyCount(0);
+      }
+    };
+
+    syncReadyCount();
+    const removeOrdersListener = onDebouncedEvent(ORDERS_CHANGED, () => {
+      syncReadyCount();
+    }, 700);
 
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('cart-updated', handleCartEvent);
-      window.removeEventListener('held-updated', handleHeldEvent);
-      window.removeEventListener('storage', updateCountFromStorage);
+      window.removeEventListener("cart-updated", handleCartEvent);
+      window.removeEventListener("storage", updateCountFromStorage);
+      window.removeEventListener("profile_updated", handleProfileUpdate);
+      removeOrdersListener();
     };
   }, []);
 
-  const formatTime = (date: Date) =>
-    date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "short", day: "numeric" });
-
   return (
     <ToastProvider>
-      <div className="flex flex-col h-screen bg-[#f8f9fc] font-sans overflow-hidden">
+      <div className="flex flex-col h-screen bg-zinc-50 font-sans overflow-hidden">
         {/* POS Header */}
         <header className="h-[56px] shrink-0 bg-white border-b border-gray-200 flex items-center px-6 gap-6 shadow-sm z-50">
           {/* Logo */}
@@ -100,21 +115,6 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
               <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">POS Terminal</span>
             </div>
           </Link>
-
-          <div className="w-px h-6 bg-gray-200" />
-
-          {/* Clock */}
-          <div className="flex items-center gap-2 text-gray-500">
-            <Clock className="size-4 text-primary" />
-            <div>
-              <span className="text-[13px] font-bold text-[#1E293B] tabular-nums">
-                {isMounted ? formatTime(time) : "--:--:--"}
-              </span>
-              <span className="text-[10px] text-gray-400 ml-2">
-                {isMounted ? formatDate(time) : "Loading..."}
-              </span>
-            </div>
-          </div>
 
           <div className="flex-1" />
           
@@ -159,6 +159,31 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
               <CircleDollarSign className="size-4" />
             </Link>
 
+            <Link
+              href="/ready-orders"
+              className={cn(
+                "size-8 rounded-xl flex items-center justify-center transition-all relative border",
+                pathname === "/ready-orders"
+                  ? "bg-primary text-white border-primary shadow-sm"
+                  : readyCount > 0
+                    ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                    : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
+              )}
+              title="Ready orders"
+            >
+              <Bell className="size-4" />
+              <span
+                className={cn(
+                  "absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center",
+                  readyCount > 0
+                    ? "bg-emerald-600 text-white"
+                    : "bg-muted text-muted-foreground border border-border"
+                )}
+              >
+                {readyCount}
+              </span>
+            </Link>
+
             <button 
               onClick={() => window.print()}
               className="size-8 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-gray-100 transition-all border border-gray-100"
@@ -166,22 +191,12 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
               <Printer className="size-4" />
             </button>
 
-            {/* Held Orders Button */}
-            <button 
-              onClick={() => window.dispatchEvent(new CustomEvent('open-held-orders'))}
-              className={cn(
-                "size-8 rounded-xl flex items-center justify-center transition-all relative border",
-                heldCount > 0 ? "bg-primary text-white border-primary shadow-sm" : "bg-gray-50 text-gray-400 border-gray-100"
-              )}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="size-8 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-gray-100 transition-all border border-gray-100"
+              title="Refresh"
             >
-              <History className="size-4" />
-              {heldCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-white text-primary text-[9px] font-black h-4 w-4 flex items-center justify-center rounded-full shadow-md border border-primary">
-                  {heldCount}
-                </span>
-              )}
-            </button>
-            <button onClick={() => window.location.reload()} className="size-8 rounded-xl bg-gray-50 text-gray-500 flex items-center justify-center hover:bg-gray-100 transition-all border border-gray-100">
               <RotateCw className="size-4" />
             </button>
           </div>
