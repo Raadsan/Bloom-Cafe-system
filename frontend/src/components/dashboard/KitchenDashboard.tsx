@@ -40,9 +40,16 @@ import {
   chartPrimary,
   chartPrimaryVariants,
   chartTooltipStyle,
+  chartAxisTick,
+  dashboardTableIdClass,
   dashboardStatusBadgeClass,
   getOrderStatusBadgeClass,
   formatStatusLabel,
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 import { isToday, format, subDays } from "date-fns";
 
@@ -109,12 +116,12 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground uppercase">Kitchen Dashboard</h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-3">Monitor active orders and kitchen workload.</p>
-        </div>
+    <div className={cn(dashboardPageClass, "space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700")} style={dashboardPageStyle}>
+      <div className={pageHeaderWrapperClass}>
+        <h1 className={pageHeaderTitleClass}>Kitchen Dashboard</h1>
+        <p className={pageHeaderSubtitleClass}>
+          Monitor active orders and kitchen workload.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -152,8 +159,8 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={chartAxisTick} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={chartAxisTick} />
                 <Tooltip contentStyle={chartTooltipStyle} itemStyle={{ color: "#ffffff" }} />
                 <Area type="monotone" dataKey="orders" stroke={chartPrimary} strokeWidth={2.5} fillOpacity={1} fill="url(#colorKitchen)" />
               </AreaChart>
@@ -192,15 +199,15 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-          <div className="px-8 py-4 flex flex-wrap items-center justify-between border-b border-zinc-50">
+        <div className="trezo-card overflow-hidden">
+          <div className="px-8 py-4 flex flex-wrap items-center justify-between border-b border-border">
             <div>
-              <h3 className="text-sm font-bold uppercase tracking-tight text-[#1E293B]">Priority Orders</h3>
+              <h3 className="text-sm font-bold uppercase tracking-tight text-foreground">Priority Orders</h3>
               <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mt-0.5">Pending and preparing tickets</p>
             </div>
           </div>
 
-          <div className="border-t border-zinc-100 overflow-x-auto">
+          <div className="border-t border-border overflow-x-auto">
             <Table className="w-full">
               <TableHeader className={dashboardTableHeaderClass}>
                 <TableRow className={dashboardTableHeadRowClass}>
@@ -210,14 +217,14 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Items count</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="bg-white">
+              <TableBody className="bg-card">
                 {pendingOrders.length > 0 ? pendingOrders.map((order) => (
                   <TableRow key={order.id} className={dashboardTableBodyRowClass}>
                   <TableCell className={dashboardTableCellClass}>
-                    <span className="text-[13px] font-bold text-primary">{order.id}</span>
+                    <span className={dashboardTableIdClass}>{order.id}</span>
                   </TableCell>
                   <TableCell className={dashboardTableCellClass}>
-                    <span className="text-[13px] font-medium text-zinc-600">
+                    <span className="text-[13px] font-medium text-muted-foreground">
                       Table {order.table?.number || order.tableId}
                     </span>
                   </TableCell>

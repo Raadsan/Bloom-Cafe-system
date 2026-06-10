@@ -33,6 +33,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   actionBtnEdit,
   actionBtnDelete,
   dashboardTableHeaderClass,
@@ -159,7 +160,7 @@ export default function RolesPage() {
 
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
-      <div className="mb-6 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Roles</h1>
         <p className={pageHeaderSubtitleClass}>Create and manage staff roles and their descriptions.</p>
       </div>

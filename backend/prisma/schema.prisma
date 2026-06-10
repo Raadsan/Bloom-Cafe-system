@@ -70,6 +70,14 @@ model receiptSettings {
   updatedAt  DateTime @updatedAt
 }
 
+model systemSettings {
+  id            Int      @id @default(1)
+  systemName    String   @default("Restaurant")
+  systemTagline String?  @default("Management System")
+  systemLogoUrl String?  @db.LongText
+  updatedAt     DateTime @updatedAt
+}
+
 model address {
   id         Int      @id @default(autoincrement())
   customerId Int

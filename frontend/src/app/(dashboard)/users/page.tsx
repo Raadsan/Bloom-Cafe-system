@@ -29,6 +29,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   actionBtnView,
   actionBtnEdit,
   actionBtnDelete,
@@ -40,6 +41,16 @@ import {
   dashboardStatusBadgeClass,
   getTableStatusBadgeClass,
   btnCreatePage,
+  dashboardCardClass,
+  dashboardControlsRowClass,
+  dashboardTableWrapClass,
+  dashboardPaginationClass,
+  dashboardSelectClass,
+  dashboardInputClass,
+  dashboardTextPrimary,
+  dashboardTextSecondary,
+  dashboardLabelClass,
+  dashboardTableIdClass,
 } from "@/lib/dashboard-ui";
 
 // Module-level in-memory cache to persist between React page transitions
@@ -249,22 +260,22 @@ export default function UsersPage() {
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Page Header: Outside the box */}
-      <div className="mb-6 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Users management</h1>
         <p className={pageHeaderSubtitleClass}>Manage system administrators, roles, and security permissions in one place.</p>
       </div>
 
       {/* Main Container Box */}
-      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+      <div className={dashboardCardClass}>
         {/* Controls Row: Inside the box */}
-        <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50">
+        <div className={dashboardControlsRowClass}>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+            <div className={cn("flex items-center gap-2", dashboardLabelClass)}>
               <span>Show</span>
               <select 
                 value={pageSize} 
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className={cn("w-16", dashboardSelectClass)}
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -273,12 +284,12 @@ export default function UsersPage() {
               </select>
             </div>
 
-            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+            <div className={cn("flex items-center gap-2", dashboardLabelClass)}>
               <span>Filter Role</span>
               <select 
                 value={roleFilter} 
                 onChange={(e) => setRoleFilter(e.target.value)}
-                className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className={cn("w-40 px-3", dashboardSelectClass)}
               >
                 <option value="all">All Roles</option>
                 {roles.map(r => (
@@ -298,7 +309,7 @@ export default function UsersPage() {
                 placeholder="Search admins..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
+                className={dashboardInputClass}
               />
             </div>
 
@@ -312,7 +323,7 @@ export default function UsersPage() {
         </div>
 
         {/* Table */}
-        <div className="border-t border-zinc-100 overflow-hidden bg-white">
+        <div className={dashboardTableWrapClass}>
           <div className="overflow-x-auto">
             <Table className="w-full">
               <TableHeader className={dashboardTableHeaderClass}>
@@ -339,7 +350,7 @@ export default function UsersPage() {
                   ))
                 ) : paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="px-6 py-10 text-center text-zinc-500">
+                    <TableCell colSpan={7} className="px-6 py-10 text-center text-muted-foreground dark:text-white/70">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -347,19 +358,19 @@ export default function UsersPage() {
                   paginatedUsers.map((u) => (
                     <TableRow key={u.id} className={dashboardTableBodyRowClass}>
                       <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-bold text-primary">{u.id}</span>
+                        <span className={dashboardTableIdClass}>{u.id}</span>
                       </TableCell>
                       <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-medium text-zinc-700">{u.fullName}</span>
+                        <span className={dashboardTextPrimary}>{u.fullName}</span>
                       </TableCell>
                       <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-medium text-zinc-600">{u.email}</span>
+                        <span className={dashboardTextSecondary}>{u.email}</span>
                       </TableCell>
                       <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-medium text-zinc-600">{u.phone || "—"}</span>
+                        <span className={dashboardTextSecondary}>{u.phone || "—"}</span>
                       </TableCell>
                       <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-medium text-zinc-600 capitalize">
+                        <span className={cn(dashboardTextSecondary, "capitalize")}>
                           {u.role?.name || "No Role"}
                         </span>
                       </TableCell>
@@ -414,7 +425,7 @@ export default function UsersPage() {
         </div>
 
         {/* Table Footer / Pagination */}
-        <div className="py-2 px-8 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-zinc-400 border-t border-zinc-100 bg-zinc-50/30">
+        <div className={dashboardPaginationClass}>
           <div>
             {Math.min(filteredUsers.length, (currentPage - 1) * pageSize + 1)}-{Math.min(filteredUsers.length, currentPage * pageSize)} of {filteredUsers.length}
           </div>

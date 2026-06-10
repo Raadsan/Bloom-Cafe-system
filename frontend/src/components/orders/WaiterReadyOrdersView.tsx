@@ -143,7 +143,7 @@ export default function WaiterReadyOrdersView({
     >
       <div className={cn("mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4", !isPos && "px-4")}>
         <div>
-          <h1 className={isPos ? "text-xl font-black text-foreground tracking-tight" : pageHeaderTitleClass}>
+          <h1 className={pageHeaderTitleClass}>
             {pageTitle}
           </h1>
           <p className={isPos ? "text-sm text-muted-foreground mt-1" : pageHeaderSubtitleClass}>

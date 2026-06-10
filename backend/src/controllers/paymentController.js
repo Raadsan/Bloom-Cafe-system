@@ -686,7 +686,6 @@
 import prisma from '../config/db.js'
 import { emitOrderUpdate, emitPaymentSuccess } from '../utils/socketEvents.js'
 import { notifyNewOrder } from '../utils/orderNotifications.js'
-import { resolveSenderForOrder } from '../utils/notificationSender.js'
 import { sendWaafiPayment } from '../utils/waafiPayment.js'
 
 // GET AVAILABLE PAYMENT METHODS
@@ -829,10 +828,6 @@ export const processWaafiPayment = async (req, res) => {
     }
 
     // ── 5. NOTIFICATIONS ────────────────────────────────────────────────────
-    const paymentSender = await resolveSenderForOrder(
-      updatedPayment.order,
-      req.user?.id
-    )
     await prisma.notification.create({
       data: {
         title: 'Payment Successful',
@@ -840,7 +835,6 @@ export const processWaafiPayment = async (req, res) => {
         role: 'customer',
         orderId,
         customerId: updatedPayment.order?.customerId || null,
-        ...paymentSender,
       },
     })
 
@@ -1000,7 +994,6 @@ export const processCheckoutPayment = async (req, res) => {
     }
 
     // 6. NOTIFICATIONS
-    const checkoutSender = await resolveSenderForOrder(order, req.user?.id)
     await prisma.notification.create({
       data: {
         title: 'Payment Successful',
@@ -1008,7 +1001,6 @@ export const processCheckoutPayment = async (req, res) => {
         role: 'customer',
         orderId: order.id,
         customerId: order.customerId || null,
-        ...checkoutSender,
       },
     })
 
@@ -1129,10 +1121,6 @@ export const confirmPublicPayment = async (req, res) => {
       }
 
       // 🔥 NOTIFICATIONS
-      const publicPaySender = await resolveSenderForOrder(
-        payment.order,
-        req.user?.id
-      )
       await prisma.notification.create({
         data: {
           title: 'Payment Successful',
@@ -1140,7 +1128,6 @@ export const confirmPublicPayment = async (req, res) => {
           role: 'customer',
           orderId: payment.order.id,
           customerId: payment.order.customerId,
-          ...publicPaySender,
         },
       })
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Bell, Search, ChevronDown, LogOut, User as UserIcon, FileText, Settings2 } from "lucide-react";
@@ -20,6 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PermissionProvider } from "@/context/PermissionContext";
+import { pageHeaderBarTitleClass } from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 import { onDebouncedEvent, REFRESH_NOTIFICATIONS } from "@/lib/live-updates";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -44,6 +46,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return "Dashboard";
   })();
 
+  const fetchNotifications = useCallback(async (silent = false) => {
+    try {
+      if (!silent) setNotificationsLoading(true);
+      const data = await notificationApi.getMyNotifications(silent);
+      setNotifications(data);
+    } catch (error) {
+      console.error("Failed to load notifications", error);
+    } finally {
+      if (!silent) setNotificationsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -51,18 +65,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setUser(currentUser);
       } catch (error) {
         console.error("Failed to load user session", error);
-      }
-    };
-
-    const fetchNotifications = async (silent = false) => {
-      try {
-        if (!silent) setNotificationsLoading(true);
-        const data = await notificationApi.getMyNotifications(silent);
-        setNotifications(data);
-      } catch (error) {
-        console.error("Failed to load notifications", error);
-      } finally {
-        if (!silent) setNotificationsLoading(false);
       }
     };
 
@@ -84,24 +86,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       window.removeEventListener('profile_updated', handleProfileUpdate);
       removeNotificationListener();
     };
-  }, []);
+  }, [fetchNotifications]);
 
   return (
     <SidebarProvider defaultOpen={true} style={{ "--sidebar-width": "16rem", "--sidebar-width-icon": "5.5rem" } as React.CSSProperties}>
       <PermissionProvider>
         <AppSidebar />
 
-        <SidebarInset className="bg-[#F8F9FA] dark:bg-zinc-950/50">
+        <SidebarInset className="bg-[#F8F9FA] dark:bg-[#161616]">
           {/* Top Header */}
-          <header className="sticky top-0 z-30 shrink-0 border-b bg-white/80 backdrop-blur-md transition-all duration-300">
+          <header className="sticky top-0 z-30 shrink-0 border-b border-border bg-white/80 dark:bg-[#161616]/95 backdrop-blur-md transition-all duration-300">
             <div className="flex h-14 lg:h-[72px] items-center gap-2 sm:gap-3 px-3 sm:px-4 lg:px-6">
               {/* Left: menu + page title on tablet/desktop compact */}
               <div className="flex min-w-0 items-center gap-2 sm:gap-3 shrink-0">
-                <SidebarTrigger className="size-10 shrink-0 rounded-lg border border-zinc-200 bg-white text-muted-foreground shadow-sm hover:text-primary hover:border-primary/30 transition-colors lg:size-9 lg:border-0 lg:bg-transparent lg:shadow-none" />
-                <h1 className="truncate text-sm font-semibold text-[#1E293B] lg:hidden max-w-[120px] sm:max-w-[180px]">
+                <SidebarTrigger className="size-10 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-muted-foreground shadow-sm hover:text-primary hover:border-primary/30 transition-colors lg:size-9 lg:border-0 lg:bg-transparent lg:dark:bg-transparent lg:shadow-none" />
+                <h1 className={cn(pageHeaderBarTitleClass, "truncate lg:hidden max-w-[120px] sm:max-w-[180px]")}>
                   {pageTitle}
                 </h1>
-                <h1 className="hidden lg:block text-[14px] font-semibold text-[#1E293B] whitespace-nowrap">
+                <h1 className={cn(pageHeaderBarTitleClass, "hidden lg:block whitespace-nowrap")}>
                   {pageTitle}
                 </h1>
               </div>
@@ -134,12 +136,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Search className="size-4 text-muted-foreground" />
                 </Button>
 
-                <DropdownMenu>
+                <DropdownMenu
+                  onOpenChange={(open) => {
+                    if (open) fetchNotifications(true);
+                  }}
+                >
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full group">
-                      <Bell className="w-4.5 h-4.5 text-muted-foreground group-hover:text-foreground group-hover:scale-110 transition-all" />
+                      <Bell className="w-4.5 h-4.5 text-muted-foreground dark:text-white group-hover:text-foreground dark:group-hover:text-white group-hover:scale-110 transition-all" />
                       {unreadCount > 0 && (
-                        <span className="absolute top-1.5 right-1.5 min-w-[14px] h-3.5 px-0.5 bg-primary text-[8px] font-bold text-primary-foreground rounded-full ring-2 ring-background flex items-center justify-center">
+                        <span className="absolute top-1.5 right-1.5 min-w-[14px] h-3.5 px-0.5 bg-primary text-[8px] font-bold text-white rounded-full ring-2 ring-background flex items-center justify-center">
                           {unreadCount > 9 ? "9+" : unreadCount}
                         </span>
                       )}
@@ -149,7 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="bg-muted/50 p-4 border-b border-border flex items-center justify-between">
                       <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Notifications</h3>
                       {unreadCount > 0 && (
-                        <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase">
+                        <span className="text-[9px] font-bold text-white bg-primary px-2 py-0.5 rounded-full uppercase">
                           {unreadCount} New
                         </span>
                       )}
@@ -208,7 +214,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 pl-0.5 cursor-pointer group outline-none shrink-0">
-                      <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[15px] font-medium shadow-sm shadow-primary/20 transition-all group-hover:ring-2 group-hover:ring-primary/20 overflow-hidden shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center text-[15px] font-medium shadow-sm shadow-primary/20 transition-all group-hover:ring-2 group-hover:ring-primary/20 overflow-hidden shrink-0">
                         {user?.avatarUrl ? (
                           <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
@@ -225,7 +231,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <DropdownMenuContent className="w-72 mt-2 rounded-xl shadow-2xl border-border/50" align="end">
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-2 px-2 py-2.5 text-left text-sm">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground font-medium text-[15px] overflow-hidden">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white font-medium text-[15px] overflow-hidden">
                         {user?.avatarUrl ? (
                           <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
@@ -260,12 +266,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className="text-xs font-bold uppercase tracking-widest text-destructive py-2.5 cursor-pointer"
+                    className="text-xs font-bold uppercase tracking-widest text-destructive dark:text-white py-2.5 cursor-pointer"
                     onClick={async () => {
                       await authApi.logout();
                     }}
                   >
-                    <LogOut className="mr-2 size-4" />
+                    <LogOut className="mr-2 size-4 dark:text-white" />
                     Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -275,14 +281,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Mobile / tablet search row */}
             {mobileSearchOpen && (
-              <div className="lg:hidden border-t border-zinc-100 px-3 sm:px-4 py-2.5">
+              <div className="lg:hidden border-t border-zinc-100 dark:border-zinc-800 px-3 sm:px-4 py-2.5">
                 <div className="relative w-full group">
                   <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
                   <input
                     type="text"
                     placeholder="Search..."
                     autoFocus
-                    className="w-full h-10 pl-9 pr-4 text-sm bg-zinc-50 border border-zinc-200 focus:border-primary/30 focus:bg-white rounded-lg focus:outline-none transition-all"
+                    className="w-full h-10 pl-9 pr-4 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 focus:border-primary/30 focus:bg-white dark:focus:bg-zinc-900 rounded-lg focus:outline-none transition-all dark:text-zinc-100"
                   />
                 </div>
               </div>
@@ -290,7 +296,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </header>
 
           {/* Page Content */}
-          <main className="flex-1 overflow-auto">
+          <main className="dashboard-scope flex-1 overflow-auto">
             <div className="py-4 px-2 md:px-3 lg:px-4">
               <div className="w-full mx-auto">
                 {children}

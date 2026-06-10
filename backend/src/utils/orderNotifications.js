@@ -1,6 +1,5 @@
 import prisma from '../config/db.js'
 import { emitNewOrder, emitOrderReady } from './socketEvents.js'
-import { loadSenderFields, resolveSenderForOrder } from './notificationSender.js'
 
 function getTableLabel(order) {
   if (order.table?.number) return `Table ${order.table.number}`
@@ -13,7 +12,7 @@ function getTableLabel(order) {
 /**
  * New order entered kitchen queue — notify kitchen + all waiters.
  */
-export async function notifyNewOrder(order, senderId = null) {
+export async function notifyNewOrder(order, _senderId = null) {
   if (!order?.id) return
 
   const label = getTableLabel(order)
@@ -22,12 +21,9 @@ export async function notifyNewOrder(order, senderId = null) {
     order.orderitem?.length ??
     0
 
-  const sender = await resolveSenderForOrder(order, senderId)
-
   const base = {
     title: 'New Order',
     orderId: order.id,
-    ...sender,
   }
 
   await prisma.notification.createMany({
@@ -52,11 +48,10 @@ export async function notifyNewOrder(order, senderId = null) {
 /**
  * Order ready — notify waiters (+ order creator) and dine-in customer.
  */
-export async function notifyOrderReady(order, senderId = null) {
+export async function notifyOrderReady(order, _senderId = null) {
   if (!order?.id) return
 
   const label = getTableLabel(order)
-  const sender = await loadSenderFields(senderId || order?.userId || null)
 
   const notifications = [
     {
@@ -65,14 +60,12 @@ export async function notifyOrderReady(order, senderId = null) {
       role: 'waiter',
       orderId: order.id,
       userId: null,
-      ...sender,
     },
     {
       title: 'Order Ready',
       message: `Order #${order.id} for ${label} is ready for pickup`,
       role: 'kitchen',
       orderId: order.id,
-      ...sender,
     },
   ]
 
@@ -86,9 +79,6 @@ export async function notifyOrderReady(order, senderId = null) {
       role: 'customer',
       orderId: order.id,
       customerId: order.customerId || null,
-      senderId: sender.senderId,
-      senderName: sender.senderName,
-      senderAvatarUrl: sender.senderAvatarUrl,
     })
   }
 

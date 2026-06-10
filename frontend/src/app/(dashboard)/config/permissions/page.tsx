@@ -21,6 +21,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
   dashboardTableHeadClass,
@@ -289,7 +290,7 @@ export default function PermissionsPage() {
 
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
-      <div className="mb-6 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Role Permissions</h1>
         <p className={pageHeaderSubtitleClass}>Configure view, add, edit and delete access for each module by role.</p>
       </div>

@@ -33,6 +33,7 @@ import api from "@/lib/api/axios";
 import { paymentApi, PaymentMethod } from "@/lib/api/paymentApi";
 import { customerApi, Customer } from "@/lib/api/customerApi";
 import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
+import { ReceiptHeader } from "@/components/receipt/ReceiptBody";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { btnCreatePage } from "@/lib/dashboard-ui";
@@ -1104,7 +1105,7 @@ export default function PosTerminalPage() {
         <div className="px-5 py-4 border-b border-border/60">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h1 className="text-lg font-bold text-[#1e293b] uppercase tracking-tight">Order Detail</h1>
+              <h1 className="text-lg font-semibold text-[#1e293b] dark:text-white tracking-tight">Order Detail</h1>
               <button
                 type="button"
                 onClick={copyOrderId}
@@ -1710,9 +1711,9 @@ export default function PosTerminalPage() {
       </Dialog>
 
       {/* Print receipt */}
-      <div id="printable-receipt" className="hidden print:block font-mono text-[10px] p-4 bg-white">
-        <div className="text-center mb-4">
-          <h2 className="text-sm font-bold uppercase">{receiptSettings?.name || "RESTAURANT"}</h2>
+      <div id="printable-receipt" className="hidden print:block font-mono text-[10px] p-4 bg-white text-black">
+        <div className="mb-3">
+          <ReceiptHeader settings={receiptSettings} />
         </div>
         <div className="border-b border-dashed mb-2 pb-2">
           <p>Order: {draftOrderId}</p>
@@ -1734,6 +1735,12 @@ export default function PosTerminalPage() {
           <span>TOTAL</span>
           <span>${total.toFixed(2)}</span>
         </div>
+        {(receiptSettings?.footerText || receiptSettings?.email) && (
+          <div className="text-center mt-4 text-[9px] text-zinc-600">
+            {receiptSettings?.footerText && <p className="italic">{receiptSettings.footerText}</p>}
+            {receiptSettings?.email && <p className="font-bold mt-1">{receiptSettings.email}</p>}
+          </div>
+        )}
       </div>
     </div>
   );

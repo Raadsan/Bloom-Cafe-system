@@ -27,6 +27,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   actionBtnView,
   actionBtnEdit,
   actionBtnDelete,
@@ -193,7 +194,7 @@ export default function RoomsPage() {
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Page Header */}
-      <div className="mb-6 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Rooms & Halls</h1>
         <p className={pageHeaderSubtitleClass}>
           Manage dining halls and rooms — assign tables to rooms when creating tables.

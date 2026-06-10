@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { authApi, AuthUser } from "@/lib/api/authApi";
 import { 
-  UtensilsCrossed, 
   LogOut, 
   User,
   User as UserIcon,
@@ -23,6 +22,9 @@ import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
 import { orderApi } from "@/lib/api/orderApi";
 import { matchesReadyAudience } from "@/lib/order-type-utils";
 import { ToastProvider } from "@/components/ui/toast";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { useSystemBranding } from "@/hooks/use-system-branding";
+import SystemBrandMark from "@/components/branding/SystemBrandMark";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -38,6 +40,7 @@ import {
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { branding } = useSystemBranding();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [readyCount, setReadyCount] = useState(0);
@@ -102,17 +105,23 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastProvider>
-      <div className="flex flex-col h-screen bg-zinc-50 font-sans overflow-hidden">
+      <div className="flex flex-col h-screen bg-zinc-50 dark:bg-[#161616] font-sans overflow-hidden">
         {/* POS Header */}
-        <header className="h-[56px] shrink-0 bg-white border-b border-gray-200 flex items-center px-6 gap-6 shadow-sm z-50">
+        <header className="h-[56px] shrink-0 bg-white dark:bg-[#161616] border-b border-gray-200 dark:border-[#2a2a2a] flex items-center px-6 gap-6 shadow-sm z-50">
           {/* Logo */}
-          <Link href="/pos-terminal" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm">
-              <UtensilsCrossed className="size-4 text-white" />
-            </div>
-            <div>
-              <span className="text-[13px] font-black text-[#1E293B] uppercase tracking-tight">Restaurant</span>
-              <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">POS Terminal</span>
+          <Link href="/pos-terminal" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity min-w-0">
+            <SystemBrandMark
+              logoUrl={branding.systemLogoUrl}
+              systemName={branding.systemName}
+              size="sm"
+            />
+            <div className="min-w-0">
+              <span className="text-[13px] font-black text-[#1E293B] dark:text-zinc-100 uppercase tracking-tight truncate block">
+                {branding.systemName}
+              </span>
+              <span className="block text-[9px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest leading-none truncate">
+                {branding.systemTagline || "POS Terminal"}
+              </span>
             </div>
           </Link>
 
@@ -201,6 +210,8 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
+          <ThemeToggle />
+
           {/* User Info */}
           {user && (
             <div className="flex items-center gap-3">
@@ -258,12 +269,12 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="bg-gray-100" />
                   <DropdownMenuItem
-                    className="text-[11px] font-bold uppercase tracking-widest text-red-500 py-3 cursor-pointer hover:bg-red-50 hover:text-red-600 focus:bg-red-50 focus:text-red-600"
+                    className="text-[11px] font-bold uppercase tracking-widest text-red-500 dark:text-white py-3 cursor-pointer hover:bg-red-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-white focus:bg-red-50 dark:focus:bg-white/10 focus:text-red-600 dark:focus:text-white"
                     onClick={async () => {
                       await authApi.logout();
                     }}
                   >
-                    <LogOut className="mr-2.5 size-4" />
+                    <LogOut className="mr-2.5 size-4 dark:text-white" />
                     Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -273,7 +284,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* POS Content — full height */}
-        <main className="flex-1 overflow-hidden">
+        <main className="pos-scope flex-1 overflow-hidden">
           {children}
         </main>
       </div>

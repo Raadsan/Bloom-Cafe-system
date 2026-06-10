@@ -26,6 +26,11 @@ import {
   dashboardStatusBadgeClass,
   getOrderStatusBadgeClass,
   formatStatusLabel,
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 import {
   Table,
@@ -84,12 +89,12 @@ export default function MySalesPage() {
   const highestSale = totalOrders > 0 ? Math.max(...orders.map(o => o.total || 0)) : 0;
 
   return (
-    <div className="animate-in fade-in duration-700 font-sans mx-4 pt-6 pb-8 space-y-6">
+    <div className={cn(dashboardPageClass, "space-y-6")} style={dashboardPageStyle}>
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className={cn(pageHeaderWrapperClass, "flex flex-col sm:flex-row sm:items-center justify-between gap-4")}>
         <div>
-          <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">My Sales Analytics</h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Detailed tracking of your personal sales and performance.</p>
+          <h1 className={pageHeaderTitleClass}>My Sales Analytics</h1>
+          <p className={pageHeaderSubtitleClass}>Detailed tracking of your personal sales and performance.</p>
         </div>
         <div className="flex items-center gap-3">
           <Button onClick={fetchMyOrders} variant="outline" className="h-10 border-zinc-200 text-zinc-600 rounded-xl shadow-sm font-bold px-4 hover:bg-zinc-50 flex items-center gap-2 text-xs uppercase tracking-widest">

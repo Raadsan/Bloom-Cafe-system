@@ -6,6 +6,14 @@ import { useToast } from "@/components/ui/toast";
 import ProfileDetailsPanel, {
   ProfileDetailsSkeleton,
 } from "@/components/profile/ProfileDetailsPanel";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
+} from "@/lib/dashboard-ui";
+import { cn } from "@/lib/utils";
 
 const selectClass =
   "w-full h-10 px-3 rounded-lg border border-zinc-200 bg-white text-sm text-zinc-800 outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10";
@@ -170,13 +178,11 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-zinc-50 p-4 md:p-6">
+    <div className={cn(dashboardPageClass, "h-full overflow-y-auto bg-zinc-50 dark:bg-transparent")} style={dashboardPageStyle}>
       <div className="w-full max-w-none space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">
-            My Profile
-          </h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">
+        <div className={pageHeaderWrapperClass}>
+          <h1 className={pageHeaderTitleClass}>My Profile</h1>
+          <p className={pageHeaderSubtitleClass}>
             Manage your account information
           </p>
         </div>

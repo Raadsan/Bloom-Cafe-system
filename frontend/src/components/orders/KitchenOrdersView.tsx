@@ -23,6 +23,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   btnCreatePage,
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
@@ -459,7 +460,7 @@ export default function KitchenOrdersView({
 
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
-      <div className="mb-4 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Kitchen Queue</h1>
         <p className={pageHeaderSubtitleClass}>
           Pick up orders, prepare dishes, and mark them ready for waiters.

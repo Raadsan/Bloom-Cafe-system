@@ -45,6 +45,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   actionBtnView,
   actionBtnEdit,
   actionBtnDelete,
@@ -370,7 +371,7 @@ export default function TablesPage() {
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Page Header: Outside the box */}
-      <div className="mb-6 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Tables Management</h1>
         <p className={pageHeaderSubtitleClass}>Manage restaurant floor plans, table statuses, and QR code assignments.</p>
       </div>

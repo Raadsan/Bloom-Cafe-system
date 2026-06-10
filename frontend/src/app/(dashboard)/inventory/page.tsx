@@ -19,6 +19,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   actionBtnView,
   actionBtnEdit,
   actionBtnDelete,
@@ -202,7 +203,7 @@ export default function InventoryPage() {
 
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
-      <div className="mb-6 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Current Stock</h1>
         <p className={pageHeaderSubtitleClass}>Track inventory levels, stock alerts, and item availability across your kitchen.</p>
       </div>

@@ -23,6 +23,13 @@ import { isKitchenPendingStatus } from "@/lib/kitchen-order-utils";
 import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
 import { matchesReadyAudience } from "@/lib/order-type-utils";
 import OrderQueueCard from "@/components/orders/OrderQueueCard";
+import {
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
+} from "@/lib/dashboard-ui";
 
 type PosQueueTab = "pending" | "preparing" | "ready";
 
@@ -141,11 +148,11 @@ export default function PosOrdersQueueView() {
   const activeTabLabel = TABS.find(t => t.id === activeTab)?.label ?? "Orders";
 
   return (
-    <div className="h-full overflow-y-auto animate-in fade-in duration-700 font-sans mx-4 pt-6 pb-8 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className={cn(dashboardPageClass, "h-full overflow-y-auto space-y-6")} style={dashboardPageStyle}>
+      <div className={cn(pageHeaderWrapperClass, "flex flex-col sm:flex-row sm:items-center justify-between gap-4")}>
         <div>
-          <h1 className="text-2xl font-bold text-[#1e293b] uppercase tracking-tight">Order Queue</h1>
-          <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">
+          <h1 className={pageHeaderTitleClass}>Order Queue</h1>
+          <p className={pageHeaderSubtitleClass}>
             Takeaway and delivery — pending, preparing, and ready.
           </p>
         </div>

@@ -38,6 +38,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
   dashboardTableHeadClass,
@@ -49,6 +50,8 @@ import {
   chartPrimaryLight,
   chartPrimaryVariants,
   chartTooltipStyle,
+  chartAxisTickSm,
+  dashboardTableIdClass,
   dashboardStatusBadgeClass,
   getOrderStatusBadgeClass,
   formatStatusLabel,
@@ -142,7 +145,7 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       <div className="space-y-8">
         {/* Page Header — matches Rooms page */}
-        <div className="px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className={cn(pageHeaderWrapperClass, "flex flex-col sm:flex-row sm:items-center justify-between gap-4")}>
           <div>
             <h1 className={pageHeaderTitleClass}>Waiter Dashboard</h1>
             <p className={pageHeaderSubtitleClass}>
@@ -172,7 +175,7 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
               </div>
               <div className="mt-4">
                 <p className="text-[12px] text-zinc-500 uppercase tracking-wider font-medium">{stat.title}</p>
-                <h3 className="text-2xl font-semibold tracking-tight text-[#1e293b] mt-1">{stat.value}</h3>
+                <h3 className="text-2xl font-semibold tracking-tight text-foreground mt-1">{stat.value}</h3>
               </div>
             </div>
           ))}
@@ -183,7 +186,7 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
           <div className="lg:col-span-2 trezo-card p-6">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h3 className="text-sm font-semibold text-[#1e293b] capitalize tracking-tight">Weekly Orders</h3>
+                <h3 className="text-sm font-semibold text-foreground capitalize tracking-tight">Weekly Orders</h3>
                 <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Your activity over the last 7 days</p>
               </div>
               <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors">
@@ -205,13 +208,13 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
                     dataKey="name"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 10, fontWeight: 600, fill: "#71717a" }}
+                    tick={chartAxisTickSm}
                     dy={10}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 10, fontWeight: 600, fill: "#71717a" }}
+                    tick={chartAxisTickSm}
                   />
                   <Tooltip
                     contentStyle={{
@@ -237,7 +240,7 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
           <div className="trezo-card p-6">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h3 className="text-sm font-semibold text-[#1e293b] capitalize tracking-tight">Order Status</h3>
+                <h3 className="text-sm font-semibold text-foreground capitalize tracking-tight">Order Status</h3>
                 <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Pending vs success</p>
               </div>
             </div>
@@ -250,7 +253,7 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
                     dataKey="name"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 10, fontWeight: 600, fill: "#71717a" }}
+                    tick={chartAxisTickSm}
                     dy={10}
                   />
                   <YAxis hide />
@@ -272,10 +275,10 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
 
         {/* Recent Orders Table */}
         <div className="px-4">
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-            <div className="px-8 py-4 flex flex-wrap items-center justify-between border-b border-zinc-50">
+          <div className="trezo-card overflow-hidden">
+            <div className="px-8 py-4 flex flex-wrap items-center justify-between border-b border-border">
               <div>
-                <h3 className="text-sm font-semibold text-[#1e293b] capitalize tracking-tight">Recent Orders</h3>
+                <h3 className="text-sm font-semibold text-foreground capitalize tracking-tight">Recent Orders</h3>
                 <p className="text-[12px] text-zinc-500 uppercase tracking-wider mt-1 font-medium">Your last 5 orders</p>
               </div>
               <div className="flex items-center gap-3">
@@ -286,7 +289,7 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
               </div>
             </div>
 
-            <div className="border-t border-zinc-100 overflow-x-auto">
+            <div className="border-t border-border overflow-x-auto">
               <Table className="w-full">
                 <TableHeader className={dashboardTableHeaderClass}>
                   <TableRow className={dashboardTableHeadRowClass}>
@@ -296,11 +299,11 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
                     <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Status</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody className="bg-white">
+                <TableBody className="bg-card">
                   {recentOrders.length > 0 ? recentOrders.map((order) => (
                     <TableRow key={order.id} className={dashboardTableBodyRowClass}>
                       <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-bold text-primary">{order.id}</span>
+                        <span className={dashboardTableIdClass}>{order.id}</span>
                       </TableCell>
                       <TableCell className={dashboardTableCellClass}>
                         <span className="text-[13px] font-medium text-zinc-700">{order.customerName || "Walk-in Guest"}</span>

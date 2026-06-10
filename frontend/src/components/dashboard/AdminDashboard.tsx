@@ -47,9 +47,16 @@ import {
   chartPrimary,
   chartPrimaryVariants,
   chartTooltipStyle,
+  chartAxisTick,
+  dashboardTableIdClass,
   dashboardStatusBadgeClass,
   getOrderStatusBadgeClass,
   formatStatusLabel,
+  dashboardPageClass,
+  dashboardPageStyle,
+  pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 
 interface DashboardData {
@@ -119,23 +126,14 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className={cn(dashboardPageClass, "space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700")} style={dashboardPageStyle}>
 
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground uppercase">Admin Dashboard</h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-3">Track your restaurant performance and daily operations.</p>
-        </div>
-        {/* <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="text-[11px] font-bold uppercase tracking-widest h-10 rounded-xl bg-white border border-zinc-100 text-[#64748B] hover:bg-zinc-50 hover:text-primary transition-all shadow-sm">
-            <Calendar className="mr-2 size-3.5" />
-            Last 7 Days
-          </Button>
-          <Button size="sm" className="text-[11px] font-bold uppercase tracking-widest h-10 rounded-xl bg-[#F3F4FF] text-primary hover:bg-primary hover:text-white transition-all border-none shadow-none px-6">
-            Generate Report
-          </Button>
-        </div> */}
+      <div className={pageHeaderWrapperClass}>
+        <h1 className={pageHeaderTitleClass}>Admin Dashboard</h1>
+        <p className={pageHeaderSubtitleClass}>
+          Track your restaurant performance and daily operations.
+        </p>
       </div>
 
       {/* Stat Cards Grid */}
@@ -194,13 +192,13 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
                   dataKey="name"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }}
+                  tick={chartAxisTick}
                   dy={10}
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }}
+                  tick={chartAxisTick}
                 />
                 <Tooltip
                   contentStyle={chartTooltipStyle}
@@ -236,7 +234,7 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
                   dataKey="name"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 10, fontWeight: 700, fill: "hsl(var(--muted-foreground))" }}
+                  tick={chartAxisTick}
                   dy={10}
                 />
                 <YAxis hide />
@@ -258,10 +256,10 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Orders Table Section */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-          <div className="px-8 py-4 flex flex-wrap items-center justify-between border-b border-zinc-50">
+        <div className="lg:col-span-2 trezo-card overflow-hidden">
+          <div className="px-8 py-4 flex flex-wrap items-center justify-between border-b border-border">
             <div>
-              <h3 className="text-sm font-bold uppercase tracking-tight text-[#1E293B]">Recent Orders</h3>
+              <h3 className="text-sm font-bold uppercase tracking-tight text-foreground">Recent Orders</h3>
               <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mt-0.5">Last 5 activities</p>
             </div>
             <div className="flex items-center gap-3">
@@ -270,17 +268,17 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="w-full h-9 pl-9 pr-3 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-xs font-medium text-zinc-600"
+                  className="w-full h-9 pl-9 pr-3 bg-muted/30 border border-border rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-xs font-medium text-foreground"
                 />
               </div>
-              <Button variant="ghost" size="sm" className="h-9 px-3 bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-primary hover:border-primary/30">
+              <Button variant="ghost" size="sm" className="h-9 px-3 bg-muted/30 border border-border text-muted-foreground hover:text-primary hover:border-primary/30">
                 <Filter className="size-3.5 mr-1.5" />
                 <span className="text-xs font-semibold">Filter</span>
               </Button>
             </div>
           </div>
 
-          <div className="border-t border-zinc-100 overflow-x-auto">
+          <div className="border-t border-border overflow-x-auto">
             <Table className="w-full">
               <TableHeader className={dashboardTableHeaderClass}>
                 <TableRow className={dashboardTableHeadRowClass}>
@@ -291,11 +289,11 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
                   <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Total</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="bg-white">
+              <TableBody className="bg-card">
                 {recentOrders.length > 0 ? recentOrders.map((order) => (
                   <TableRow key={order.id} className={dashboardTableBodyRowClass}>
                   <TableCell className={dashboardTableCellClass}>
-                    <span className="text-[13px] font-bold text-primary">{order.id}</span>
+                    <span className={dashboardTableIdClass}>{order.id}</span>
                   </TableCell>
                   <TableCell className={dashboardTableCellClass}>
                     <div className="flex flex-col gap-0.5">
@@ -327,7 +325,7 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
             </TableBody>
           </Table>
         </div>
-        <div className="p-5 border-t border-zinc-100 bg-white text-center">
+        <div className="p-5 border-t border-border bg-card text-center">
           <button className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary hover:underline transition-all">
             View All Transactions
           </button>

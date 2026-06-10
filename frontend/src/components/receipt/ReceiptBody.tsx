@@ -24,7 +24,7 @@ export interface ReceiptSnapshot {
   createdAt: string;
 }
 
-function ReceiptPhones({ phone }: { phone?: string }) {
+export function ReceiptPhones({ phone }: { phone?: string }) {
   if (!phone) return null;
   try {
     const phones = JSON.parse(phone);
@@ -42,6 +42,30 @@ function ReceiptPhones({ phone }: { phone?: string }) {
   return null;
 }
 
+export function ReceiptHeader({ settings }: { settings: ReceiptSettings | null }) {
+  return (
+    <div className="text-center space-y-1">
+      {settings?.logoUrl ? (
+        <div className="flex justify-center mb-2">
+          <img
+            src={settings.logoUrl}
+            alt={settings.name || "Restaurant logo"}
+            className="max-h-14 w-auto object-contain"
+          />
+        </div>
+      ) : null}
+      <h2 className="text-sm font-bold uppercase leading-tight">
+        {settings?.name || "RESTAURANT NAME"}
+      </h2>
+      <div className="text-[9px] text-zinc-500">
+        {settings?.address && <p>{settings.address}</p>}
+        <ReceiptPhones phone={settings?.phone} />
+        {settings?.vatNumber && <p className="font-bold">VAT: {settings.vatNumber}</p>}
+      </div>
+    </div>
+  );
+}
+
 export function ReceiptBody({
   data,
   settings,
@@ -53,18 +77,8 @@ export function ReceiptBody({
 }) {
   return (
     <div className={cn("font-mono text-[10px] text-zinc-800", className)}>
-      <div className="text-center mb-4 space-y-1">
-        {settings?.logoUrl && (
-          <div className="flex justify-center mb-2">
-            <img src={settings.logoUrl} alt="Logo" className="max-h-12 w-auto" />
-          </div>
-        )}
-        <h2 className="text-sm font-bold uppercase">{settings?.name || "RESTAURANT NAME"}</h2>
-        <div className="text-[9px] text-zinc-500">
-          {settings?.address && <p>{settings.address}</p>}
-          <ReceiptPhones phone={settings?.phone} />
-          {settings?.vatNumber && <p className="font-bold">VAT: {settings.vatNumber}</p>}
-        </div>
+      <div className="mb-3">
+        <ReceiptHeader settings={settings} />
       </div>
 
       <div className="border-b border-dashed border-zinc-300 mb-2 pb-2 space-y-0.5">

@@ -22,6 +22,7 @@ import menuRoutes from './routes/menuRoutes.js';
 import customerRoutes from './routes/customerRoutes.js'
 import expenseRoutes from './routes/expenseRoutes.js';
 import receiptSettingsRoutes from './routes/receiptSettingsRoutes.js'
+import systemSettingsRoutes from './routes/systemSettingsRoutes.js'
 import addressRoutes from './routes/addressRoutes.js'
 import roomRoutes from './routes/roomRoutes.js'
 
@@ -53,6 +54,7 @@ app.use('/api/expenses', expenseRoutes)
 app.use('/api/addresses', addressRoutes)
 app.use('/api/rooms', roomRoutes)
 app.use('/api/receipt-settings', receiptSettingsRoutes)
+app.use('/api/system-settings', systemSettingsRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');

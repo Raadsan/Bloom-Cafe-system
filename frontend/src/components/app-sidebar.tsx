@@ -2,7 +2,6 @@
 
 import {
   LayoutDashboard,
-  UtensilsCrossed,
   ListOrdered,
   Users,
   Settings,
@@ -62,6 +61,8 @@ import Link from "next/link";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { getLucideIcon, searchLucideIconNames, LUCIDE_ICON_NAMES } from "@/lib/lucide-icons";
+import { useSystemBranding } from "@/hooks/use-system-branding";
+import SystemBrandMark from "@/components/branding/SystemBrandMark";
 
 // Helper to normalize URLs from database
 const normalizeUrl = (url: string) => {
@@ -115,7 +116,7 @@ function NavUser({ user }: { user: AuthUser | null }) {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground border border-border/40 group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:justify-center"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-primary text-primary-foreground font-medium text-[15px] shadow-sm shadow-primary/20">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-primary text-white font-medium text-[15px] shadow-sm shadow-primary/20">
                 {user.fullName?.charAt(0) || "U"}
               </div>
               <div className="grid flex-1 text-left text-[11px] leading-tight group-data-[collapsible=icon]:hidden">
@@ -137,7 +138,7 @@ function NavUser({ user }: { user: AuthUser | null }) {
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-2 py-2 text-left text-sm">
-                <div className="flex h-9 w-9 items-center justify-center rounded bg-primary text-primary-foreground font-medium text-[15px] shadow-sm shadow-primary/20">
+                <div className="flex h-9 w-9 items-center justify-center rounded bg-primary text-white font-medium text-[15px] shadow-sm shadow-primary/20">
                   {user.fullName?.charAt(0) || "U"}
                 </div>
                 <div className="grid flex-1 text-left text-xs leading-tight">
@@ -166,12 +167,12 @@ function NavUser({ user }: { user: AuthUser | null }) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
-              className="text-xs font-semibold uppercase tracking-widest text-destructive cursor-pointer hover:bg-destructive/5"
+              className="text-xs font-semibold uppercase tracking-widest text-destructive dark:text-white cursor-pointer hover:bg-destructive/5"
               onClick={async () => {
                 await authApi.logout();
               }}
             >
-              <LogOut className="mr-2 size-4" />
+              <LogOut className="mr-2 size-4 dark:text-white" />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -270,27 +271,35 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     });
   }, [menus]);
 
+  const { branding } = useSystemBranding();
+
   return (
-    <Sidebar collapsible="icon" {...props} className="border-r border-zinc-100 shadow-none bg-white">
-      <SidebarHeader className="h-[76px] flex items-center justify-start px-4 bg-white border-b border-zinc-50 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:justify-center">
+    <Sidebar collapsible="icon" {...props} className="border-r border-sidebar-border shadow-none bg-sidebar">
+      <SidebarHeader className="h-[76px] flex items-center justify-start px-4 bg-sidebar border-b border-sidebar-border group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:justify-center">
         <Link href="/dashboard" className="flex items-center gap-3 w-full group-data-[collapsible=icon]:justify-center mt-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-primary/20 ml-1 group-data-[collapsible=icon]:ml-0 font-bold text-lg">
-            <UtensilsCrossed/>
-          </div>
-          <div className="flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
-            <span className="font-bold text-lg tracking-tighter text-[#1E293B] uppercase leading-none">Restaurant</span>
-            <span className="text-[9px] font-bold text-muted-foreground/50 tracking-widest uppercase leading-none">Management System</span>
+          <SystemBrandMark
+            logoUrl={branding.systemLogoUrl}
+            systemName={branding.systemName}
+            size="md"
+          />
+          <div className="flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden min-w-0">
+            <span className="font-bold text-lg tracking-tighter text-sidebar-foreground uppercase leading-none truncate">
+              {branding.systemName}
+            </span>
+            <span className="text-[9px] font-bold text-muted-foreground/50 tracking-widest uppercase leading-none truncate">
+              {branding.systemTagline || "Management System"}
+            </span>
           </div>
         </Link>
       </SidebarHeader>
       
-      <SidebarContent className="bg-white px-4 pt-8 pb-4 gap-0">
+      <SidebarContent className="bg-sidebar px-4 pt-8 pb-4 gap-0">
         <SidebarGroup className="p-0">
           <SidebarMenu className="gap-1.5 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-4 group-data-[collapsible=icon]:px-0">
             {loading ? (
               [1, 2, 3, 4, 5, 6].map((i) => (
                 <SidebarMenuItem key={i} className="w-full px-2">
-                  <div className="h-11 w-full rounded-lg bg-zinc-50 animate-pulse" />
+                  <div className="h-11 w-full rounded-lg bg-sidebar-accent animate-pulse" />
                 </SidebarMenuItem>
               ))
             ) : (
@@ -316,12 +325,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           className={cn(
                             "font-semibold text-[15.5px] h-12 transition-all pl-6 pr-2 rounded-lg w-full",
                             isActive 
-                              ? "bg-[#F3F4FF] text-[#1E293B]" 
-                              : "text-[#64748B] hover:bg-zinc-50 hover:text-[#1E293B]",
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground" 
+                              : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
                             "group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center"
                           )}
                         >
-                          <Icon className={cn("size-5 shrink-0 group-data-[collapsible=icon]:size-4", (isActive || isOpen) ? "text-[#1E293B]" : "text-[#94A3B8]")} strokeWidth={2} />
+                          <Icon className={cn("size-5 shrink-0 group-data-[collapsible=icon]:size-4", (isActive || isOpen) ? "text-sidebar-accent-foreground" : "text-muted-foreground")} strokeWidth={2} />
                           <span className="ml-3 flex-1 group-data-[collapsible=icon]:hidden whitespace-nowrap overflow-hidden text-ellipsis">{displayTitle}</span>
                           <ChevronRight className={cn("ml-auto size-3.5 shrink-0 transition-transform duration-300 opacity-40 group-data-[collapsible=icon]:hidden", isOpen && "rotate-90")} />
                         </SidebarMenuButton>
@@ -338,8 +347,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                     className={cn(
                                       "font-medium text-[14.5px] h-10 transition-all rounded-md pl-4 pr-3 w-full", 
                                       isSubActive 
-                                        ? "text-[#1E293B] bg-[#F3F4FF]/50" 
-                                        : "text-[#64748B] hover:text-[#1E293B] hover:bg-zinc-50/50"
+                                        ? "text-sidebar-accent-foreground bg-sidebar-accent/70" 
+                                        : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
                                     )}
                                   >
                                     <div className="flex items-center w-full">
@@ -360,13 +369,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         className={cn(
                           "font-semibold text-[15.5px] h-12 transition-all pl-5 pr-1 rounded-lg w-full",
                           isActive 
-                            ? "bg-[#F3F4FF] text-[#1E293B]" 
-                            : "text-[#64748B] hover:bg-zinc-50 hover:text-[#1E293B]",
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground" 
+                            : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
                           "group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center"
                         )}
                       >
                         <div className="flex items-center w-full justify-start group-data-[collapsible=icon]:justify-center">
-                          <Icon className={cn("size-5 shrink-0 group-data-[collapsible=icon]:size-4", isActive ? "text-[#1E293B]" : "text-[#94A3B8]")} strokeWidth={2} />
+                          <Icon className={cn("size-5 shrink-0 group-data-[collapsible=icon]:size-4", isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground")} strokeWidth={2} />
                           <span className="ml-3 flex-1 group-data-[collapsible=icon]:hidden whitespace-nowrap overflow-hidden text-ellipsis">{displayTitle}</span>
                         </div>
                       </SidebarMenuButton>
@@ -379,7 +388,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarGroup>
       </SidebarContent>
       
-      <SidebarFooter className="p-3 bg-white border-t border-zinc-50">
+      <SidebarFooter className="p-3 bg-sidebar border-t border-sidebar-border">
         <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />

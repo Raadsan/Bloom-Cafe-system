@@ -76,35 +76,38 @@
   --sidebar-accent-foreground: #5b1017;
   --sidebar-border: hsl(214.3 31.8% 91.4%);
   --sidebar-ring: #5b1017;
+  --chart-tick: #64748b;
 }
 
+/* Dark theme — unified #161616 */
 .dark {
-  --background: hsl(222 47% 6%);
-  --foreground: hsl(210 40% 98%);
-  --card: hsl(222 47% 10%);
-  --card-foreground: hsl(210 40% 98%);
-  --popover: hsl(222 47% 10%);
-  --popover-foreground: hsl(210 40% 98%);
+  --background: #161616;
+  --foreground: #cccccc;
+  --card: #161616;
+  --card-foreground: #cccccc;
+  --popover: #161616;
+  --popover-foreground: #cccccc;
   --primary: #5b1017;
-  --primary-foreground: hsl(222 47% 11.2%);
-  --secondary: hsl(222 47% 15%);
-  --secondary-foreground: hsl(210 40% 98%);
-  --muted: hsl(222 47% 15%);
-  --muted-foreground: hsl(215 20.2% 65.1%);
-  --accent: hsl(222 47% 15%);
-  --accent-foreground: hsl(210 40% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --border: hsl(222 47% 18%);
-  --input: hsl(222 47% 18%);
+  --primary-foreground: #ffffff;
+  --secondary: #1e1e1e;
+  --secondary-foreground: #cccccc;
+  --muted: #1e1e1e;
+  --muted-foreground: #858585;
+  --accent: #1e1e1e;
+  --accent-foreground: #cccccc;
+  --destructive: #f14c4c;
+  --border: #2a2a2a;
+  --input: #161616;
   --ring: #5b1017;
-  --sidebar: hsl(222 47% 8%);
-  --sidebar-foreground: hsl(210 40% 98%);
+  --sidebar: #161616;
+  --sidebar-foreground: #cccccc;
   --sidebar-primary: #5b1017;
-  --sidebar-primary-foreground: hsl(222 47% 11.2%);
-  --sidebar-accent: hsl(222 47% 15%);
-  --sidebar-accent-foreground: hsl(210 40% 98%);
-  --sidebar-border: hsl(222 47% 18%);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e1e1e;
+  --sidebar-accent-foreground: #cccccc;
+  --sidebar-border: #2a2a2a;
   --sidebar-ring: #5b1017;
+  --chart-tick: #cccccc;
 }
 
 @layer base {
@@ -132,6 +135,192 @@
 
 .trezo-input {
   @apply bg-muted/30 border-transparent focus:border-primary/30 focus:bg-background transition-all rounded-lg;
+}
+
+/* ── Dark mode: dashboard & POS content polish ── */
+.dark :is(.dashboard-scope, .pos-scope) .bg-white {
+  background-color: var(--card);
+}
+
+.dark :is(.dashboard-scope, .pos-scope) :is(
+  .bg-zinc-50,
+  .bg-zinc-50\/30,
+  .bg-zinc-50\/50,
+  .bg-gray-50
+) {
+  background-color: #161616;
+}
+
+.dark :is(.dashboard-scope, .pos-scope) :is(
+  .border-zinc-50,
+  .border-zinc-100,
+  .border-zinc-200,
+  .border-gray-100,
+  .border-gray-200
+) {
+  border-color: var(--border);
+}
+
+.dark :is(.dashboard-scope, .pos-scope) :is(
+  .text-zinc-400,
+  .text-zinc-500,
+  .text-zinc-600,
+  .text-zinc-700,
+  .text-zinc-800,
+  .text-gray-400,
+  .text-gray-500,
+  .text-gray-600,
+  .text-gray-700,
+  .text-\[\#1E293B\],
+  .text-\[\#1e293b\],
+  .text-\[\#64748B\],
+  .text-\[\#94A3B8\]
+) {
+  color: hsl(210 40% 98%);
+}
+
+.dark :is(.dashboard-scope, .pos-scope) input:not([type="checkbox"]):not([type="radio"]),
+.dark :is(.dashboard-scope, .pos-scope) select,
+.dark :is(.dashboard-scope, .pos-scope) textarea {
+  background-color: #161616;
+  border-color: #2a2a2a;
+  color: #cccccc;
+}
+
+/* Table action icons & ID numbers — white in dark mode */
+.dark :is(.dashboard-scope, .pos-scope) table button svg {
+  color: #ffffff;
+}
+
+.dark :is(.dashboard-scope, .pos-scope) table .text-primary {
+  color: #ffffff;
+}
+
+.dark :is(.dashboard-scope, .pos-scope) input::placeholder,
+.dark :is(.dashboard-scope, .pos-scope) textarea::placeholder {
+  color: hsl(215 20% 65%);
+}
+
+.dark :is(.dashboard-scope, .pos-scope) select option {
+  background-color: hsl(222 47% 10%);
+  color: hsl(210 40% 98%);
+}
+
+.dark :is(.dashboard-scope, .pos-scope) .hover\:bg-zinc-50:hover,
+.dark :is(.dashboard-scope, .pos-scope) .hover\:bg-zinc-50\/50:hover {
+  background-color: hsl(222 47% 15%);
+}
+
+.dark :is(.dashboard-scope, .pos-scope) .bg-zinc-100 {
+  background-color: hsl(222 47% 14%);
+}
+
+/* Modals — unified #161616 form surfaces */
+.dark [role="dialog"] {
+  background-color: #161616 !important;
+  border-color: #2a2a2a !important;
+  color: #cccccc;
+}
+
+.dark [role="dialog"].bg-white {
+  background-color: #161616 !important;
+  border-color: #2a2a2a !important;
+}
+
+.dark [role="dialog"] :is(
+  .bg-zinc-50,
+  .bg-zinc-50\/30,
+  .bg-zinc-50\/50,
+  .bg-white
+) {
+  background-color: #161616 !important;
+}
+
+.dark [role="dialog"] :is(
+  .border-zinc-50,
+  .border-zinc-100,
+  .border-zinc-200
+) {
+  border-color: #2a2a2a !important;
+}
+
+.dark [role="dialog"] :is(
+  .text-zinc-400,
+  .text-zinc-500,
+  .text-zinc-600,
+  .text-zinc-700,
+  .text-gray-400,
+  .text-gray-500,
+  .text-gray-600,
+  .text-gray-700,
+  .text-\[\#1E293B\],
+  .text-\[\#1e293b\]
+) {
+  color: #cccccc;
+}
+
+.dark [role="dialog"] label {
+  color: #cccccc;
+}
+
+.dark [role="dialog"] input:not([type="checkbox"]):not([type="radio"]),
+.dark [role="dialog"] select,
+.dark [role="dialog"] textarea {
+  background-color: #161616 !important;
+  border-color: #2a2a2a !important;
+  color: #cccccc;
+}
+
+/* Modal & page action buttons — #cccccc bg */
+.dark [role="dialog"] button[data-slot="button"]:not([class*="rose"]):not([class*="destructive"]):not([class*="btnConfirmDelete"]) {
+  background-color: #cccccc !important;
+  color: #161616 !important;
+  border-color: #2a2a2a !important;
+}
+
+.dark [role="dialog"] button[data-slot="button"]:not([class*="rose"]):not([class*="destructive"]):not([class*="btnConfirmDelete"]):hover {
+  background-color: #b8b8b8 !important;
+  color: #161616 !important;
+}
+
+.dark :is(.dashboard-scope, .pos-scope) button[data-slot="button"].bg-primary:not([class*="actionBtn"]):not([class*="btnConfirmDelete"]) {
+  background-color: #cccccc !important;
+  color: #161616 !important;
+  border-color: #2a2a2a !important;
+}
+
+.dark :is(.dashboard-scope, .pos-scope) button[data-slot="button"].bg-primary:not([class*="actionBtn"]):not([class*="btnConfirmDelete"]):hover {
+  background-color: #b8b8b8 !important;
+  color: #161616 !important;
+}
+
+/* Table headers — dark bg, white text in dark mode */
+.dark :is(.dashboard-scope, .pos-scope) thead.bg-primary,
+.dark :is(.dashboard-scope, .pos-scope) thead[class*="dashboardTableHeader"],
+.dark :is(.dashboard-scope, .pos-scope) .bg-primary.border-b.border-primary {
+  background-color: #1e1e1e !important;
+  border-color: #2a2a2a !important;
+}
+
+.dark :is(.dashboard-scope, .pos-scope) thead.bg-primary th,
+.dark :is(.dashboard-scope, .pos-scope) thead.bg-primary .text-white,
+.dark :is(.dashboard-scope, .pos-scope) thead.bg-primary [class*="dashboardTableHead"] {
+  color: #ffffff !important;
+}
+
+/* Chart axis numbers — white in dark mode */
+.dark .recharts-cartesian-axis-tick text {
+  fill: #cccccc !important;
+}
+
+/* Header: avatar letter, notification badge, logout */
+.dark header .bg-primary.text-primary-foreground,
+.dark header .bg-primary.text-white {
+  color: #ffffff;
+}
+
+.dark header [data-slot="dropdown-menu-content"] .text-destructive {
+  color: #ffffff;
 }
 
 /* Receipt Print Styles */

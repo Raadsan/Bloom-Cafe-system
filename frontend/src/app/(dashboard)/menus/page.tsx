@@ -38,6 +38,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   actionBtnView,
   actionBtnEdit,
   actionBtnDelete,
@@ -236,7 +237,7 @@ export default function MenuPage() {
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Page Header: Outside the box */}
-      <div className="mb-6 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Menu Management</h1>
         <p className={pageHeaderSubtitleClass}>Manage your restaurant menu items, categories, and availability in one place.</p>
       </div>

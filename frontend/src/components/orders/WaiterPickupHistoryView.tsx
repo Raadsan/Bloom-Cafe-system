@@ -16,6 +16,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
   dashboardTableHeadClass,
@@ -91,7 +92,7 @@ export default function WaiterPickupHistoryView() {
 
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
-      <div className="mb-6 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-center justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Pickup History</h1>
           <p className={pageHeaderSubtitleClass}>

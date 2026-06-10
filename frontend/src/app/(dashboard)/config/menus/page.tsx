@@ -39,6 +39,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   actionBtnEdit,
   actionBtnDelete,
   btnConfirmDelete,
@@ -234,7 +235,7 @@ export default function MenuManagementPage() {
 
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
-      <div className="mb-6 px-4">
+      <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Menu Configuration</h1>
         <p className={pageHeaderSubtitleClass}>
           Manage sidebar navigation links, URLs, order and sub-modules.
@@ -349,7 +350,7 @@ export default function MenuManagementPage() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-zinc-400 text-[11px] font-medium">—</span>
+                            <span className="text-zinc-400 text-[11px] font-medium">N/A</span>
                           )}
                         </TableCell>
 

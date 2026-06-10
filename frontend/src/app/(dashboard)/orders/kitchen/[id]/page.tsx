@@ -22,6 +22,7 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
+  pageHeaderSubtitleClass,
   btnCreatePage,
 } from "@/lib/dashboard-ui";
 import {
@@ -168,10 +169,10 @@ export default function KitchenOrderPreparePage() {
           Back
         </Link>
 
-        <h1 className={cn(pageHeaderTitleClass, "text-xl mb-1")}>
+        <h1 className={pageHeaderTitleClass}>
           Order #{order.id}
         </h1>
-        <p className="text-sm text-zinc-500 mb-6">
+        <p className={cn(pageHeaderSubtitleClass, "mb-6 normal-case")}>
           {order.status === "preparing"
             ? "Preparing — read all items below"
             : order.status === "ready"

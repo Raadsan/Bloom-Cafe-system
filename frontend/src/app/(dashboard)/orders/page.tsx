@@ -1,4 +1,4 @@
-﻿/* Orders Management Page - Cleaned Version */
+/* Orders Management Page - Cleaned Version */
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -51,6 +51,7 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderSubtitleClass,
+  pageHeaderWrapperClass,
   actionBtnEdit,
   actionBtnDelete,
   btnConfirmDelete,
@@ -1059,7 +1060,7 @@ export default function AllOrdersPage() {
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Header */}
-      <div className="mb-6 px-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-center justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Orders Management</h1>
           <p className={pageHeaderSubtitleClass}>
