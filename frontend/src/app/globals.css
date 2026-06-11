@@ -196,6 +196,11 @@
   color: #ffffff;
 }
 
+/* POS prices & totals — white in dark mode */
+.dark .pos-scope :is(.tabular-nums, .font-bold).text-primary {
+  color: #ffffff;
+}
+
 .dark :is(.dashboard-scope, .pos-scope) input::placeholder,
 .dark :is(.dashboard-scope, .pos-scope) textarea::placeholder {
   color: hsl(215 20% 65%);

@@ -1,6 +1,32 @@
 import prisma from '../config/db.js'
 import { logAudit } from '../utils/auditHelper.js'
 
+function normalizeDiscountInput(discountType, discountValue, price) {
+  const value = Math.max(0, Number(discountValue) || 0)
+  const basePrice = Math.max(0, Number(price) || 0)
+
+  if (!value || !discountType) {
+    return { discountType: null, discountValue: 0 }
+  }
+
+  const type =
+    discountType === 'fixed'
+      ? 'fixed'
+      : discountType === 'percentage'
+        ? 'percentage'
+        : null
+
+  if (!type) {
+    return { discountType: null, discountValue: 0 }
+  }
+
+  if (type === 'percentage') {
+    return { discountType: type, discountValue: Math.min(100, value) }
+  }
+
+  return { discountType: type, discountValue: Math.min(basePrice, value) }
+}
+
 function normalizeOptionsInput(raw) {
   if (raw === undefined) return undefined
   if (raw === null || raw === '') return null
@@ -26,7 +52,7 @@ function normalizeOptionsInput(raw) {
 // CREATE MENU ITEM
 export const createMenuItem = async (req, res) => {
   try {
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended, options } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended, options, discountType, discountValue } = req.body
 
     if (!name || price === undefined || !categoryId) {
       return res.status(400).json({
@@ -46,13 +72,18 @@ export const createMenuItem = async (req, res) => {
       })
     }
 
+    const parsedPrice = Number(price)
+    const discount = normalizeDiscountInput(discountType, discountValue, parsedPrice)
+
     const item = await prisma.menuitem.create({
       data: {
         name: name.trim(),
         description: description?.trim() ? description.trim() : null,
         costPrice: costPrice !== undefined ? Number(costPrice) : null,
-        price: Number(price),
+        price: parsedPrice,
         tax: tax !== undefined ? Number(tax) : 0,
+        discountType: discount.discountType,
+        discountValue: discount.discountValue,
         imageUrl: imageUrl || null,
         categoryId: Number(categoryId),
         isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
@@ -140,7 +171,7 @@ export const getMenuItemsByCategory = async (req, res) => {
 export const updateMenuItem = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended, options } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended, options, discountType, discountValue } = req.body
 
     const itemId = Number(id)
     if (isNaN(itemId)) {
@@ -159,6 +190,17 @@ export const updateMenuItem = async (req, res) => {
       }
     }
 
+    const nextPrice = price !== undefined ? Number(price) : existing.price
+    const nextDiscountType =
+      discountType !== undefined ? discountType : existing.discountType
+    const nextDiscountValue =
+      discountValue !== undefined ? discountValue : existing.discountValue
+    const discount = normalizeDiscountInput(
+      nextDiscountType,
+      nextDiscountValue,
+      nextPrice
+    )
+
     const updated = await prisma.menuitem.update({
       where: { id: itemId },
       data: {
@@ -170,11 +212,13 @@ export const updateMenuItem = async (req, res) => {
               : null
             : existing.description,
         costPrice: costPrice !== undefined ? Number(costPrice) : existing.costPrice,
-        price: price !== undefined ? Number(price) : existing.price,
+        price: nextPrice,
         tax: tax !== undefined ? Number(tax) : existing.tax,
+        discountType: discount.discountType,
+        discountValue: discount.discountValue,
         imageUrl: imageUrl !== undefined ? imageUrl : existing.imageUrl,
         categoryId: categoryId ? Number(categoryId) : existing.categoryId,
-        isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
+        isAvailable: typeof isAvailable === 'boolean' ? isAvailable : existing.isAvailable,
         isRecommended: typeof isRecommended === 'boolean' ? isRecommended : (existing.isRecommended ?? false),
         ...(options !== undefined ? { options: normalizeOptionsInput(options) } : {}),
       },

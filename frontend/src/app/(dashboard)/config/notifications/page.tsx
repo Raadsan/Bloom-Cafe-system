@@ -46,31 +46,33 @@ export default function NotificationsPage() {
     return () => removeListener();
   }, []);
 
-  const openDetail = async (n: Notification) => {
-    setSelected(n);
+  const openDetail = (n: Notification) => {
+    setSelected(n.isRead ? n : { ...n, isRead: true });
     setDetailOpen(true);
     if (!n.isRead) {
-      try {
-        await notificationApi.markNotificationRead(n.id);
-        setNotifications(prev =>
-          prev.map(item => (item.id === n.id ? { ...item, isRead: true } : item))
-        );
-        setSelected({ ...n, isRead: true });
-      } catch (error) {
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === n.id ? { ...item, isRead: true } : item))
+      );
+      notificationApi.markNotificationRead(n.id).catch((error) => {
         console.error("Failed to mark notification read", error);
-      }
+        fetchNotifications(true);
+      });
     }
   };
 
-  const handleMarkAllRead = async () => {
-    const unread = notifications.filter(n => !n.isRead);
+  const handleMarkAllRead = () => {
+    const unread = notifications.filter((n) => !n.isRead);
     if (unread.length === 0) return;
-    try {
-      await Promise.all(unread.map(n => notificationApi.markNotificationRead(n.id)));
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    } catch (error) {
-      console.error("Failed to mark all read", error);
-    }
+
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    notificationApi.patchAllNotificationsReadLocal();
+
+    Promise.all(unread.map((n) => notificationApi.markNotificationRead(n.id))).catch(
+      (error) => {
+        console.error("Failed to mark all read", error);
+        fetchNotifications(true);
+      }
+    );
   };
 
   const senderName =

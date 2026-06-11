@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { CheckCircle2, Phone, Save, User } from "lucide-react";
+import { CheckCircle2, User } from "lucide-react";
 import { Customer } from "@/lib/api/customerApi";
 import { cn } from "@/lib/utils";
+import PosCustomerPhoneCombobox from "@/components/pos/PosCustomerPhoneCombobox";
 
 function getInitial(name?: string) {
   const n = (name || "G").trim();
@@ -43,8 +44,6 @@ interface PosCustomerProfileCardProps {
   onPhoneChange: (value: string) => void;
   onPhoneBlur: () => void;
   onSelectCustomer: (customerId: string) => void;
-  onSave?: () => void;
-  onCall?: () => void;
   className?: string;
 }
 
@@ -60,126 +59,82 @@ export default function PosCustomerProfileCard({
   onPhoneChange,
   onPhoneBlur,
   onSelectCustomer,
-  onSave,
-  onCall,
   className,
 }: PosCustomerProfileCardProps) {
   const displayName = customerName.trim() || "Walk-in Guest";
   const isCompact = variant === "compact";
+  const fieldClass =
+    "w-full h-11 px-3 bg-white border border-zinc-200 rounded-lg text-sm font-medium text-zinc-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 placeholder:text-zinc-400";
+
+  if (!isCompact) {
+    return (
+      <div className={cn("space-y-4", className)}>
+        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block">
+          Customer info
+        </label>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-zinc-700">Customer name</label>
+          <input
+            type="text"
+            value={customerName}
+            onChange={e => onNameChange(e.target.value)}
+            placeholder="e.g. Walk-in guest"
+            className={fieldClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-zinc-700">Phone number</label>
+          <PosCustomerPhoneCombobox
+            value={customerPhone}
+            options={selectPhoneOptions}
+            selectedCustomerId={selectedCustomer}
+            onValueChange={onPhoneChange}
+            onBlur={onPhoneBlur}
+            onSelect={onSelectCustomer}
+            placeholder="Type number or select customer"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4 pt-1 text-sm">
+          <div>
+            <p className="text-xs text-zinc-400 mb-1">Order type</p>
+            <p className="font-medium text-zinc-800">{orderTypeLabel}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-400 mb-1">Location</p>
+            <p className="font-medium text-zinc-800 truncate">{locationLabel}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       className={cn(
-        "rounded-2xl border border-zinc-100 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.08)] overflow-hidden",
+        "rounded-xl border border-zinc-100 bg-white shadow-sm overflow-hidden",
         className
       )}
     >
-      <div className={cn("flex items-start gap-4", isCompact ? "p-4" : "p-5")}>
+      <div className="flex items-start gap-3 p-4">
         <div className="relative shrink-0">
-          <div
-            className={cn(
-              "rounded-full bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center font-bold text-primary border-2 border-white shadow-md",
-              isCompact ? "size-12 text-base" : "size-16 text-xl"
-            )}
-          >
-            {customerName.trim() ? (
-              getInitial(customerName)
-            ) : (
-              <User className={isCompact ? "size-5" : "size-7"} strokeWidth={2} />
-            )}
+          <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-sm">
+            {customerName.trim() ? getInitial(customerName) : <User className="size-4" />}
           </div>
           {selectedCustomer && (
-            <span className="absolute -bottom-0.5 -right-0.5 size-5 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center">
-              <CheckCircle2 className="size-3 text-white" />
+            <span className="absolute -bottom-0.5 -right-0.5 size-4 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center">
+              <CheckCircle2 className="size-2.5 text-white" />
             </span>
           )}
         </div>
-        <div className="flex-1 min-w-0 pt-0.5">
-          {isCompact ? (
-            <>
-              <p className="text-base font-bold text-zinc-900 truncate">{displayName}</p>
-              <p className="text-xs text-zinc-400 mt-0.5 truncate">{orderTypeLabel}</p>
-            </>
-          ) : (
-            <>
-              <input
-                type="text"
-                value={customerName}
-                onChange={e => onNameChange(e.target.value)}
-                placeholder="Customer name"
-                className="w-full text-xl font-bold text-zinc-900 bg-transparent border-0 p-0 focus:outline-none focus:ring-0 placeholder:text-zinc-300"
-              />
-              <p className="text-sm text-zinc-400 mt-0.5">{orderTypeLabel}</p>
-            </>
-          )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-zinc-900 truncate">{displayName}</p>
+          <p className="text-xs text-zinc-400 mt-0.5 truncate">{orderTypeLabel}</p>
         </div>
       </div>
-
-      <div className="border-t border-zinc-100 mx-4 sm:mx-5" />
-
-      <div className={cn("space-y-3", isCompact ? "px-4 py-3" : "px-5 py-4")}>
-        {isCompact ? (
-          <>
-            <DetailRow label="Phone:" value={customerPhone || "—"} />
-            <DetailRow label="Location:" value={locationLabel} />
-          </>
-        ) : (
-          <>
-            <DetailRow label="Phone no:">
-              <input
-                type="tel"
-                value={customerPhone}
-                onChange={e => onPhoneChange(e.target.value)}
-                onBlur={onPhoneBlur}
-                placeholder="Enter number"
-                className="w-full text-right text-sm text-zinc-600 bg-zinc-50 border border-zinc-100 rounded-lg px-3 py-2 focus:outline-none focus:border-primary/40"
-                autoComplete="tel"
-              />
-            </DetailRow>
-            <DetailRow label="Saved no:">
-              <select
-                value={selectedCustomer ?? ""}
-                onChange={e => onSelectCustomer(e.target.value)}
-                className="w-full text-sm text-zinc-600 bg-zinc-50 border border-zinc-100 rounded-lg px-3 py-2 focus:outline-none focus:border-primary/40"
-              >
-                <option value="">Choose number</option>
-                {selectPhoneOptions.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.phone}
-                  </option>
-                ))}
-              </select>
-            </DetailRow>
-            <DetailRow label="Order type:" value={orderTypeLabel} />
-            <DetailRow label="Location:" value={locationLabel} />
-          </>
-        )}
+      <div className="border-t border-zinc-100 px-4 py-3 space-y-2">
+        <DetailRow label="Phone:" value={customerPhone || "—"} />
+        <DetailRow label="Location:" value={locationLabel} />
       </div>
-
-      {!isCompact && (onSave || onCall) && (
-        <div className="px-5 pb-5 pt-1 flex items-center gap-2">
-          {onCall && (
-            <button
-              type="button"
-              onClick={onCall}
-              className="flex-1 h-11 rounded-full bg-amber-400 hover:bg-amber-500 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm transition-colors"
-            >
-              <Phone className="size-4" />
-              Call Customer
-            </button>
-          )}
-          {onSave && (
-            <button
-              type="button"
-              onClick={onSave}
-              className="size-11 rounded-full bg-teal-700 hover:bg-teal-800 text-white flex items-center justify-center shadow-sm transition-colors shrink-0"
-              title="Save"
-            >
-              <Save className="size-4" />
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

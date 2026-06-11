@@ -1,4 +1,8 @@
 import api from './axios';
+import {
+  dispatchNotificationRead,
+  dispatchNotificationsMarkedAllRead,
+} from '@/lib/live-updates';
 
 export interface NotificationSender {
   id: number;
@@ -60,6 +64,28 @@ export const notificationApi = {
     notifCache = null;
   },
 
+  patchNotificationReadLocal: (id: number) => {
+    if (notifCache) {
+      notifCache = {
+        at: notifCache.at,
+        data: notifCache.data.map((n) =>
+          n.id === id ? { ...n, isRead: true } : n
+        ),
+      };
+    }
+    dispatchNotificationRead(id);
+  },
+
+  patchAllNotificationsReadLocal: () => {
+    if (notifCache) {
+      notifCache = {
+        at: notifCache.at,
+        data: notifCache.data.map((n) => ({ ...n, isRead: true })),
+      };
+    }
+    dispatchNotificationsMarkedAllRead();
+  },
+
   getKitchenNotifications: async (): Promise<Notification[]> => {
     const res = await api.get('/notifications/kitchen');
     return res.data.data || [];
@@ -71,9 +97,23 @@ export const notificationApi = {
   },
 
   markNotificationRead: async (id: number): Promise<Notification> => {
-    const res = await api.patch(`/notifications/${id}/read`);
-    notificationApi.clearNotificationCache();
-    return res.data.data;
+    notificationApi.patchNotificationReadLocal(id);
+    try {
+      const res = await api.patch(`/notifications/${id}/read`);
+      const updated = res.data.data as Notification;
+      if (notifCache) {
+        notifCache = {
+          at: Date.now(),
+          data: notifCache.data.map((n) =>
+            n.id === id ? { ...n, ...updated } : n
+          ),
+        };
+      }
+      return updated;
+    } catch (err) {
+      notificationApi.clearNotificationCache();
+      throw err;
+    }
   },
 
   getCustomerNotifications: async (customerId: number): Promise<Notification[]> => {

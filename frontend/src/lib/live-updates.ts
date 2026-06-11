@@ -1,5 +1,7 @@
 export const ORDERS_CHANGED = "orders_changed";
 export const REFRESH_NOTIFICATIONS = "refresh_notifications";
+export const NOTIFICATION_READ = "notification_read";
+export const NOTIFICATIONS_MARKED_ALL_READ = "notifications_marked_all_read";
 
 export type OrderSocketPayload = {
   id?: number;
@@ -15,6 +17,14 @@ export function dispatchOrdersChanged(detail: OrderSocketPayload) {
 
 export function dispatchRefreshNotifications() {
   window.dispatchEvent(new CustomEvent(REFRESH_NOTIFICATIONS));
+}
+
+export function dispatchNotificationRead(id: number) {
+  window.dispatchEvent(new CustomEvent(NOTIFICATION_READ, { detail: { id } }));
+}
+
+export function dispatchNotificationsMarkedAllRead() {
+  window.dispatchEvent(new CustomEvent(NOTIFICATIONS_MARKED_ALL_READ));
 }
 
 /** Debounced handler — avoids rapid API refetches when many socket events arrive. */

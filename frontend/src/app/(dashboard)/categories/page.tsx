@@ -2,11 +2,18 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { Plus, Search, Edit, Trash2, Tag, UtensilsCrossed, Eye, X, RefreshCw, Image as ImageIcon } from "lucide-react";
+import { Plus, Edit, Trash2, Tag, UtensilsCrossed, X, RefreshCw, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { categoryApi, Category, CategoryWithItems } from "@/lib/api/categoryApi";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { categoryApi, CategoryWithItems } from "@/lib/api/categoryApi";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
 import {
@@ -17,6 +24,12 @@ import {
   actionBtnEdit,
   actionBtnDelete,
 } from "@/lib/dashboard-ui";
+
+const viewLabelClass = "text-xs text-zinc-400 dark:text-zinc-500";
+const viewValueClass = "text-[15px] font-medium text-zinc-700 dark:text-zinc-200";
+const formLabelClass = "text-xs font-medium text-[#1e293b] dark:text-zinc-200";
+const formInputClass =
+  "w-full px-3 py-2 bg-white dark:bg-[#161616] border border-zinc-200 dark:border-[#2a2a2a] rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm font-medium dark:text-white placeholder:text-zinc-400";
 
 export default function MenuCategoriesPage() {
   const { showToast } = useToast();
@@ -279,94 +292,124 @@ export default function MenuCategoriesPage() {
 
 
       {/* ADD / EDIT MODAL */}
-      <Dialog open={isAddOpen || isEditOpen} onOpenChange={(open) => { if (!open) { setIsAddOpen(false); setIsEditOpen(false); } }}>
-        <DialogContent className="sm:max-w-[640px] bg-white border-zinc-100 p-0 overflow-hidden">
-          <DialogTitle className="sr-only">Category Form</DialogTitle>
-          <div className="p-6 border-b border-zinc-100">
-            <DialogTitle className="text-xl font-bold text-[#1e293b]">
-              {isEditOpen ? "Edit Category" : "Add New Category"}
-            </DialogTitle>
-            <DialogDescription className="text-sm text-zinc-500 mt-1">
-              {isEditOpen ? "Update the category details below." : "Fill in the details to create a new menu category."}
-            </DialogDescription>
+      <Dialog
+        open={isAddOpen || isEditOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsAddOpen(false);
+            setIsEditOpen(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[720px] max-h-[92vh] bg-white dark:bg-[#161616] border-none p-0 gap-0 overflow-hidden rounded-2xl shadow-xl flex flex-col">
+          <div className="shrink-0 px-6 py-4 border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/40 dark:bg-[#1a1a1a]">
+            <DialogHeader className="space-y-0.5">
+              <DialogTitle className="text-lg font-semibold text-[#1e293b] dark:text-white">
+                {isEditOpen ? "Edit category" : "Add category"}
+              </DialogTitle>
+              <DialogDescription className="text-zinc-500 dark:text-zinc-400 text-xs">
+                {isEditOpen
+                  ? "Update name, image, status, and description."
+                  : "Create a new menu category with an optional cover image."}
+              </DialogDescription>
+            </DialogHeader>
           </div>
 
-          <div className="p-8 space-y-6">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Category Name *</label>
-              <input
-                type="text"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. Appetizers, Main Course..."
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Category Image</label>
-              <div className="flex flex-col gap-4">
-                {formImage && (
-                  <div className="relative w-full h-40 rounded-xl overflow-hidden border border-zinc-100 shadow-sm bg-zinc-50 group">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="px-6 py-4 border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/30 dark:bg-[#1a1a1a]/50">
+              <p className={cn(formLabelClass, "mb-2 flex items-center gap-1.5")}>
+                <ImageIcon className="size-3.5 text-zinc-400" />
+                Category image
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-16 rounded-lg overflow-hidden border border-zinc-200 dark:border-[#2a2a2a] bg-white dark:bg-[#161616] shrink-0 flex items-center justify-center">
+                  {formImage ? (
                     <img src={formImage} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      onClick={() => setFormImage("")}
-                      className="absolute top-3 right-3 p-2 bg-rose-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-rose-600"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                )}
-                <div className="flex gap-3">
-                  <div className="relative flex-1">
-                    <Tag className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <input
-                      type="text"
-                      value={formImage}
-                      onChange={(e) => setFormImage(e.target.value)}
-                      placeholder="Paste image URL here..."
-                      className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[14px] font-medium"
-                    />
-                  </div>
-                  <label className="cursor-pointer shrink-0">
-                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                    <div className="h-[48px] px-6 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center font-bold text-[13px] transition-colors">
-                      Browse
-                    </div>
-                  </label>
+                  ) : (
+                    <ImageIcon className="size-6 text-zinc-300" />
+                  )}
                 </div>
+                <input
+                  type="text"
+                  value={formImage}
+                  onChange={(e) => setFormImage(e.target.value)}
+                  placeholder="Paste image URL..."
+                  className={cn(formInputClass, "flex-1")}
+                />
+                <label className="cursor-pointer shrink-0">
+                  <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                  <span className="inline-flex h-9 px-4 items-center rounded-lg bg-primary/10 text-primary text-xs font-semibold border border-primary/20 hover:bg-primary/15 transition-colors">
+                    Upload
+                  </span>
+                </label>
+                {formImage && (
+                  <button
+                    type="button"
+                    onClick={() => setFormImage("")}
+                    className="shrink-0 size-9 rounded-lg border border-zinc-200 dark:border-[#2a2a2a] flex items-center justify-center text-zinc-400 hover:text-rose-500 hover:border-rose-200 transition-colors"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Status</label>
-              <select
-                value={formActive ? "active" : "inactive"}
-                onChange={(e) => setFormActive(e.target.value === "active")}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Category name *</label>
+                  <input
+                    type="text"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="e.g. Appetizers, Main Course..."
+                    className={formInputClass}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Status</label>
+                  <select
+                    value={formActive ? "active" : "inactive"}
+                    onChange={(e) => setFormActive(e.target.value === "active")}
+                    className={cn(formInputClass, "appearance-none cursor-pointer")}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Description</label>
-              <textarea
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                placeholder="Brief description of the category..."
-                rows={3}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium resize-none"
-              />
+              <div className="space-y-1">
+                <label className={formLabelClass}>Description</label>
+                <textarea
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  placeholder="Brief description of this category..."
+                  rows={3}
+                  className={cn(formInputClass, "resize-none min-h-[80px]")}
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} className="rounded-lg font-bold px-6 h-11" disabled={saving}>
+
+          <DialogFooter className="shrink-0 m-0 px-6 py-4 bg-zinc-50/50 dark:bg-[#1a1a1a] border-t border-zinc-100 dark:border-[#2a2a2a] flex sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddOpen(false);
+                setIsEditOpen(false);
+              }}
+              className="h-9 px-5 text-sm font-medium rounded-lg"
+              disabled={saving}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold border-none px-8 h-11" disabled={saving}>
-              {saving ? "Saving..." : isEditOpen ? "Update Category" : "Create Category"}
+            <Button
+              onClick={handleSave}
+              className="h-9 px-6 bg-primary !text-white hover:bg-primary/90 rounded-lg text-sm font-semibold border-none"
+              disabled={saving}
+            >
+              {saving ? "Saving..." : isEditOpen ? "Update category" : "Create category"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -399,88 +442,108 @@ export default function MenuCategoriesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* VIEW ITEMS MODAL */}
-      <Dialog open={isViewOpen} onOpenChange={() => setIsViewOpen(false)}>
-        <DialogContent className="sm:max-w-[560px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl">
-          <DialogTitle className="sr-only">Category Details</DialogTitle>
+      {/* VIEW MODAL */}
+      <Dialog open={isViewOpen} onOpenChange={(open) => { if (!open) setIsViewOpen(false); }}>
+        <DialogContent className="sm:max-w-[750px] max-h-[90vh] bg-white dark:bg-[#161616] border-none p-0 gap-0 overflow-hidden rounded-2xl shadow-xl flex flex-col">
+          <div className="shrink-0 p-8 border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/30 dark:bg-[#1a1a1a]">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="text-2xl font-semibold text-[#1e293b] dark:text-white">
+                Category details
+              </DialogTitle>
+              <DialogDescription className="text-zinc-500 dark:text-zinc-400 text-sm">
+                Full information for this menu category.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
           {selected && (
-            <>
-              <div className="p-8 border-b border-zinc-100">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-2xl font-bold text-[#1E293B]">{selected.name}</h3>
-                    <p className="text-sm font-medium text-primary mt-1 uppercase tracking-wider">
-                      {selected.menuitem?.length || 0} Registered Items
-                    </p>
-                    <span
-                      className={cn(
-                        "inline-flex mt-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
-                        selected.isActive !== false
-                          ? "text-emerald-600 border-emerald-100 bg-emerald-50"
-                          : "text-rose-600 border-rose-100 bg-rose-50"
-                      )}
-                    >
-                      {selected.isActive !== false ? "Active" : "Inactive"}
-                    </span>
+            <div className="flex-1 min-h-0 overflow-y-auto bg-white dark:bg-[#161616]">
+              <div className="w-full border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/50 dark:bg-[#1a1a1a]">
+                {selected.imageUrl ? (
+                  <div className="w-full h-52 sm:h-60 overflow-hidden">
+                    <img
+                      src={selected.imageUrl}
+                      alt={selected.name}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-1">Created At</p>
-                    <p className="text-xs font-medium text-zinc-600">
-                      {selected.createdAt ? new Date(selected.createdAt).toLocaleDateString() : "N/A"}
-                    </p>
+                ) : (
+                  <div className="w-full h-40 sm:h-48 flex flex-col items-center justify-center gap-2 text-zinc-300 dark:text-zinc-600">
+                    <ImageIcon className="size-12" />
+                    <p className="text-sm font-medium text-zinc-400">No image</p>
                   </div>
-                </div>
+                )}
               </div>
 
-              <div className="p-8 space-y-6">
-                <div>
-                  <label className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider mb-3 block">Description</label>
-                  <p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 rounded-xl border border-zinc-100">
-                    {selected.description || "No description provided for this category."}
-                  </p>
+              <div className="px-8 py-8 space-y-6">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+                  <div className="space-y-1">
+                    <p className={viewLabelClass}>Category name</p>
+                    <p className={viewValueClass}>{selected.name}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className={viewLabelClass}>Status</p>
+                    <p className={viewValueClass}>
+                      {selected.isActive !== false ? "Active" : "Inactive"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className={viewLabelClass}>Menu items</p>
+                    <p className={viewValueClass}>{selected.menuitem?.length || 0}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className={viewLabelClass}>Created</p>
+                    <p className={viewValueClass}>
+                      {selected.createdAt
+                        ? new Date(selected.createdAt).toLocaleDateString()
+                        : "—"}
+                    </p>
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <p className={viewLabelClass}>Description</p>
+                    <p className={cn(viewValueClass, "leading-relaxed")}>
+                      {selected.description || "No description provided."}
+                    </p>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider mb-3 block">Items in Category</label>
-                  <div className="max-h-[30vh] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                    {selected.menuitem?.length === 0 ? (
-                      <p className="text-center py-8 text-zinc-400 italic text-sm">No items assigned to this category yet.</p>
+                  <p className={cn(viewLabelClass, "mb-3")}>Items in this category</p>
+                  <div className="max-h-[28vh] overflow-y-auto space-y-2 pr-1">
+                    {!selected.menuitem?.length ? (
+                      <p className="text-center py-8 text-zinc-400 italic text-sm">
+                        No items assigned to this category yet.
+                      </p>
                     ) : (
-                      selected.menuitem?.map((item) => (
-                        <div key={item.id} className="flex justify-between items-center py-3.5 px-5 bg-zinc-50 hover:bg-zinc-100 transition-colors rounded-xl border border-zinc-100">
-                          <span className="text-sm font-semibold text-zinc-700">{item.name}</span>
-                          <span className="text-sm font-bold text-primary">${item.price.toFixed(2)}</span>
+                      selected.menuitem.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex justify-between items-center py-3 px-4 bg-zinc-50 dark:bg-[#1a1a1a] hover:bg-zinc-100 dark:hover:bg-[#222] transition-colors rounded-lg border border-zinc-100 dark:border-[#2a2a2a]"
+                        >
+                          <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                            {item.name}
+                          </span>
+                          <span className="text-sm font-bold text-primary">
+                            ${item.price.toFixed(2)}
+                          </span>
                         </div>
                       ))
                     )}
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center gap-3">
-                    <RefreshCw className="size-3.5 text-zinc-400" />
-                    <div>
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Created</p>
-                      <p className="text-xs font-medium text-zinc-700">{selected.createdAt ? new Date(selected.createdAt).toLocaleDateString() : "N/A"}</p>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center gap-3">
-                    <Eye className="size-3.5 text-zinc-400" />
-                    <div>
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Updated</p>
-                      <p className="text-xs font-medium text-zinc-700">{selected.updatedAt ? new Date(selected.updatedAt).toLocaleDateString() : "Recently"}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <DialogFooter className="pt-6 border-t border-zinc-100">
-                  <Button variant="outline" onClick={() => setIsViewOpen(false)} className="w-full rounded-xl font-bold border-zinc-200 h-12 shadow-sm">
-                    Done
-                  </Button>
-                </DialogFooter>
               </div>
-            </>
+            </div>
           )}
+
+          <DialogFooter className="shrink-0 m-0 px-6 py-4 bg-zinc-50/50 dark:bg-[#1a1a1a] border-t border-zinc-100 dark:border-[#2a2a2a]">
+            <Button
+              variant="outline"
+              onClick={() => setIsViewOpen(false)}
+              className="w-full sm:w-auto h-9 px-6 text-sm font-medium rounded-lg"
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -154,12 +154,14 @@ function NavUser({ user }: { user: AuthUser | null }) {
                 <UserIcon className="mr-2 size-4" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/settings" className="flex w-full items-center text-xs font-semibold uppercase tracking-widest cursor-pointer hover:bg-muted/50">
-                  <Settings2 className="mr-2 size-4" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
+              {user.role?.toLowerCase() === "admin" && (
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="flex w-full items-center text-xs font-semibold uppercase tracking-widest cursor-pointer hover:bg-muted/50">
+                    <Settings2 className="mr-2 size-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem className="text-xs font-semibold uppercase tracking-widest cursor-pointer hover:bg-muted/50">
                 <FileText className="mr-2 size-4" />
                 Policy
@@ -275,21 +277,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="icon" {...props} className="border-r border-sidebar-border shadow-none bg-sidebar">
-      <SidebarHeader className="h-[76px] flex items-center justify-start px-4 bg-sidebar border-b border-sidebar-border group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:justify-center">
-        <Link href="/dashboard" className="flex items-center gap-3 w-full group-data-[collapsible=icon]:justify-center mt-3">
+      <SidebarHeader className="!p-0 h-[96px] flex items-stretch justify-center bg-sidebar border-b border-sidebar-border group-data-[collapsible=icon]:h-[72px]">
+        <Link
+          href="/dashboard"
+          className="flex flex-1 w-full items-center justify-center px-1 py-2 min-h-0 hover:opacity-90 transition-opacity group-data-[collapsible=icon]:px-1"
+        >
           <SystemBrandMark
             logoUrl={branding.systemLogoUrl}
             systemName={branding.systemName}
-            size="md"
+            variant="plain"
+            fit="width"
+            className="w-full max-w-full h-auto max-h-[76px] group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:max-h-none"
           />
-          <div className="flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden min-w-0">
-            <span className="font-bold text-lg tracking-tighter text-sidebar-foreground uppercase leading-none truncate">
-              {branding.systemName}
-            </span>
-            <span className="text-[9px] font-bold text-muted-foreground/50 tracking-widest uppercase leading-none truncate">
-              {branding.systemTagline || "Management System"}
-            </span>
-          </div>
         </Link>
       </SidebarHeader>
       

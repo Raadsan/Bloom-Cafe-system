@@ -10,12 +10,10 @@ import {
   Filter,
   Eye,
   Image as ImageIcon,
-  CheckCircle2,
   XCircle,
   MoreVertical,
   ChevronDown,
   X,
-  RefreshCw,
   Star
 } from "lucide-react";
 
@@ -31,6 +29,11 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/menuItemApi";
+import {
+  getMenuItemEffectivePrice,
+  menuItemHasDiscount,
+  getMenuItemDiscountLabel,
+} from "@/lib/menu-item-pricing";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -48,6 +51,12 @@ import {
   dashboardStatusBadgeClass,
   getTableStatusBadgeClass,
 } from "@/lib/dashboard-ui";
+
+const viewLabelClass = "text-xs text-zinc-400 dark:text-zinc-500";
+const viewValueClass = "text-[15px] font-medium text-zinc-700 dark:text-zinc-200";
+const formLabelClass = "text-xs font-medium text-[#1e293b] dark:text-zinc-200";
+const formInputClass =
+  "w-full px-3 py-2 bg-white dark:bg-[#161616] border border-zinc-200 dark:border-[#2a2a2a] rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm font-medium dark:text-white placeholder:text-zinc-400";
 
 export default function MenuPage() {
   const { showToast } = useToast();
@@ -75,6 +84,8 @@ export default function MenuPage() {
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formTax, setFormTax] = useState("");
   const [formOptions, setFormOptions] = useState("");
+  const [formDiscountType, setFormDiscountType] = useState<"" | "percentage" | "fixed">("");
+  const [formDiscountValue, setFormDiscountValue] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Pagination states
@@ -139,6 +150,8 @@ export default function MenuPage() {
     setFormImageUrl("");
     setFormTax("0");
     setFormOptions("");
+    setFormDiscountType("");
+    setFormDiscountValue("");
     setIsAddOpen(true);
   };
 
@@ -154,6 +167,14 @@ export default function MenuPage() {
     setFormImageUrl(item.imageUrl || "");
     setFormTax(String(item.tax || 0));
     setFormOptions(parseMenuItemOptions(item).join(", "));
+    setFormDiscountType(
+      item.discountType === "percentage" || item.discountType === "fixed"
+        ? item.discountType
+        : ""
+    );
+    setFormDiscountValue(
+      item.discountValue && item.discountValue > 0 ? String(item.discountValue) : ""
+    );
     setIsEditOpen(true);
   };
 
@@ -201,6 +222,8 @@ export default function MenuPage() {
         options: formOptions.trim()
           ? formOptions.split(",").map(s => s.trim()).filter(Boolean)
           : null,
+        discountType: formDiscountType || null,
+        discountValue: formDiscountType ? Number(formDiscountValue || 0) : 0,
       };
 
       if (isEditOpen && selectedItem) {
@@ -351,8 +374,22 @@ export default function MenuPage() {
                       <TableCell className="px-6 py-3 text-[13px] font-medium text-zinc-400 text-right">
                         ${(item.costPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </TableCell>
-                      <TableCell className="px-6 py-3 text-[13px] font-bold text-primary text-right">
-                        ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <TableCell className="px-6 py-3 text-right">
+                        {menuItemHasDiscount(item) ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-[13px] font-semibold text-primary">
+                              ${getMenuItemEffectivePrice(item).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[11px] text-zinc-400 line-through">
+                              ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[10px] text-emerald-600">{getMenuItemDiscountLabel(item)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-[13px] font-semibold text-primary">
+                            ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="px-6 py-3 text-[13px] font-medium text-zinc-500 text-right">
                         {item.tax}%
@@ -370,7 +407,9 @@ export default function MenuPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => openViewModal(item)}
                             className={actionBtnView}
+                            title="View item"
                           >
                             <Eye className="size-4" />
                           </Button>
@@ -436,196 +475,233 @@ export default function MenuPage() {
 
       {/* ADD / EDIT MODAL */}
       <Dialog open={isAddOpen || isEditOpen} onOpenChange={(open) => { if (!open) { setIsAddOpen(false); setIsEditOpen(false); } }}>
-        <DialogContent className="sm:max-w-[750px] bg-white border-none p-0 overflow-hidden rounded-2xl shadow-xl animate-in fade-in zoom-in-95 duration-200">
-          <div className="p-8 border-b border-zinc-100 bg-zinc-50/30">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-bold text-[#1e293b]">
-                {isEditOpen ? "Edit Menu Item" : "Add New Menu Item"}
+        <DialogContent className="sm:max-w-[720px] max-h-[92vh] bg-white dark:bg-[#161616] border-none p-0 gap-0 overflow-hidden rounded-2xl shadow-xl flex flex-col">
+          <div className="shrink-0 px-6 py-4 border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/40 dark:bg-[#1a1a1a]">
+            <DialogHeader className="space-y-0.5">
+              <DialogTitle className="text-lg font-semibold text-[#1e293b] dark:text-white">
+                {isEditOpen ? "Edit menu item" : "Add menu item"}
               </DialogTitle>
-              <DialogDescription className="text-zinc-500 text-sm mt-1">
-                Configure the details and pricing for this menu entry.
+              <DialogDescription className="text-zinc-500 dark:text-zinc-400 text-xs">
+                Configure details, pricing, and discount for this entry.
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="px-8 py-8 space-y-6 max-h-[75vh] overflow-y-auto">
-            {/* Row 1: Name and Category */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-[#1e293b]">Item Name *</label>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="px-6 py-4 border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/30 dark:bg-[#1a1a1a]/50">
+              <p className={cn(formLabelClass, "mb-2 flex items-center gap-1.5")}>
+                <ImageIcon className="size-3.5 text-zinc-400" />
+                Item image
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-16 rounded-lg overflow-hidden border border-zinc-200 dark:border-[#2a2a2a] bg-white dark:bg-[#161616] shrink-0 flex items-center justify-center">
+                  {formImageUrl ? (
+                    <img src={formImageUrl} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="size-6 text-zinc-300" />
+                  )}
+                </div>
                 <input
                   type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="e.g. Grilled Salmon"
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium placeholder:text-zinc-400"
+                  value={formImageUrl}
+                  onChange={(e) => setFormImageUrl(e.target.value)}
+                  placeholder="Paste image URL..."
+                  className={cn(formInputClass, "flex-1")}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-[#1e293b]">Category *</label>
-                <div className="relative">
-                  <select
-                    value={formCategoryId}
-                    onChange={(e) => setFormCategoryId(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium appearance-none cursor-pointer"
-                  >
-                    <option value="">Select Category</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="size-4 absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Prices */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-[#1e293b]">Cost Price ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formCostPrice}
-                  onChange={(e) => setFormCostPrice(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium text-zinc-600"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-[#1e293b]">Selling Price ($) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formPrice}
-                  onChange={(e) => setFormPrice(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-[#1e293b]">Tax / VAT (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formTax}
-                  onChange={(e) => setFormTax(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium"
-                />
-              </div>
-            </div>
-
-            {/* Row 3: Availability & Recommended */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-[#1e293b]">Availability</label>
-                <select
-                  value={formIsAvailable ? "available" : "unavailable"}
-                  onChange={(e) => setFormIsAvailable(e.target.value === "available")}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium appearance-none cursor-pointer"
-                >
-                  <option value="available">Available</option>
-                  <option value="unavailable">Out of Stock</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-[#1e293b]">Recommended</label>
-                <select
-                  value={formIsRecommended ? "yes" : "no"}
-                  onChange={(e) => setFormIsRecommended(e.target.value === "yes")}
-                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium appearance-none cursor-pointer"
-                >
-                  <option value="yes">Yes (Recommended)</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1e293b]">POS Options</label>
-              <input
-                type="text"
-                value={formOptions}
-                onChange={(e) => setFormOptions(e.target.value)}
-                placeholder="e.g. Small, Medium, Large (comma separated)"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium"
-              />
-              <p className="text-xs text-zinc-400">Shown on POS terminal for this item. Leave empty if none.</p>
-            </div>
-
-            {/* Description — shown to kitchen when preparing orders */}
-            <div className="space-y-2 pt-2">
-              <label className="text-sm font-bold text-[#1e293b]">Description</label>
-              <textarea
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                placeholder="Ingredients, prep notes, allergens… (visible to kitchen staff)"
-                rows={3}
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[15px] font-medium resize-y min-h-[88px]"
-              />
-            </div>
-
-            {/* Row 4: Image */}
-            <div className="space-y-3 pt-4 border-t border-zinc-100">
-              <label className="text-sm font-bold text-[#1e293b] flex items-center gap-2">
-                <ImageIcon className="size-4 text-zinc-400" />
-                Item Image
-              </label>
-
-              <div className="flex items-center gap-4">
-                <div className="flex-1 flex gap-3">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={formImageUrl}
-                      onChange={(e) => setFormImageUrl(e.target.value)}
-                      placeholder="Paste image URL here..."
-                      className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary transition-all text-[14px] font-medium"
-                    />
-                  </div>
-                  <label className="cursor-pointer">
-                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                    <div className="h-[46px] px-6 rounded-lg bg-primary/5 text-primary hover:bg-primary/10 flex items-center justify-center font-bold text-[13px] transition-all border border-primary/20">
-                      Upload
-                    </div>
-                  </label>
-                </div>
-
+                <label className="cursor-pointer shrink-0">
+                  <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                  <span className="inline-flex h-9 px-4 items-center rounded-lg bg-primary/10 text-primary text-xs font-semibold border border-primary/20 hover:bg-primary/15 transition-colors">
+                    Upload
+                  </span>
+                </label>
                 {formImageUrl && (
-                  <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-zinc-200 shadow-sm shrink-0">
-                    <img src={formImageUrl} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      onClick={() => setFormImageUrl("")}
-                      className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormImageUrl("")}
+                    className="shrink-0 size-9 rounded-lg border border-zinc-200 dark:border-[#2a2a2a] flex items-center justify-center text-zinc-400 hover:text-rose-500 hover:border-rose-200 transition-colors"
+                  >
+                    <X className="size-4" />
+                  </button>
                 )}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Item name *</label>
+                  <input
+                    type="text"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="e.g. Grilled Salmon"
+                    className={formInputClass}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Category *</label>
+                  <div className="relative">
+                    <select
+                      value={formCategoryId}
+                      onChange={(e) => setFormCategoryId(e.target.value)}
+                      className={cn(formInputClass, "appearance-none cursor-pointer pr-9")}
+                    >
+                      <option value="">Select category</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="size-4 absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Cost price ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formCostPrice}
+                    onChange={(e) => setFormCostPrice(e.target.value)}
+                    placeholder="0.00"
+                    className={cn(formInputClass, "bg-zinc-50 dark:bg-[#1a1a1a]")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Selling price ($) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formPrice}
+                    onChange={(e) => setFormPrice(e.target.value)}
+                    placeholder="0.00"
+                    className={formInputClass}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Tax / VAT (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formTax}
+                    onChange={(e) => setFormTax(e.target.value)}
+                    placeholder="0"
+                    className={formInputClass}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Discount type</label>
+                  <select
+                    value={formDiscountType}
+                    onChange={(e) => {
+                      const v = e.target.value as "" | "percentage" | "fixed";
+                      setFormDiscountType(v);
+                      if (!v) setFormDiscountValue("");
+                    }}
+                    className={cn(formInputClass, "appearance-none cursor-pointer")}
+                  >
+                    <option value="">No discount</option>
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed ($)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Discount value</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={formDiscountType === "percentage" ? 100 : undefined}
+                    value={formDiscountValue}
+                    onChange={(e) => setFormDiscountValue(e.target.value)}
+                    placeholder={formDiscountType === "percentage" ? "10" : "2.50"}
+                    disabled={!formDiscountType}
+                    className={cn(formInputClass, "disabled:opacity-50")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Final price</label>
+                  <div className={cn(formInputClass, "bg-primary/5 text-primary border-primary/20")}>
+                    $
+                    {formPrice && !isNaN(Number(formPrice))
+                      ? getMenuItemEffectivePrice({
+                          price: Number(formPrice),
+                          discountType: formDiscountType || undefined,
+                          discountValue: Number(formDiscountValue || 0),
+                        }).toFixed(2)
+                      : "0.00"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Availability</label>
+                  <select
+                    value={formIsAvailable ? "available" : "unavailable"}
+                    onChange={(e) => setFormIsAvailable(e.target.value === "available")}
+                    className={cn(formInputClass, "appearance-none cursor-pointer")}
+                  >
+                    <option value="available">Available</option>
+                    <option value="unavailable">Out of stock</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className={formLabelClass}>Recommended</label>
+                  <select
+                    value={formIsRecommended ? "yes" : "no"}
+                    onChange={(e) => setFormIsRecommended(e.target.value === "yes")}
+                    className={cn(formInputClass, "appearance-none cursor-pointer")}
+                  >
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className={formLabelClass}>POS options</label>
+                <input
+                  type="text"
+                  value={formOptions}
+                  onChange={(e) => setFormOptions(e.target.value)}
+                  placeholder="Small, Medium, Large"
+                  className={formInputClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={formLabelClass}>Description</label>
+                <textarea
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  placeholder="Ingredients, prep notes, allergens…"
+                  rows={2}
+                  className={cn(formInputClass, "resize-none min-h-[64px]")}
+                />
               </div>
             </div>
           </div>
 
-          <DialogFooter className="px-8 py-6 bg-zinc-50/50 border-t border-zinc-100 flex items-center sm:justify-end gap-3">
+          <DialogFooter className="shrink-0 m-0 px-6 py-4 bg-zinc-50/50 dark:bg-[#1a1a1a] border-t border-zinc-100 dark:border-[#2a2a2a] flex sm:justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }}
-              className="text-zinc-500 font-bold px-6 h-11 rounded-lg transition-all"
+              className="h-9 px-5 text-sm font-medium rounded-lg"
               disabled={saving}
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold border-none px-8 h-11 transition-all active:scale-95"
+              className="h-9 px-6 bg-primary !text-white hover:bg-primary/90 rounded-lg text-sm font-semibold border-none"
               disabled={saving}
             >
-              {saving ? "Saving..." : isEditOpen ? "Update Item" : "Create Item"}
+              {saving ? "Saving..." : isEditOpen ? "Update item" : "Create item"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -633,68 +709,141 @@ export default function MenuPage() {
 
       {/* VIEW MODAL */}
       <Dialog open={isViewOpen} onOpenChange={(open) => { if (!open) setIsViewOpen(false); }}>
-        <DialogContent className="sm:max-w-[500px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl">
-          <DialogTitle className="sr-only">Menu Item Details</DialogTitle>
-          <div className="p-8">
-            <div className="flex justify-between items-start mb-6">
-              <div className="min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-2xl font-bold text-[#1E293B] truncate">{selectedItem?.name}</h3>
-                  <span className={cn(
-                    dashboardStatusBadgeClass,
-                    getTableStatusBadgeClass(selectedItem?.isAvailable ? "active" : "inactive"),
-                    "shrink-0"
-                  )}>
-                    {selectedItem?.isAvailable ? "Active" : "Inactive"}
-                  </span>
+        <DialogContent className="sm:max-w-[750px] max-h-[90vh] bg-white dark:bg-[#161616] border-none p-0 gap-0 overflow-hidden rounded-2xl shadow-xl flex flex-col">
+          <div className="shrink-0 p-8 border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/30 dark:bg-[#1a1a1a]">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="text-2xl font-semibold text-[#1e293b] dark:text-white">
+                Menu item details
+              </DialogTitle>
+              <DialogDescription className="text-zinc-500 dark:text-zinc-400 text-sm">
+                Full information for this menu entry.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto bg-white dark:bg-[#161616]">
+            <div className="w-full border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/50 dark:bg-[#1a1a1a]">
+              {selectedItem?.imageUrl ? (
+                <div className="w-full h-52 sm:h-60 overflow-hidden">
+                  <img
+                    src={selectedItem.imageUrl}
+                    alt={selectedItem.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-[11px] font-bold rounded-md uppercase tracking-wider">
-                    {categories.find(c => String(c.id) === String(selectedItem?.categoryId))?.name || "Uncategorized"}
-                  </span>
+              ) : (
+                <div className="w-full h-40 sm:h-48 flex flex-col items-center justify-center gap-2 text-zinc-300 dark:text-zinc-600">
+                  <ImageIcon className="size-12" />
+                  <p className="text-sm font-medium text-zinc-400">No image</p>
                 </div>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-2xl font-black text-primary">${Number(selectedItem?.price).toFixed(2)}</p>
-                <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-1">Per serving</p>
-              </div>
+              )}
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <p className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider mb-2">Description</p>
-                <p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50/50 p-4 rounded-xl border border-zinc-100">
-                  {selectedItem?.description || "No description provided for this item."}
+            <div className="px-8 py-8 space-y-6">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Item name</p>
+                <p className={viewValueClass}>{selectedItem?.name || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Category</p>
+                <p className={viewValueClass}>
+                  {categories.find(c => String(c.id) === String(selectedItem?.categoryId))?.name ||
+                    "Uncategorized"}
                 </p>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center gap-3">
-                  <RefreshCw className="size-3.5 text-zinc-400" />
-                  <div>
-                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Created</p>
-                    <p className="text-xs font-medium text-zinc-700">{selectedItem?.createdAt ? new Date(selectedItem.createdAt).toLocaleDateString() : "N/A"}</p>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Cost price</p>
+                <p className={viewValueClass}>${Number(selectedItem?.costPrice || 0).toFixed(2)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Selling price</p>
+                {selectedItem && menuItemHasDiscount(selectedItem) ? (
+                  <div className="space-y-0.5">
+                    <p className={cn(viewValueClass, "text-primary")}>
+                      ${getMenuItemEffectivePrice(selectedItem).toFixed(2)}
+                    </p>
+                    <p className="text-sm text-zinc-400 line-through">
+                      ${Number(selectedItem.price).toFixed(2)}
+                    </p>
                   </div>
-                </div>
-                <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center gap-3">
-                  <CheckCircle2 className="size-3.5 text-zinc-400" />
-                  <div>
-                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Tax / VAT</p>
-                    <p className="text-xs font-medium text-zinc-700">{selectedItem?.tax || 0}%</p>
-                  </div>
-                </div>
+                ) : (
+                  <p className={cn(viewValueClass, "text-primary")}>
+                    ${Number(selectedItem?.price || 0).toFixed(2)}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Discount</p>
+                <p className={viewValueClass}>
+                  {selectedItem && menuItemHasDiscount(selectedItem)
+                    ? getMenuItemDiscountLabel(selectedItem)
+                    : "—"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Tax / VAT</p>
+                <p className={viewValueClass}>{selectedItem?.tax ?? 0}%</p>
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Availability</p>
+                <p className={viewValueClass}>
+                  {selectedItem?.isAvailable ? "Available" : "Out of stock"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Recommended</p>
+                <p className={viewValueClass}>
+                  {selectedItem?.isRecommended ? "Yes" : "No"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>POS options</p>
+                <p className={viewValueClass}>
+                  {selectedItem
+                    ? parseMenuItemOptions(selectedItem).join(", ") || "—"
+                    : "—"}
+                </p>
               </div>
             </div>
 
-            <DialogFooter className="mt-8 pt-6 border-t border-zinc-100">
-              <Button
-                onClick={() => setIsViewOpen(false)}
-                className="w-full bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-xl font-bold border-none h-12 shadow-lg shadow-primary/20"
-              >
-                Close View
-              </Button>
-            </DialogFooter>
+            <div className="space-y-1 pt-2 border-t border-zinc-100 dark:border-[#2a2a2a]">
+              <p className={cn(viewLabelClass, "pt-4")}>Description</p>
+              <p className={cn(viewValueClass, "text-zinc-600 dark:text-zinc-300 leading-relaxed")}>
+                {selectedItem?.description || "No description provided."}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-8 gap-y-5 pt-2 border-t border-zinc-100 dark:border-[#2a2a2a]">
+              <div className="space-y-1 pt-4">
+                <p className={viewLabelClass}>Created</p>
+                <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                  {selectedItem?.createdAt
+                    ? new Date(selectedItem.createdAt).toLocaleString()
+                    : "—"}
+                </p>
+              </div>
+              <div className="space-y-1 pt-4">
+                <p className={viewLabelClass}>Last updated</p>
+                <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                  {selectedItem?.updatedAt
+                    ? new Date(selectedItem.updatedAt).toLocaleString()
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            </div>
           </div>
+
+          <DialogFooter className="shrink-0 m-0 px-8 py-6 bg-zinc-50/50 dark:bg-[#1a1a1a] border-t border-zinc-100 dark:border-[#2a2a2a] flex sm:justify-end">
+            <Button
+              onClick={() => setIsViewOpen(false)}
+              variant="outline"
+              className="text-zinc-500 font-medium px-6 h-11 rounded-lg"
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

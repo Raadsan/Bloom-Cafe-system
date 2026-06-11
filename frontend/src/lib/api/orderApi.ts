@@ -61,6 +61,12 @@ export interface CreateOrderPayload {
   items: { menuItemId: number; quantity: number }[];
 }
 
+export interface PosCheckoutPayload extends CreateOrderPayload {
+  paymentMethod: string;
+  paymentPhone?: string;
+  providerName?: string;
+}
+
 export type GetAllOrdersParams = {
   status?: string;
   onlyMine?: boolean;
@@ -115,6 +121,14 @@ async function fetchOrdersFromNetwork(params?: GetAllOrdersParams): Promise<Orde
 export const orderApi = {
   createOrder: async (payload: CreateOrderPayload): Promise<Order> => {
     const res = await api.post('/orders', payload);
+    clearOrdersListCache();
+    return res.data.data;
+  },
+
+  posCheckout: async (
+    payload: PosCheckoutPayload
+  ): Promise<{ id: number; total: number; status: string }> => {
+    const res = await api.post('/orders/pos-checkout', payload);
     clearOrdersListCache();
     return res.data.data;
   },

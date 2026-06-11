@@ -585,7 +585,9 @@ export const getFinanceReport = async (req, res) => {
             totalCost: cost,
             totalSelling: selling,
             profit: selling - cost,
-            date: p.paidAt
+            date: p.paidAt,
+            paymentMethod: p.method || 'unknown',
+            providerName: p.providerName || null,
           })
         })
       }
@@ -610,6 +612,74 @@ export const getFinanceReport = async (req, res) => {
   } catch (error) {
     console.error('Finance Report Error:', error)
     res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// WEEKLY REVENUE CHART (last 7 days)
+export const getWeeklyAnalytics = async (req, res) => {
+  try {
+    const end = new Date()
+    end.setHours(23, 59, 59, 999)
+
+    const start = new Date()
+    start.setDate(start.getDate() - 6)
+    start.setHours(0, 0, 0, 0)
+
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const buckets = []
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start)
+      d.setDate(start.getDate() + i)
+      const key = d.toISOString().split('T')[0]
+      buckets.push({
+        key,
+        name: dayLabels[d.getDay()],
+        revenue: 0,
+        orders: 0,
+      })
+    }
+
+    const payments = await prisma.payment.findMany({
+      where: {
+        status: 'paid',
+        paidAt: { gte: start, lte: end },
+      },
+      select: {
+        amount: true,
+        paidAt: true,
+        orderId: true,
+      },
+    })
+
+    const ordersPerDay = {}
+
+    for (const payment of payments) {
+      const key = new Date(payment.paidAt).toISOString().split('T')[0]
+      const bucket = buckets.find((b) => b.key === key)
+      if (!bucket) continue
+
+      bucket.revenue += payment.amount
+      if (!ordersPerDay[key]) ordersPerDay[key] = new Set()
+      ordersPerDay[key].add(payment.orderId)
+    }
+
+    buckets.forEach((bucket) => {
+      bucket.orders = ordersPerDay[bucket.key]?.size || 0
+      delete bucket.key
+    })
+
+    return res.status(200).json({
+      success: true,
+      data: buckets,
+    })
+  } catch (error) {
+    console.error('Weekly Analytics Error:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch weekly analytics',
+      error: error.message,
+    })
   }
 }
 
@@ -705,4 +775,4 @@ export const getClientsReport = async (req, res) => {
     console.error('Clients Report Error:', error)
     res.status(500).json({ success: false, message: error.message })
   }
-}
+}

@@ -740,9 +740,17 @@
 
 
 import prisma from '../config/db.js'
-import { emitOrderUpdate } from '../utils/socketEvents.js'
+import { emitOrderUpdate, emitPaymentSuccess } from '../utils/socketEvents.js'
 import { notifyNewOrder, notifyOrderReady } from '../utils/orderNotifications.js'
 import { logAudit } from '../utils/auditHelper.js'
+import { sendWaafiPayment } from '../utils/waafiPayment.js'
+
+const MOBILE_WALLET_METHODS = ['evc_plus', 'edahab', 'premier_wallet', 'waafi']
+
+const generateInternalRef = () => {
+  const random = Math.floor(1000 + Math.random() * 9000)
+  return `PAY-${Date.now()}-${random}`
+}
 
 const orderListCache = new Map()
 const orderListInflight = new Map()
@@ -926,6 +934,189 @@ export const createOrder = async (req, res) => {
       data: order
     })
 
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+/**
+ * POS checkout — create order + payment in one request (faster than two round trips).
+ */
+export const createPosCheckout = async (req, res) => {
+  try {
+    const {
+      tableId,
+      addressId,
+      type,
+      customerName,
+      customerPhone,
+      notes,
+      items,
+      discountAmount: discountAmountInput,
+      discountType,
+      discountValue,
+      paymentMethod,
+      paymentPhone,
+      providerName,
+    } = req.body
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'items are required' })
+    }
+
+    if (!paymentMethod) {
+      return res.status(400).json({ success: false, message: 'paymentMethod is required' })
+    }
+
+    if (type === 'delivery' && !addressId) {
+      return res.status(400).json({ success: false, message: 'addressId is required for delivery orders' })
+    }
+
+    if (tableId) {
+      const table = await prisma.table.findUnique({ where: { id: Number(tableId) } })
+      if (!table) {
+        return res.status(404).json({ success: false, message: 'Table not found' })
+      }
+    }
+
+    let subTotal = 0
+    let taxAmount = 0
+    const orderItemsData = []
+
+    const menuItemIds = [...new Set(items.map((item) => Number(item.menuItemId)))]
+    const menuItems = await prisma.menuitem.findMany({
+      where: { id: { in: menuItemIds } },
+    })
+    const menuItemMap = new Map(menuItems.map((menuItem) => [menuItem.id, menuItem]))
+
+    for (const item of items) {
+      const menuItem = menuItemMap.get(Number(item.menuItemId))
+      if (!menuItem || !menuItem.isAvailable) {
+        return res.status(400).json({ success: false, message: 'Menu item not available' })
+      }
+
+      const quantity = Number(item.quantity) || 1
+      const unitPrice = menuItem.price
+      const itemTaxRate = menuItem.tax || 0
+      const itemSubtotal = quantity * unitPrice
+      const itemTaxAmount = itemSubtotal * (itemTaxRate / 100)
+
+      subTotal += itemSubtotal
+      taxAmount += itemTaxAmount
+
+      orderItemsData.push({
+        menuItemId: menuItem.id,
+        quantity,
+        unitPrice,
+        tax: itemTaxRate,
+      })
+    }
+
+    let customer = null
+    if (customerName && customerPhone) {
+      customer = await prisma.customer.upsert({
+        where: { phone: customerPhone.trim() },
+        update: { fullName: customerName.trim() },
+        create: {
+          fullName: customerName.trim(),
+          phone: customerPhone.trim(),
+        },
+      })
+    }
+
+    const discountAmount = Math.max(0, Number(discountAmountInput) || 0)
+    const parsedDiscountValue = Math.max(0, Number(discountValue) || 0)
+    const orderTotal = Math.max(0, subTotal + taxAmount - discountAmount)
+
+    const method = String(paymentMethod).toLowerCase()
+    const phone = paymentPhone?.trim() || customerPhone?.trim() || null
+    const internalRef = generateInternalRef()
+
+    if (method === 'premier_wallet' && !phone) {
+      return res.status(400).json({ success: false, message: 'Phone required for Premier Wallet payment' })
+    }
+
+    let waafiResponse = null
+    if (method === 'premier_wallet') {
+      waafiResponse = await sendWaafiPayment({
+        transactionId: internalRef,
+        accountNo: phone,
+        amount: orderTotal,
+        description: 'Bloom Cafe – POS Order',
+      })
+
+      if (waafiResponse.responseCode !== '2001') {
+        return res.status(402).json({
+          success: false,
+          message: waafiResponse.responseMsg || 'Premier Wallet payment failed',
+        })
+      }
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        orderType: type || 'dine-in',
+        tableId: tableId ? Number(tableId) : null,
+        addressId: addressId ? Number(addressId) : null,
+        customerId: customer?.id || null,
+        userId: req.user?.id || null,
+        customerName,
+        customerPhone,
+        notes,
+        subTotal,
+        taxAmount,
+        discountAmount,
+        discountType: discountAmount > 0 ? discountType || null : null,
+        discountValue: discountAmount > 0 ? parsedDiscountValue : 0,
+        total: orderTotal,
+        status: 'pending',
+        source: 'pos',
+        orderitem: { create: orderItemsData },
+        payment: {
+          create: {
+            amount: orderTotal,
+            method: method === 'premier_wallet' ? 'waafi' : method,
+            phone,
+            providerName: providerName?.trim() || null,
+            status: 'paid',
+            internalRef,
+            providerRef: waafiResponse?.referenceId || null,
+            paidAt: new Date(),
+          },
+        },
+      },
+      include: {
+        table: true,
+        payment: true,
+        orderitem: { include: { menuitem: { select: { id: true, name: true } } } },
+      },
+    })
+
+    if (order.tableId && !MOBILE_WALLET_METHODS.includes(method)) {
+      await prisma.table.update({
+        where: { id: order.tableId },
+        data: { status: 'active' },
+      })
+    }
+
+    await Promise.all([
+      notifyNewOrder(order, req.user?.id),
+      logAudit({
+        userId: req.user?.id,
+        action: 'Created',
+        entity: 'Order',
+        entityId: order.id,
+        description: `POS checkout order #${order.id}`,
+      }),
+    ])
+
+    clearOrderListCache()
+    emitPaymentSuccess(order)
+
+    res.status(201).json({
+      success: true,
+      data: { id: order.id, total: order.total, status: order.status },
+    })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }

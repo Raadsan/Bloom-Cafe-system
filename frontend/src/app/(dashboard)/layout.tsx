@@ -22,7 +22,12 @@ import {
 import { PermissionProvider } from "@/context/PermissionContext";
 import { pageHeaderBarTitleClass } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
-import { onDebouncedEvent, REFRESH_NOTIFICATIONS } from "@/lib/live-updates";
+import {
+  onDebouncedEvent,
+  REFRESH_NOTIFICATIONS,
+  NOTIFICATION_READ,
+  NOTIFICATIONS_MARKED_ALL_READ,
+} from "@/lib/live-updates";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -76,6 +81,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
 
     window.addEventListener('profile_updated', handleProfileUpdate);
+
+    const onNotificationRead = (e: Event) => {
+      const id = (e as CustomEvent<{ id: number }>).detail.id;
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, isRead: true } : item))
+      );
+    };
+
+    const onAllNotificationsRead = () => {
+      setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+    };
+
+    window.addEventListener(NOTIFICATION_READ, onNotificationRead);
+    window.addEventListener(NOTIFICATIONS_MARKED_ALL_READ, onAllNotificationsRead);
+
     const removeNotificationListener = onDebouncedEvent(
       REFRESH_NOTIFICATIONS,
       () => fetchNotifications(true),
@@ -84,6 +104,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return () => {
       window.removeEventListener('profile_updated', handleProfileUpdate);
+      window.removeEventListener(NOTIFICATION_READ, onNotificationRead);
+      window.removeEventListener(NOTIFICATIONS_MARKED_ALL_READ, onAllNotificationsRead);
       removeNotificationListener();
     };
   }, [fetchNotifications]);
@@ -171,16 +193,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             key={n.id}
                             type="button"
                             className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors ${n.isRead ? "opacity-60" : "bg-primary/5"}`}
-                            onClick={async () => {
+                            onClick={() => {
                               if (!n.isRead) {
-                                try {
-                                  await notificationApi.markNotificationRead(n.id);
-                                  setNotifications((prev) =>
-                                    prev.map((item) => (item.id === n.id ? { ...item, isRead: true } : item))
-                                  );
-                                } catch (error) {
+                                setNotifications((prev) =>
+                                  prev.map((item) =>
+                                    item.id === n.id ? { ...item, isRead: true } : item
+                                  )
+                                );
+                                notificationApi.markNotificationRead(n.id).catch((error) => {
                                   console.error("Failed to mark notification read", error);
-                                }
+                                  fetchNotifications(true);
+                                });
                               }
                             }}
                           >
@@ -253,12 +276,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         Profile
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/settings" className="flex w-full items-center text-xs font-bold uppercase tracking-widest py-2.5 cursor-pointer">
-                        <Settings2 className="mr-2 size-4" />
-                        Settings
-                      </Link>
-                    </DropdownMenuItem>
+                    {user?.role?.toLowerCase() === "admin" && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/settings" className="flex w-full items-center text-xs font-bold uppercase tracking-widest py-2.5 cursor-pointer">
+                          <Settings2 className="mr-2 size-4" />
+                          Settings
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem className="text-xs font-bold uppercase tracking-widest py-2.5 cursor-pointer">
                       <FileText className="mr-2 size-4" />
                       Policy

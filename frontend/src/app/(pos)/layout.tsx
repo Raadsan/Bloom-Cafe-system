@@ -256,12 +256,14 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
                         My Profile
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard/settings" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
-                        <Settings2 className="mr-2.5 size-4" />
-                        Settings
-                      </Link>
-                    </DropdownMenuItem>
+                    {user?.role?.toLowerCase() === "admin" && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/settings" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
+                          <Settings2 className="mr-2.5 size-4" />
+                          Settings
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem className="text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
                       <FileText className="mr-2.5 size-4" />
                       Privacy Policy

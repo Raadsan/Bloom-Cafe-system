@@ -36,7 +36,7 @@ export const categoryApi = {
   },
 
   getAllCategories: async (): Promise<Category[]> => {
-    const res = await api.get('/categories/all');
+    const res = await api.get('/categories');
     return res.data.data || [];
   },
 

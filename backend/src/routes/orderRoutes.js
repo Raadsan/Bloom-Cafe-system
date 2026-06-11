@@ -26,6 +26,7 @@
 import express from 'express'
 import {
   createOrder,
+  createPosCheckout,
   getAllOrders,
   getOrderById,
   updateOrderStatus,
@@ -54,6 +55,7 @@ const canViewOrder = (req, res, next) => {
 
 // Create order — accessible to any logged-in user (needed by POS)
 router.post('/', protect, createOrder)
+router.post('/pos-checkout', protect, createPosCheckout)
 
 // Get all orders (Accessible to any logged-in user for POS retrieval)
 router.get('/all', protect, getAllOrders)

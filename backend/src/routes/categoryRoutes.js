@@ -41,8 +41,8 @@ const router = express.Router()
 router.post('/', protect, checkPermission('/categories', 'canAdd'), createCategory)
 
 // Get all categories
-// router.get('/all', protect, checkPermission('/categories', 'canView'), getAllCategories)
-router.get('/all',getAllCategories)
+router.get('/', getAllCategories)
+router.get('/all', getAllCategories)
 
 // Get categories with items
 router.get('/with-items', getCategoriesWithItems)

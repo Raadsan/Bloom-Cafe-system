@@ -18,7 +18,6 @@ import {
   Pencil,
   ChevronRight,
   ChevronDown,
-  Printer,
   Percent,
   Copy,
   History,
@@ -26,11 +25,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
 import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/menuItemApi";
+import {
+  getMenuItemEffectivePrice,
+  menuItemHasDiscount,
+  getMenuItemDiscountPercent,
+} from "@/lib/menu-item-pricing";
 import { tableApi, Table } from "@/lib/api/tableApi";
 import { roomApi, Room } from "@/lib/api/roomApi";
 import { orderApi } from "@/lib/api/orderApi";
 import api from "@/lib/api/axios";
-import { paymentApi, PaymentMethod } from "@/lib/api/paymentApi";
+import { PaymentMethod } from "@/lib/api/paymentApi";
 import { customerApi, Customer } from "@/lib/api/customerApi";
 import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
 import { ReceiptHeader } from "@/components/receipt/ReceiptBody";
@@ -48,13 +52,14 @@ import {
 } from "@/components/ui/dialog";
 
 type ViewMode = "grid" | "list";
-type PosOrderType = "takeaway" | "delivery";
+type PosOrderType = "dine-in" | "takeaway" | "delivery";
 
 const POS_ORDER_TYPES: {
   id: PosOrderType;
   label: string;
   icon: typeof ShoppingBag;
 }[] = [
+  { id: "dine-in", label: "Dine-in", icon: Utensils },
   { id: "takeaway", label: "Takeaway", icon: ShoppingBag },
   { id: "delivery", label: "Delivery", icon: Truck },
 ];
@@ -105,6 +110,9 @@ const POS_PAYMENT_METHODS: {
 
 const formInputClass =
   "w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-sm font-medium";
+
+const priceAmountClass = "text-primary dark:text-white";
+const summaryAmountClass = "font-semibold text-foreground dark:text-white";
 
 function getTableRoomId(table: Table): number | null {
   const id = table.roomId ?? table.room?.id;
@@ -189,7 +197,7 @@ export default function PosTerminalPage() {
   const [deliveryDistrict, setDeliveryDistrict] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>("evc_plus");
   const [paymentPhone, setPaymentPhone] = useState("");
-  const [summaryOpen, setSummaryOpen] = useState(true);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [heldCount, setHeldCount] = useState(0);
   const [activeHeldOrderId, setActiveHeldOrderId] = useState<number | null>(null);
   const [draftSeq, setDraftSeq] = useState(1);
@@ -228,7 +236,11 @@ export default function PosTerminalPage() {
     if (savedMeta) {
       try {
         const parsed = JSON.parse(savedMeta) as Partial<PosOrderMeta>;
-        if (parsed.orderType === "takeaway" || parsed.orderType === "delivery") {
+        if (
+          parsed.orderType === "dine-in" ||
+          parsed.orderType === "takeaway" ||
+          parsed.orderType === "delivery"
+        ) {
           setOrderType(parsed.orderType);
         }
         if (parsed.takeawayTiming === "now" || parsed.takeawayTiming === "later") {
@@ -366,6 +378,15 @@ export default function PosTerminalPage() {
   }, [tables, selectedRoomId]);
 
   const orderLocationLabel = useMemo(() => {
+    if (orderType === "dine-in") {
+      if (selectedTableRecord) {
+        const roomName = selectedRoom?.name;
+        return roomName
+          ? `Table ${selectedTableRecord.number} · ${roomName}`
+          : `Table ${selectedTableRecord.number}`;
+      }
+      return "Select table";
+    }
     if (orderType === "takeaway") {
       if (takeawayTiming === "later" && (pickupDate || pickupTime)) {
         if (pickupDate && pickupTime) return `Takeaway · Pickup ${pickupDate} ${pickupTime}`;
@@ -380,20 +401,26 @@ export default function PosTerminalPage() {
         : `Delivery · ${deliveryStreet.trim()}`;
     }
     return "Delivery — add address";
-  }, [orderType, takeawayTiming, pickupDate, pickupTime, deliveryStreet, deliveryDistrict]);
+  }, [
+    orderType,
+    selectedTableRecord,
+    selectedRoom,
+    takeawayTiming,
+    pickupDate,
+    pickupTime,
+    deliveryStreet,
+    deliveryDistrict,
+  ]);
 
-  const orderTypeLabel = orderType === "delivery" ? "Delivery" : "Takeaway";
+  const orderTypeLabel =
+    orderType === "delivery" ? "Delivery" : orderType === "dine-in" ? "Dine-in" : "Takeaway";
 
   const customersByPhone = useMemo(
     () => [...customers].sort((a, b) => a.phone.localeCompare(b.phone)),
     [customers]
   );
 
-  const selectPhoneOptions = useMemo(() => {
-    const digits = normalizePhone(customerPhone);
-    if (!digits) return customersByPhone;
-    return customersByPhone.filter(c => normalizePhone(c.phone).includes(digits));
-  }, [customersByPhone, customerPhone]);
+  const selectPhoneOptions = customersByPhone;
 
   useEffect(() => {
     return () => {
@@ -487,6 +514,10 @@ export default function PosTerminalPage() {
       setDeliveryStreet("");
       setDeliveryDistrict("");
     }
+    if (type !== "dine-in") {
+      setSelectedTable(null);
+      setSelectedRoomId("");
+    }
   };
 
   const draftOrderId = `#${String(draftSeq).padStart(3, "0")}`;
@@ -515,7 +546,7 @@ export default function PosTerminalPage() {
           key,
           id: product.id,
           name: product.name,
-          price: product.price,
+          price: getMenuItemEffectivePrice(product),
           tax: product.tax || 0,
           quantity: 1,
           imageUrl: product.imageUrl,
@@ -615,6 +646,11 @@ export default function PosTerminalPage() {
   };
 
   const validateOrderDetails = (): boolean => {
+    if (orderType === "dine-in" && !selectedTable) {
+      showToast("Select a table for dine-in", "error");
+      setIsTableDialogOpen(true);
+      return false;
+    }
     if (orderType === "takeaway" && takeawayTiming === "later" && (!pickupDate || !pickupTime)) {
       showToast("Select pickup date and time", "error");
       setIsTableDialogOpen(true);
@@ -654,7 +690,7 @@ export default function PosTerminalPage() {
     const addressId = await resolveDeliveryAddressId();
 
     return {
-      tableId: undefined,
+      tableId: orderType === "dine-in" ? selectedTable ?? undefined : undefined,
       addressId,
       type: orderType,
       status,
@@ -743,7 +779,13 @@ export default function PosTerminalPage() {
       setSelectedRoomId("");
     }
     const resumedType = (order.orderType || "takeaway") as string;
-    setOrderType(resumedType === "delivery" ? "delivery" : "takeaway");
+    setOrderType(
+      resumedType === "delivery"
+        ? "delivery"
+        : resumedType === "dine-in"
+          ? "dine-in"
+          : "takeaway"
+    );
     setSelectedCustomer(order.customerId);
     if (order.customerName) setCustomerName(order.customerName);
     if (order.customerPhone) setCustomerPhone(order.customerPhone);
@@ -793,8 +835,8 @@ export default function PosTerminalPage() {
         key: cartLineKey(m.id),
         id: m.id,
         name: m.name,
-        price: m.price,
-        tax: m.tax || 0,
+        price: oi.unitPrice ?? getMenuItemEffectivePrice(m),
+        tax: oi.tax ?? (m.tax || 0),
         quantity: oi.quantity,
         imageUrl: m.imageUrl,
       };
@@ -813,14 +855,6 @@ export default function PosTerminalPage() {
     }
   };
 
-  const handlePrint = () => {
-    if (cart.length === 0) {
-      showToast("Cart is empty", "error");
-      return;
-    }
-    window.print();
-  };
-
   const selectedPaymentMethod = POS_PAYMENT_METHODS.find(m => m.id === paymentMethod)!;
 
   const handleOpenPayment = () => {
@@ -828,11 +862,28 @@ export default function PosTerminalPage() {
       showToast("Your cart is empty", "error");
       return;
     }
+    setIsTableDialogOpen(true);
+  };
+
+  const handleContinueToCheckout = () => {
     if (!validateOrderDetails()) return;
     const cust = customers.find(c => c.id === selectedCustomer);
     setPaymentPhone(cust?.phone || customerPhone || "");
     setPaymentMethod("evc_plus");
+    setIsTableDialogOpen(false);
     setIsCheckoutOpen(true);
+  };
+
+  const closeCheckout = (force = false) => {
+    if (!force && isProcessing) return;
+    setIsCheckoutOpen(false);
+  };
+
+  const resolvePaymentPhone = () => {
+    const trimmed = paymentPhone.trim();
+    if (trimmed) return trimmed;
+    const cust = customers.find(c => c.id === selectedCustomer);
+    return cust?.phone || customerPhone.trim() || "";
   };
 
   const handleCheckout = async () => {
@@ -840,29 +891,22 @@ export default function PosTerminalPage() {
       showToast("Your cart is empty", "error");
       return;
     }
-    if (!paymentPhone.trim()) {
-      showToast("Enter the mobile number for payment", "error");
+
+    const payPhone = resolvePaymentPhone();
+    if (paymentMethod === "premier_wallet" && !payPhone) {
+      showToast("Enter mobile number for Premier Wallet payment", "error");
       return;
     }
 
     try {
       setIsProcessing(true);
-      const order = await orderApi.createOrder({
+      await orderApi.posCheckout({
         ...(await buildOrderPayload()),
-        customerPhone: paymentPhone.trim(),
+        ...(payPhone ? { customerPhone: payPhone } : {}),
+        paymentMethod,
+        ...(payPhone ? { paymentPhone: payPhone } : {}),
+        providerName: selectedPaymentMethod.providerName,
       });
-
-      if (paymentMethod === "premier_wallet") {
-        await paymentApi.processWaafiPayment(order.id, paymentPhone.trim());
-      } else {
-        await paymentApi.createPayment({
-          orderId: order.id.toString(),
-          amount: order.total ?? total,
-          method: paymentMethod,
-          phone: paymentPhone.trim(),
-          providerName: selectedPaymentMethod.providerName,
-        });
-      }
 
       showToast("Payment successful!", "success");
       const idToDelete = activeHeldOrderId;
@@ -872,7 +916,7 @@ export default function PosTerminalPage() {
         void clearLoadedHeldOrders([idToDelete]);
       }
       resetTransaction();
-      setIsCheckoutOpen(false);
+      closeCheckout(true);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -991,13 +1035,9 @@ export default function PosTerminalPage() {
                 const itemOptions = parseMenuItemOptions(product);
                 const selected = isInCart(product.id) || activeProductId === product.id;
                 const outOfStock = !product.isAvailable;
-                const hasDiscount =
-                  product.costPrice != null && product.costPrice > product.price;
-                const discountPct = hasDiscount
-                  ? Math.round(
-                      ((product.costPrice! - product.price) / product.costPrice!) * 100
-                    )
-                  : 0;
+                const hasDiscount = menuItemHasDiscount(product);
+                const effectivePrice = getMenuItemEffectivePrice(product);
+                const discountPct = getMenuItemDiscountPercent(product);
 
                 return (
                   <div
@@ -1027,15 +1067,20 @@ export default function PosTerminalPage() {
                         </p>
                         <h3 className="text-sm font-bold text-foreground truncate">{product.name}</h3>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-sm font-bold text-primary">
-                            ${product.price.toFixed(2)}
+                          <span className={cn("text-sm font-bold", priceAmountClass)}>
+                            ${effectivePrice.toFixed(2)}
                           </span>
                           {hasDiscount && (
                             <>
                               <span className="text-xs text-muted-foreground line-through">
-                                ${product.costPrice!.toFixed(2)}
+                                ${product.price.toFixed(2)}
                               </span>
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-secondary/35 text-primary">
+                              <span
+                                className={cn(
+                                  "text-[10px] font-bold px-1.5 py-0.5 rounded bg-secondary/35",
+                                  priceAmountClass
+                                )}
+                              >
                                 -{discountPct}%
                               </span>
                             </>
@@ -1091,7 +1136,16 @@ export default function PosTerminalPage() {
                     <p className="text-sm font-bold truncate">{product.name}</p>
                     <p className="text-xs text-muted-foreground">{categoryName(product.categoryId)}</p>
                   </div>
-                  <span className="text-sm font-bold text-primary">${product.price.toFixed(2)}</span>
+                  <div className="text-right shrink-0">
+                    <span className={cn("text-sm font-bold block", priceAmountClass)}>
+                      ${getMenuItemEffectivePrice(product).toFixed(2)}
+                    </span>
+                    {menuItemHasDiscount(product) && (
+                      <span className="text-[10px] text-muted-foreground line-through">
+                        ${product.price.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
                   <Plus className="size-4 text-primary" />
                 </button>
               ))}
@@ -1144,31 +1198,7 @@ export default function PosTerminalPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsTableDialogOpen(true)}
-          className="mx-5 mt-4 block w-[calc(100%-2.5rem)] text-left relative group"
-        >
-          <PosCustomerProfileCard
-            variant="compact"
-            customerName={customerName}
-            customerPhone={customerPhone}
-            selectedCustomer={selectedCustomer}
-            selectPhoneOptions={selectPhoneOptions}
-            orderTypeLabel={orderTypeLabel}
-            locationLabel={orderLocationLabel}
-            onNameChange={() => {}}
-            onPhoneChange={() => {}}
-            onPhoneBlur={() => {}}
-            onSelectCustomer={() => {}}
-            className="group-hover:border-primary/20 transition-colors"
-          />
-          <span className="absolute top-4 right-4 size-8 rounded-full bg-white border border-zinc-100 shadow-sm flex items-center justify-center text-zinc-400 group-hover:text-primary">
-            <Pencil className="size-3.5" />
-          </span>
-        </button>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2 min-h-0">
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-10">
               <div className="size-16 rounded-full bg-muted/40 flex items-center justify-center mb-3">
@@ -1178,74 +1208,73 @@ export default function PosTerminalPage() {
               <p className="text-xs text-muted-foreground/70 mt-1">Tap a product to add</p>
             </div>
           ) : (
-            cart.map(item => (
-              <div
-                key={item.key}
-                className="relative bg-muted/20 border border-border/60 rounded-xl p-3"
-              >
-                <button
-                  type="button"
-                  onClick={() => setEditingLineKey(item.key)}
-                  className="absolute top-2.5 right-2.5 text-muted-foreground hover:text-primary"
+            cart.map(item => {
+              const optionLabel = formatCartOptions(item);
+              const lineLabel = [
+                `${item.quantity}x ${item.name}`,
+                optionLabel,
+                item.lineNote,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+
+              return (
+                <div
+                  key={item.key}
+                  className="flex items-center gap-2 bg-white border border-zinc-100 rounded-lg px-2.5 py-2 shadow-sm"
                 >
-                  <Pencil className="size-3.5" />
-                </button>
-                <div className="flex gap-3">
-                  <div className="size-11 rounded-full overflow-hidden bg-white border border-border shrink-0">
+                  <div className="size-8 rounded-md overflow-hidden bg-zinc-50 border border-zinc-100 shrink-0">
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <Utensils className="size-5 m-3 text-muted-foreground/40" />
+                      <Utensils className="size-4 m-2 text-muted-foreground/40" />
                     )}
                   </div>
-                  <div className="flex-1 min-w-0 pr-6">
-                    <p className="text-sm font-bold text-foreground leading-tight">{item.name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      $ {item.price.toFixed(2)}
-                    </p>
-                    {formatCartOptions(item) && (
-                      <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
-                        {formatCartOptions(item)}
-                      </p>
-                    )}
-                    {item.lineNote && (
-                      <p className="text-[10px] text-muted-foreground italic mt-1">{item.lineNote}</p>
-                    )}
-                    <div className="flex items-center justify-between mt-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.key, -1)}
-                          className="size-7 rounded-md border border-border bg-white text-muted-foreground flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
-                        >
-                          <Minus className="size-3.5" />
-                        </button>
-                        <span className="text-sm font-bold min-w-[1.25rem] text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.key, 1)}
-                          className="size-7 rounded-md border border-border bg-white text-muted-foreground flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
-                        >
-                          <Plus className="size-3.5" />
-                        </button>
-                      </div>
-                      <span className="text-sm font-bold text-foreground">
-                        $ {(item.price * item.quantity).toFixed(2)}
-                      </span>
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingLineKey(item.key)}
+                    className="flex-1 min-w-0 text-left text-xs font-medium text-foreground truncate hover:text-primary"
+                    title={lineLabel}
+                  >
+                    {lineLabel}
+                  </button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.key, -1)}
+                      className="size-6 rounded border border-zinc-200 bg-white text-muted-foreground flex items-center justify-center hover:border-primary hover:text-primary"
+                    >
+                      <Minus className="size-3" />
+                    </button>
+                    <span className="text-xs font-semibold min-w-[1rem] text-center dark:text-white">
+                      {item.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.key, 1)}
+                      className="size-6 rounded border border-zinc-200 bg-white text-muted-foreground flex items-center justify-center hover:border-primary hover:text-primary"
+                    >
+                      <Plus className="size-3" />
+                    </button>
                   </div>
+                  <span
+                    className={cn(
+                      "text-xs font-bold shrink-0 w-14 text-right tabular-nums",
+                      priceAmountClass
+                    )}
+                  >
+                    ${(item.price * item.quantity).toFixed(2)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeFromCart(item.key)}
+                    className="shrink-0 text-muted-foreground/50 hover:text-destructive p-0.5"
+                  >
+                    <X className="size-3.5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeFromCart(item.key)}
-                  className="absolute bottom-2 right-2 text-muted-foreground/40 hover:text-destructive"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -1261,26 +1290,7 @@ export default function PosTerminalPage() {
           </div>
         )}
 
-        <div className="shrink-0 border-t border-border/60 bg-muted/15 p-5 space-y-3">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setIsDiscountModalOpen(true)}
-              className="flex-1 h-9 rounded-lg border border-border bg-white text-xs font-semibold text-primary flex items-center justify-center gap-1 hover:bg-primary/5"
-            >
-              <Percent className="size-3.5" />
-              Discount
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex-1 h-9 rounded-lg border border-border bg-white text-xs font-semibold text-[#fb923c] flex items-center justify-center gap-1 hover:bg-orange-50"
-            >
-              <Printer className="size-3.5" />
-              Print
-            </button>
-          </div>
-
+        <div className="shrink-0 border-t border-border/60 bg-white p-5 space-y-3">
           <button
             type="button"
             onClick={() => setSummaryOpen(o => !o)}
@@ -1294,14 +1304,14 @@ export default function PosTerminalPage() {
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Line Total</span>
-                <span className="font-semibold text-foreground">${subtotal.toFixed(2)}</span>
+                <span className={summaryAmountClass}>${subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Tax / VAT</span>
-                <span className="font-semibold text-foreground">${taxAmount.toFixed(2)}</span>
+                <span className={summaryAmountClass}>${taxAmount.toFixed(2)}</span>
               </div>
               {discountAmount > 0 && (
-                <div className="flex justify-between text-destructive">
+                <div className="flex justify-between text-destructive dark:text-white">
                   <span>Discount</span>
                   <span>-${discountAmount.toFixed(2)}</span>
                 </div>
@@ -1311,29 +1321,39 @@ export default function PosTerminalPage() {
 
           <div className="flex items-end justify-between pt-1">
             <span className="text-sm font-semibold text-muted-foreground">Total Bill</span>
-            <span className="text-xl font-bold tabular-nums text-primary">
+            <span className={cn("text-xl font-bold tabular-nums", priceAmountClass)}>
               $ {total.toFixed(2)}
             </span>
           </div>
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex gap-2 pt-1">
             <Button
               type="button"
               variant="outline"
               onClick={handleHoldOrder}
               disabled={cart.length === 0 || isProcessing}
-              className="flex-1 h-[42px] rounded-md bg-zinc-100 hover:bg-zinc-200 text-foreground border-zinc-300 font-medium text-sm shadow-sm"
+              className="flex-1 h-10 rounded-md bg-zinc-50 hover:bg-zinc-100 text-foreground border-zinc-200 font-medium text-xs shadow-sm"
             >
               {isProcessing ? <Loader2 className="size-4 animate-spin" /> : "Save Order"}
             </Button>
             <Button
               type="button"
+              variant="outline"
+              onClick={() => setIsDiscountModalOpen(true)}
+              disabled={cart.length === 0}
+              className="h-10 px-3 rounded-md border-zinc-200 text-primary font-medium text-xs gap-1 shrink-0"
+            >
+              <Percent className="size-3.5" />
+              Discount
+            </Button>
+            <Button
+              type="button"
               onClick={handleOpenPayment}
               disabled={cart.length === 0}
-              className={cn(btnCreatePage, "flex-1 h-[42px] rounded-md")}
+              className={cn(btnCreatePage, "flex-1 h-10 rounded-md text-xs gap-1")}
             >
               Payment
-              <ChevronRight className="size-4" />
+              <ChevronRight className="size-3.5" />
             </Button>
           </div>
         </div>
@@ -1353,7 +1373,7 @@ export default function PosTerminalPage() {
               <label className="text-xs font-semibold text-zinc-500 uppercase mb-2 block tracking-wide">
                 Order type
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {POS_ORDER_TYPES.map(type => {
                   const Icon = type.icon;
                   return (
@@ -1362,7 +1382,7 @@ export default function PosTerminalPage() {
                       type="button"
                       onClick={() => handleOrderTypeChange(type.id)}
                       className={cn(
-                        "flex flex-col items-center justify-center gap-1.5 h-[72px] rounded-xl border-2 text-[11px] font-bold transition-all bg-white",
+                        "flex flex-col items-center justify-center gap-1 h-16 rounded-lg border-2 text-[10px] font-bold transition-all bg-white",
                         orderType === type.id
                           ? "border-primary bg-primary/5 text-primary shadow-sm"
                           : "border-zinc-100 text-zinc-500 hover:border-primary/30"
@@ -1391,15 +1411,59 @@ export default function PosTerminalPage() {
               onPhoneChange={handleCustomerPhoneChange}
               onPhoneBlur={handleCustomerPhoneBlur}
               onSelectCustomer={handleSelectCustomerById}
-              onSave={() => setIsTableDialogOpen(false)}
-              onCall={
-                customerPhone.trim()
-                  ? () => {
-                      window.location.href = `tel:${customerPhone.trim()}`;
-                    }
-                  : undefined
-              }
             />
+
+            {orderType === "dine-in" && (
+              <div className="border-t border-border/60 pt-4 space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase block">
+                    Room
+                  </label>
+                  <select
+                    value={selectedRoomId}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setSelectedRoomId(value ? Number(value) : "");
+                      setSelectedTable(null);
+                    }}
+                    className="w-full h-11 px-3 border border-border rounded-lg text-sm bg-white"
+                  >
+                    <option value="">Select room</option>
+                    {rooms.map(room => (
+                      <option key={room.id} value={room.id}>
+                        {room.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase block">
+                    Table
+                  </label>
+                  <select
+                    value={selectedTable ?? ""}
+                    onChange={e =>
+                      setSelectedTable(e.target.value ? Number(e.target.value) : null)
+                    }
+                    disabled={!selectedRoomId}
+                    className="w-full h-11 px-3 border border-border rounded-lg text-sm bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {!selectedRoomId
+                        ? "Select room first"
+                        : roomTables.length === 0
+                          ? "No tables in this room"
+                          : "Select table"}
+                    </option>
+                    {roomTables.map(table => (
+                      <option key={table.id} value={table.id}>
+                        Table {table.number}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
             {orderType === "takeaway" && (
               <div className="border-t border-border/60 pt-4 space-y-3">
@@ -1411,7 +1475,7 @@ export default function PosTerminalPage() {
                     type="button"
                     onClick={() => handleTakeawayTimingChange("now")}
                     className={cn(
-                      "h-11 rounded-xl border-2 text-sm font-bold transition-all",
+                      "h-10 rounded-lg border-2 text-sm font-bold transition-all",
                       takeawayTiming === "now"
                         ? "border-primary bg-primary/5 text-primary"
                         : "border-border text-muted-foreground hover:border-primary/30"
@@ -1423,7 +1487,7 @@ export default function PosTerminalPage() {
                     type="button"
                     onClick={() => handleTakeawayTimingChange("later")}
                     className={cn(
-                      "h-11 rounded-xl border-2 text-sm font-bold transition-all",
+                      "h-10 rounded-lg border-2 text-sm font-bold transition-all",
                       takeawayTiming === "later"
                         ? "border-primary bg-primary/5 text-primary"
                         : "border-border text-muted-foreground hover:border-primary/30"
@@ -1438,13 +1502,13 @@ export default function PosTerminalPage() {
                       type="date"
                       value={pickupDate}
                       onChange={e => setPickupDate(e.target.value)}
-                      className="w-full h-11 px-3 border border-border rounded-xl text-sm"
+                      className="w-full h-10 px-3 border border-border rounded-lg text-sm"
                     />
                     <input
                       type="time"
                       value={pickupTime}
                       onChange={e => setPickupTime(e.target.value)}
-                      className="w-full h-11 px-3 border border-border rounded-xl text-sm"
+                      className="w-full h-10 px-3 border border-border rounded-lg text-sm"
                     />
                   </div>
                 )}
@@ -1461,24 +1525,34 @@ export default function PosTerminalPage() {
                   value={deliveryStreet}
                   onChange={e => setDeliveryStreet(e.target.value)}
                   placeholder="Street address *"
-                  className="w-full h-11 px-3 border border-border rounded-xl text-sm"
+                  className="w-full h-10 px-3 border border-border rounded-lg text-sm"
                 />
                 <input
                   type="text"
                   value={deliveryDistrict}
                   onChange={e => setDeliveryDistrict(e.target.value)}
                   placeholder="District / area"
-                  className="w-full h-11 px-3 border border-border rounded-xl text-sm"
+                  className="w-full h-10 px-3 border border-border rounded-lg text-sm"
                 />
               </div>
             )}
           </div>
-          <DialogFooter className="px-6 pb-6 pt-2">
+          <DialogFooter className="px-6 pb-6 pt-2 gap-2">
             <Button
+              type="button"
+              variant="outline"
               onClick={() => setIsTableDialogOpen(false)}
-              className={cn(btnCreatePage, "w-full h-11 rounded-full")}
+              className="h-11 rounded-lg font-medium"
             >
-              Done
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleContinueToCheckout}
+              className={cn(btnCreatePage, "flex-1 h-11 rounded-lg gap-1")}
+            >
+              Continue to payment
+              <ChevronRight className="size-4" />
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1516,34 +1590,40 @@ export default function PosTerminalPage() {
       <Dialog
         open={isCheckoutOpen}
         onOpenChange={open => {
-          if (!open && !isProcessing) setIsCheckoutOpen(false);
+          if (!open) closeCheckout();
         }}
       >
-        <DialogContent className="sm:max-w-[480px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl">
+        <DialogContent className="sm:max-w-[480px] bg-white border-zinc-100 p-0 gap-0 overflow-hidden rounded-2xl flex flex-col max-h-[92vh]">
           <DialogTitle className="sr-only">Payment</DialogTitle>
-          <div className="p-6 border-b border-zinc-100">
-            <DialogTitle className="text-xl font-bold text-[#1e293b]">Payment</DialogTitle>
-            <DialogDescription className="text-sm text-zinc-500 mt-1">
-              Choose how the customer pays before the order is sent to the kitchen.
+
+          <div className="shrink-0 px-6 py-4 border-b border-zinc-100 bg-zinc-50/40">
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">
+                1. Customer
+              </span>
+              <ChevronRight className="size-3 text-zinc-300" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary text-white">
+                2. Payment
+              </span>
+            </div>
+            <DialogTitle className="text-lg font-semibold text-[#1e293b]">Payment</DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500 mt-0.5">
+              Choose payment method and complete the order.
             </DialogDescription>
           </div>
 
-          <div className="p-6 space-y-6">
-            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Amount to pay</p>
-                <p className="text-2xl font-black text-primary mt-1">${total.toFixed(2)}</p>
-                {taxAmount > 0 && (
-                  <p className="text-xs text-zinc-500 mt-1">Includes ${taxAmount.toFixed(2)} tax</p>
-                )}
-              </div>
-              <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Wallet className="size-6 text-primary" />
-              </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+            <div className="flex items-end justify-between pt-1 pb-1 border-b border-zinc-100">
+              <span className="text-sm font-semibold text-muted-foreground">Amount to pay</span>
+              <span className={cn("text-xl font-bold tabular-nums", priceAmountClass)}>
+                $ {total.toFixed(2)}
+              </span>
             </div>
 
-            <div className="space-y-3">
-              <label className="text-sm font-bold text-[#1E293B]">Payment method *</label>
+            <div>
+              <label className="text-xs font-semibold text-zinc-500 uppercase mb-2 block tracking-wide">
+                Payment method
+              </label>
               <div className="grid grid-cols-3 gap-2">
                 {POS_PAYMENT_METHODS.map(method => {
                   const Icon = method.icon;
@@ -1553,14 +1633,14 @@ export default function PosTerminalPage() {
                       type="button"
                       onClick={() => setPaymentMethod(method.id)}
                       className={cn(
-                        "flex flex-col items-center justify-center gap-2 h-20 rounded-xl border-2 transition-all",
+                        "flex flex-col items-center justify-center gap-1 h-16 rounded-lg border-2 text-[10px] font-bold transition-all bg-white",
                         paymentMethod === method.id
-                          ? "border-primary bg-primary/5 text-primary"
-                          : "border-zinc-200 text-zinc-500 hover:border-primary/30"
+                          ? "border-primary bg-primary/5 text-primary shadow-sm"
+                          : "border-zinc-100 text-zinc-500 hover:border-primary/30"
                       )}
                     >
-                      <Icon className="size-5" />
-                      <span className="text-[11px] font-bold">{method.name}</span>
+                      <Icon className="size-4" />
+                      {method.name}
                     </button>
                   );
                 })}
@@ -1568,7 +1648,10 @@ export default function PosTerminalPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Mobile number *</label>
+              <label className="text-sm font-semibold text-[#1E293B]">
+                Mobile number
+                <span className="text-zinc-400 font-normal"> (optional)</span>
+              </label>
               <input
                 type="tel"
                 value={paymentPhone}
@@ -1578,18 +1661,21 @@ export default function PosTerminalPage() {
               />
               <p className="text-xs text-zinc-500">
                 {paymentMethod === "premier_wallet"
-                  ? "Premier Wallet will send a payment request to this number."
-                  : "Enter the number used for this mobile payment."}
+                  ? "Required for Premier Wallet — payment request is sent to this number."
+                  : "Optional. Uses customer phone if left empty."}
               </p>
             </div>
           </div>
 
-          <DialogFooter className="p-6 bg-zinc-50 border-t border-zinc-100 gap-3">
+          <DialogFooter className="shrink-0 m-0 p-4 bg-zinc-50 border-t border-zinc-100 gap-2">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsCheckoutOpen(false)}
-              className="rounded-lg font-bold px-6 h-11"
+              onClick={() => {
+                closeCheckout();
+                setIsTableDialogOpen(true);
+              }}
+              className="rounded-lg font-medium px-5 h-10 text-sm"
               disabled={isProcessing}
             >
               Back
@@ -1598,7 +1684,7 @@ export default function PosTerminalPage() {
               type="button"
               onClick={handleCheckout}
               disabled={isProcessing}
-              className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold px-8 h-11 gap-2 disabled:opacity-70"
+              className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-semibold px-6 h-10 gap-2 flex-1 disabled:opacity-70"
             >
               {isProcessing ? (
                 <>
@@ -1608,7 +1694,7 @@ export default function PosTerminalPage() {
               ) : (
                 <>
                   <CheckCircle2 className="size-4" />
-                  Confirm & Pay
+                  Confirm & pay
                 </>
               )}
             </Button>
@@ -1678,7 +1764,9 @@ export default function PosTerminalPage() {
                     ? "Delivery"
                     : order.orderType === "takeaway"
                       ? "Takeaway"
-                      : "Saved";
+                      : order.orderType === "dine-in"
+                        ? "Dine-in"
+                        : "Saved";
                 return (
                   <button
                     key={order.id}
@@ -1701,7 +1789,9 @@ export default function PosTerminalPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-sm font-bold text-primary">${order.total?.toFixed(2)}</span>
+                    <span className={cn("text-sm font-bold", priceAmountClass)}>
+                      ${order.total?.toFixed(2)}
+                    </span>
                   </button>
                 );
               })

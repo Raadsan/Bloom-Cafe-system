@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import KitchenOrderDetailDialog from "@/components/orders/KitchenOrderDetailDialog";
 import {
   Clock,
   Flame,
@@ -390,11 +390,16 @@ export default function KitchenOrdersView({
   menuItems,
   onRefresh,
 }: KitchenOrdersViewProps) {
-  const router = useRouter();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<KitchenTab>("pending");
   const [viewMode, setViewMode] = useState<KitchenViewMode>("grid");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [viewOrderId, setViewOrderId] = useState<number | null>(null);
+
+  const viewOrder = useMemo(
+    () => (viewOrderId ? orders.find(o => o.id === viewOrderId) ?? null : null),
+    [orders, viewOrderId]
+  );
 
   useEffect(() => {
     const saved = localStorage.getItem("kitchen-view-mode");
@@ -560,7 +565,7 @@ export default function KitchenOrdersView({
                 menuItems={menuItems}
                 activeTab={activeTab}
                 isUpdating={updatingId === order.id}
-                onView={() => router.push(`/orders/kitchen/${order.id}`)}
+                onView={() => setViewOrderId(order.id)}
                 onMarkReady={() => handleMarkReady(order)}
               />
             ))}
@@ -574,13 +579,33 @@ export default function KitchenOrdersView({
                 menuItems={menuItems}
                 activeTab={activeTab}
                 isUpdating={updatingId === order.id}
-                onView={() => router.push(`/orders/kitchen/${order.id}`)}
+                onView={() => setViewOrderId(order.id)}
                 onMarkReady={() => handleMarkReady(order)}
               />
             ))}
           </div>
         )}
       </div>
+
+      <KitchenOrderDetailDialog
+        order={viewOrder}
+        menuItems={menuItems}
+        open={viewOrderId !== null}
+        onOpenChange={open => {
+          if (!open) setViewOrderId(null);
+        }}
+        onOrderUpdated={async () => {
+          await onRefresh(true);
+        }}
+        onStartedPreparing={() => {
+          setActiveTab("preparing");
+          setViewOrderId(null);
+        }}
+        onMarkedReady={() => {
+          setActiveTab("ready");
+          setViewOrderId(null);
+        }}
+      />
     </div>
   );
 }

@@ -43,6 +43,13 @@ export const createCategory = async (req, res) => {
   } catch (error) {
     console.error('Create Category Error:', error)
 
+    if (error.code === 'P2000' && error.meta?.column_name === 'imageUrl') {
+      return res.status(400).json({
+        success: false,
+        message: 'Category image is too large. Use a smaller image or a shorter URL.',
+      })
+    }
+
     res.status(500).json({
       success: false,
       message: 'Failed to create category',
@@ -114,6 +121,13 @@ export const updateCategory = async (req, res) => {
     })
   } catch (error) {
     console.error('Update Category Error:', error)
+
+    if (error.code === 'P2000' && error.meta?.column_name === 'imageUrl') {
+      return res.status(400).json({
+        success: false,
+        message: 'Category image is too large. Use a smaller image or a shorter URL.',
+      })
+    }
 
     res.status(500).json({
       success: false,

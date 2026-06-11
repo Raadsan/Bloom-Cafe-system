@@ -170,7 +170,7 @@ export function getStockStatusBadgeClass(kind: "in" | "low" | "out"): string {
 
 /** Stat card icon — different soft primary tints, white icon. */
 const dashboardStatIconBaseClass =
-  "p-2.5 rounded-xl text-white shadow-md shadow-primary/15 transition-all group-hover:scale-110 group-hover:brightness-105 [&_svg]:text-white";
+  "w-fit shrink-0 self-start p-2.5 rounded-xl text-white shadow-md shadow-primary/15 transition-all group-hover:scale-110 group-hover:brightness-105 [&_svg]:text-white";
 
 /** Full primary (left) → lighter primary (right). */
 export const dashboardStatIconBgVariants = [

@@ -67,6 +67,11 @@ export const reportApi = {
     return res.data;
   },
 
+  getWeeklyAnalytics: async (): Promise<any> => {
+    const res = await api.get('/reports/weekly');
+    return res.data;
+  },
+
   getOrdersReport: async (params?: { startDate?: string; endDate?: string }): Promise<any> => {
     const query = new URLSearchParams();
     if (params?.startDate) query.set('startDate', params.startDate);

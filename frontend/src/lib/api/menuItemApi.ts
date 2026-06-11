@@ -7,6 +7,8 @@ export interface MenuItem {
   costPrice?: number;
   price: number;
   tax: number;
+  discountType?: 'percentage' | 'fixed' | string | null;
+  discountValue?: number;
   imageUrl?: string;
   isAvailable: boolean;
   isRecommended: boolean;
@@ -24,6 +26,8 @@ export interface CreateMenuItemPayload {
   costPrice?: number;
   price: number;
   tax?: number;
+  discountType?: 'percentage' | 'fixed' | null;
+  discountValue?: number;
   imageUrl?: string;
   isAvailable?: boolean;
   isRecommended?: boolean;
@@ -37,6 +41,8 @@ export interface UpdateMenuItemPayload {
   costPrice?: number;
   price?: number;
   tax?: number;
+  discountType?: 'percentage' | 'fixed' | null;
+  discountValue?: number;
   imageUrl?: string;
   isAvailable?: boolean;
   isRecommended?: boolean;

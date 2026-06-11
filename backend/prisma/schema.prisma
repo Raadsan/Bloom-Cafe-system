@@ -26,7 +26,7 @@ model category {
   isActive    Boolean    @default(true)
   createdAt   DateTime   @default(now())
   description String?
-  imageUrl    String?    @db.Text
+  imageUrl    String?    @db.LongText
   updatedAt   DateTime?
   menuitem    menuitem[]
 }
@@ -122,17 +122,19 @@ model menu {
 }
 
 model menuitem {
-  id          Int           @id @default(autoincrement())
-  name        String
-  description String?       @db.Text
-  costPrice   Float?
-  price       Float
-  tax         Float         @default(0)
-  imageUrl    String?       @db.Text
-  isAvailable Boolean       @default(true)
-  isRecommended Boolean     @default(false)
-  options     Json?
-  categoryId  Int
+  id             Int           @id @default(autoincrement())
+  name           String
+  description    String?       @db.Text
+  costPrice      Float?
+  price          Float
+  tax            Float         @default(0)
+  discountType   String?
+  discountValue  Float         @default(0)
+  imageUrl       String?       @db.Text
+  isAvailable    Boolean       @default(true)
+  isRecommended  Boolean       @default(false)
+  options        Json?
+  categoryId     Int
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @default(now()) @updatedAt
   category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)

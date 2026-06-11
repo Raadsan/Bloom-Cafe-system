@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { reportApi } from "@/lib/api/reportApi";
 import {
   DollarSign,
   Users,
@@ -68,14 +69,14 @@ interface DashboardData {
   totalRevenue: number;
 }
 
-const MOCK_REVENUE_DATA = [
-  { name: "Mon", revenue: 4000, orders: 24 },
-  { name: "Tue", revenue: 3000, orders: 18 },
-  { name: "Wed", revenue: 5000, orders: 32 },
-  { name: "Thu", revenue: 4500, orders: 28 },
-  { name: "Fri", revenue: 6000, orders: 45 },
-  { name: "Sat", revenue: 8000, orders: 58 },
-  { name: "Sun", revenue: 7000, orders: 50 },
+const EMPTY_WEEKLY_DATA = [
+  { name: "Mon", revenue: 0, orders: 0 },
+  { name: "Tue", revenue: 0, orders: 0 },
+  { name: "Wed", revenue: 0, orders: 0 },
+  { name: "Thu", revenue: 0, orders: 0 },
+  { name: "Fri", revenue: 0, orders: 0 },
+  { name: "Sat", revenue: 0, orders: 0 },
+  { name: "Sun", revenue: 0, orders: 0 },
 ];
 
 const MOCK_CATEGORY_DATA = [
@@ -87,6 +88,21 @@ const MOCK_CATEGORY_DATA = [
 const COLORS = [...chartPrimaryVariants];
 
 export default function AdminDashboard({ data, recentOrders }: { data: DashboardData | null, recentOrders: Order[] }) {
+  const [weeklyData, setWeeklyData] = useState(EMPTY_WEEKLY_DATA);
+
+  useEffect(() => {
+    reportApi
+      .getWeeklyAnalytics()
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setWeeklyData(res.data);
+        }
+      })
+      .catch(() => {
+        setWeeklyData(EMPTY_WEEKLY_DATA);
+      });
+  }, []);
+
   const statCards = [
     {
       title: "Total Orders",
@@ -180,7 +196,7 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
 
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={MOCK_REVENUE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart data={weeklyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={chartPrimary} stopOpacity={0.25} />
@@ -228,7 +244,7 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
 
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={MOCK_REVENUE_DATA}>
+              <BarChart data={weeklyData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
                 <XAxis
                   dataKey="name"
@@ -244,7 +260,7 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
                   itemStyle={{ color: "#ffffff" }}
                 />
                 <Bar dataKey="orders" radius={[4, 4, 0, 0]}>
-                  {MOCK_REVENUE_DATA.map((entry, index) => (
+                  {weeklyData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={chartPrimaryVariants[index % chartPrimaryVariants.length]} />
                   ))}
                 </Bar>

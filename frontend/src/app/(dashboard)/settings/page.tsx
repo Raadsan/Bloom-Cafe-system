@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Save, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import LogoUploadField from "@/components/receipt/LogoUploadField";
 import { systemSettingsApi } from "@/lib/api/systemSettingsApi";
+import { usePermissions } from "@/context/PermissionContext";
 import {
   dashboardPageClass,
   dashboardPageStyle,
@@ -20,6 +22,8 @@ const fieldClass =
   "w-full px-3 py-2.5 bg-white dark:bg-[#161616] border border-zinc-200 dark:border-[#2a2a2a] rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium dark:text-white";
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const { isAdmin, loading: permLoading } = usePermissions();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,8 +46,16 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!permLoading && !isAdmin) {
+      router.replace("/dashboard");
+    }
+  }, [isAdmin, permLoading, router]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      load();
+    }
+  }, [isAdmin]);
 
   const handleSave = async () => {
     if (!systemName.trim()) {
@@ -65,6 +77,10 @@ export default function SettingsPage() {
       setSaving(false);
     }
   };
+
+  if (permLoading || !isAdmin) {
+    return null;
+  }
 
   return (
     <div className={cn(dashboardPageClass, "pb-8")} style={dashboardPageStyle}>

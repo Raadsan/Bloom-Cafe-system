@@ -8,6 +8,7 @@ import {
   getMonthlyReport,
   getStaffPerformanceReport,
   getFinanceReport,
+  getWeeklyAnalytics,
   getOrdersReport,
   getClientsReport
 } from '../controllers/reportController.js'
@@ -24,6 +25,7 @@ router.get('/daily', protect, checkPermission('/report', 'canView'), getDailyRep
 router.get('/monthly', protect, checkPermission('/report', 'canView'), getMonthlyReport)
 router.get('/staff-performance', protect, checkPermission('/report', 'canView'), getStaffPerformanceReport)
 router.get('/finance', protect, checkPermission('/report', 'canView'), getFinanceReport)
+router.get('/weekly', protect, checkPermission('/report', 'canView'), getWeeklyAnalytics)
 router.get('/orders', protect, checkPermission('/report', 'canView'), getOrdersReport)
 router.get('/clients', protect, checkPermission('/report', 'canView'), getClientsReport)
 
