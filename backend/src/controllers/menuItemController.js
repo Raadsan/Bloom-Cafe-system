@@ -283,7 +283,8 @@ export const getPublicMenuByQrCode = async (req, res) => {
     const { qrCode } = req.params
 
     const table = await prisma.table.findUnique({
-      where: { qrCode }
+      where: { qrCode },
+      include: { room: { select: { id: true, name: true } } },
     })
 
     if (!table) {
@@ -294,19 +295,14 @@ export const getPublicMenuByQrCode = async (req, res) => {
     }
 
     const categories = await prisma.category.findMany({
+      where: { isActive: true },
       include: {
         menuitem: {
-          where: {
-            isAvailable: true
-          },
-          orderBy: {
-            id: 'asc'
-          }
-        }
+          where: { isAvailable: true },
+          orderBy: { id: 'asc' },
+        },
       },
-      orderBy: {
-        id: 'asc'
-      }
+      orderBy: { id: 'asc' },
     })
 
     res.status(200).json({

@@ -57,9 +57,7 @@ import {
   getTableStatusLabel,
 } from "@/lib/dashboard-ui";
 
-function getQrImageUrl(qrCode: string, size = 280) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(qrCode)}`;
-}
+import { getTableQrImageUrl } from "@/lib/qr-menu-url";
 
 const formSubmitBtnClass =
   "bg-primary !text-white hover:bg-primary/90 hover:!text-white hover:shadow-lg hover:shadow-primary/20 rounded-lg font-bold border-none px-8 h-11 shadow-md shadow-primary/15 disabled:opacity-70 disabled:cursor-not-allowed transition-all";
@@ -240,7 +238,7 @@ export default function TablesPage() {
 
   const handlePrint = () => {
     if (!selectedTable?.qrCode) return;
-    const qrUrl = getQrImageUrl(selectedTable.qrCode, 300);
+    const qrUrl = getTableQrImageUrl(selectedTable.qrCode, 300);
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(`
@@ -861,7 +859,7 @@ export default function TablesPage() {
                       <>
                         <div className="rounded-xl border border-zinc-100 bg-white p-3">
                           <img
-                            src={getQrImageUrl(selectedTable.qrCode, 220)}
+                            src={getTableQrImageUrl(selectedTable.qrCode, 220)}
                             alt={`QR code for table ${selectedTable.number}`}
                             className="size-[220px] object-contain"
                           />

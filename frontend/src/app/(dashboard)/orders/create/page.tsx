@@ -81,7 +81,7 @@ interface OrderDraft {
   notes: string;
   paymentMethod: OrderPaymentMethod;
   paymentPhone: string;
-  selectedCategoryId: number | "";
+  selectedCategoryId: number | "all" | "";
   selectedRoomId: number | "";
   formTableId: number | "";
   pendingOrderId: number | null;
@@ -127,7 +127,7 @@ export default function WaiterCreateOrderPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | "">("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | "all">("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<number | "">("");
@@ -156,7 +156,12 @@ export default function WaiterCreateOrderPage() {
       if (draft.notes) setNotes(draft.notes);
       if (draft.paymentMethod) setPaymentMethod(draft.paymentMethod);
       if (draft.paymentPhone) setPaymentPhone(draft.paymentPhone);
-      if (draft.selectedCategoryId) setSelectedCategoryId(draft.selectedCategoryId);
+      if (
+        draft.selectedCategoryId === "all" ||
+        typeof draft.selectedCategoryId === "number"
+      ) {
+        setSelectedCategoryId(draft.selectedCategoryId);
+      }
       if (draft.selectedRoomId) setSelectedRoomId(draft.selectedRoomId);
       if (draft.formTableId) setFormTableId(draft.formTableId);
       if (draft.pendingOrderId) setPendingOrderId(draft.pendingOrderId);
@@ -208,9 +213,6 @@ export default function WaiterCreateOrderPage() {
         setReceiptSettings(settings);
         setRooms((roomsData || []).filter(r => r.isActive));
         setTables(tablesData || []);
-        if (cats?.length) {
-          setSelectedCategoryId(prev => prev || cats[0].id);
-        }
       } catch {
         showToast("Failed to load menu", "error");
       } finally {
@@ -241,7 +243,7 @@ export default function WaiterCreateOrderPage() {
   const filteredItems = useMemo(() => {
     return menuItems.filter(item => {
       const matchesCategory =
-        !selectedCategoryId || item.categoryId === selectedCategoryId;
+        selectedCategoryId === "all" || item.categoryId === selectedCategoryId;
       const matchesSearch =
         !search.trim() ||
         item.name.toLowerCase().includes(search.toLowerCase());
@@ -451,11 +453,23 @@ export default function WaiterCreateOrderPage() {
         </div>
       </div>
 
-      <div className="mx-4 mb-6 flex flex-col lg:flex-row min-h-[calc(100vh-220px)] rounded-xl border border-zinc-100 bg-white overflow-hidden shadow-sm">
-        {/* Menu panel */}
-        <div className="flex-1 flex flex-col min-w-0 border-b lg:border-b-0 lg:border-r border-zinc-100">
-          <div className="px-4 sm:px-6 py-4 border-b border-zinc-50 overflow-x-auto">
+      <div className="mx-4 mb-6 flex flex-col lg:flex-row h-[calc(100vh-200px)] min-h-[520px] max-h-[calc(100vh-180px)] rounded-xl border border-zinc-100 bg-white overflow-hidden shadow-sm">
+        {/* Menu panel — left scrolls independently */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 border-b lg:border-b-0 lg:border-r border-zinc-100">
+          <div className="shrink-0 px-4 sm:px-6 py-4 border-b border-zinc-50 overflow-x-auto">
             <div className="flex items-center gap-2 min-w-max">
+              <button
+                type="button"
+                onClick={() => setSelectedCategoryId("all")}
+                className={cn(
+                  "px-4 sm:px-5 py-2 rounded-full text-sm font-semibold border-2 transition-all whitespace-nowrap",
+                  selectedCategoryId === "all"
+                    ? "border-primary text-primary bg-primary/5"
+                    : "border-transparent text-zinc-600 hover:border-zinc-200 hover:bg-zinc-50"
+                )}
+              >
+                All
+              </button>
               {categories.map(cat => (
                 <button
                   key={cat.id}
@@ -474,7 +488,7 @@ export default function WaiterCreateOrderPage() {
             </div>
           </div>
 
-          <div className="px-4 sm:px-6 py-3 border-b border-zinc-50">
+          <div className="shrink-0 px-4 sm:px-6 py-3 border-b border-zinc-50">
             <div className="relative max-w-md">
               <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
               <input
@@ -487,7 +501,7 @@ export default function WaiterCreateOrderPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
             {loading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -495,7 +509,7 @@ export default function WaiterCreateOrderPage() {
                 ))}
               </div>
             ) : filteredItems.length === 0 ? (
-              <p className="text-center text-zinc-500 py-16">No items in this category</p>
+              <p className="text-center text-zinc-500 py-16">No menu items found</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                 {filteredItems.map(item => (
@@ -529,16 +543,16 @@ export default function WaiterCreateOrderPage() {
           </div>
         </div>
 
-        {/* Cart sidebar — menu only, checkout via button */}
-        <aside className="w-full lg:w-[380px] flex flex-col bg-zinc-50/60 shrink-0">
-          <div className="p-4 sm:p-5 border-b border-zinc-100">
+        {/* Cart sidebar — header & footer fixed, items scroll inside */}
+        <aside className="w-full lg:w-[380px] flex flex-col min-h-0 bg-zinc-50/60 shrink-0 max-lg:max-h-[42vh] lg:h-full">
+          <div className="shrink-0 p-4 sm:p-5 border-b border-zinc-100 bg-zinc-50/60">
             <h2 className="text-base font-bold text-zinc-800">Current Order</h2>
             <p className="text-xs text-zinc-500 mt-0.5">
               {cart.reduce((s, l) => s + l.quantity, 0)} item(s)
             </p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 min-h-[120px] max-h-[40vh] lg:max-h-none">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3">
             {cart.length === 0 ? (
               <p className="text-sm text-zinc-400 text-center py-8">
                 Tap menu items to add them here
@@ -582,7 +596,7 @@ export default function WaiterCreateOrderPage() {
             )}
           </div>
 
-          <div className="p-4 sm:p-5 border-t border-zinc-100 space-y-4 mt-auto">
+          <div className="shrink-0 p-4 sm:p-5 border-t border-zinc-100 bg-zinc-50/60 space-y-4">
             <div className="rounded-xl bg-white border border-zinc-100 p-4 space-y-1.5">
               <div className="flex justify-between text-sm text-zinc-600">
                 <span>Subtotal</span>

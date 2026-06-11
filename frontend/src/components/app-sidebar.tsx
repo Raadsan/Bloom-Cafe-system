@@ -277,17 +277,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="icon" {...props} className="border-r border-sidebar-border shadow-none bg-sidebar">
-      <SidebarHeader className="!p-0 h-[96px] flex items-stretch justify-center bg-sidebar border-b border-sidebar-border group-data-[collapsible=icon]:h-[72px]">
+      <SidebarHeader className="!p-0 h-[112px] flex items-stretch justify-center overflow-visible bg-sidebar border-b border-sidebar-border group-data-[collapsible=icon]:h-[80px]">
         <Link
           href="/dashboard"
-          className="flex flex-1 w-full items-center justify-center px-1 py-2 min-h-0 hover:opacity-90 transition-opacity group-data-[collapsible=icon]:px-1"
+          className="flex flex-1 w-full items-center justify-center px-0.5 py-1 min-h-0 hover:opacity-90 transition-opacity group-data-[collapsible=icon]:px-1"
         >
           <SystemBrandMark
             logoUrl={branding.systemLogoUrl}
             systemName={branding.systemName}
             variant="plain"
             fit="width"
-            className="w-full max-w-full h-auto max-h-[76px] group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:max-h-none"
+            className="w-full max-w-full h-auto max-h-[100px] scale-[1.15] origin-center group-data-[collapsible=icon]:scale-100 group-data-[collapsible=icon]:h-11 group-data-[collapsible=icon]:w-11 group-data-[collapsible=icon]:max-h-none"
           />
         </Link>
       </SidebarHeader>

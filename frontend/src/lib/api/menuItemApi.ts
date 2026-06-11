@@ -90,9 +90,30 @@ export const menuItemApi = {
     await api.delete(`/menu-items/${id}`);
   },
 
-  /** PUBLIC – customer scans QR → gets full menu (no auth needed). */
-  getPublicMenuByQrCode: async (qrCode: string): Promise<MenuItem[]> => {
-    const res = await api.get(`/menu-items/menu/${qrCode}`);
-    return res.data.data || [];
+  /** PUBLIC – customer scans table QR → menu + table info (no auth). */
+  getPublicMenuByQrCode: async (qrCode: string): Promise<PublicMenuData> => {
+    const res = await api.get(`/menu-items/menu/${encodeURIComponent(qrCode)}`);
+    return res.data.data;
   },
 };
+
+export interface PublicMenuCategory {
+  id: number;
+  name: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  isActive?: boolean;
+  menuitem: MenuItem[];
+}
+
+export interface PublicMenuTable {
+  id: number;
+  number: number;
+  name?: string | null;
+  room?: { id: number; name: string } | null;
+}
+
+export interface PublicMenuData {
+  table: PublicMenuTable;
+  categories: PublicMenuCategory[];
+}
