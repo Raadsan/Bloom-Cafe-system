@@ -1,5 +1,6 @@
 import prisma from '../config/db.js'
 import { logAudit } from '../utils/auditHelper.js'
+import { enrichMenuItemsWithFlashSale } from '../utils/flashSaleHelper.js'
 
 function normalizeDiscountInput(discountType, discountValue, price) {
   const value = Math.max(0, Number(discountValue) || 0)
@@ -124,10 +125,12 @@ export const getAllMenuItems = async (req, res) => {
       orderBy: { id: 'asc' }
     })
 
+    const enriched = await enrichMenuItemsWithFlashSale(items)
+
     res.status(200).json({
       success: true,
-      count: items.length,
-      data: items
+      count: enriched.length,
+      data: enriched
     })
   } catch (error) {
     console.error('Get MenuItems Error:', error)
@@ -152,10 +155,12 @@ export const getMenuItemsByCategory = async (req, res) => {
       orderBy: { id: 'asc' }
     })
 
+    const enriched = await enrichMenuItemsWithFlashSale(items)
+
     res.status(200).json({
       success: true,
-      count: items.length,
-      data: items
+      count: enriched.length,
+      data: enriched
     })
   } catch (error) {
     console.error('Get MenuItems By Category Error:', error)

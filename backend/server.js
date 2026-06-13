@@ -15,6 +15,7 @@ import {
   ensureCreateOrderMenuItem,
   ensurePickupOrdersMenuItem,
   ensurePickupHistoryMenuItem,
+  ensureDiscountAdvertisementMenuItem,
 } from './src/controllers/menuController.js'
 
 const server = http.createServer(app)
@@ -31,7 +32,8 @@ server.listen(PORT, async () => {
     await ensureCreateOrderMenuItem()
     await ensurePickupOrdersMenuItem()
     await ensurePickupHistoryMenuItem()
-    console.log('✅ Sidebar menus ensured (Rooms, Create Order, Ready Pickup, Pickup History)')
+    await ensureDiscountAdvertisementMenuItem()
+    console.log('✅ Sidebar menus ensured (Rooms, Create Order, Ready Pickup, Pickup History, Promotions)')
   } catch (err) {
     console.warn('Sidebar menu ensure skipped:', err?.message)
   }
