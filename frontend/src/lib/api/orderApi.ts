@@ -65,6 +65,15 @@ export interface PosCheckoutPayload extends CreateOrderPayload {
   paymentMethod: string;
   paymentPhone?: string;
   providerName?: string;
+  source?: string;
+}
+
+export interface CheckoutResult {
+  id: number;
+  total: number;
+  subTotal: number;
+  taxAmount: number;
+  status: string;
 }
 
 export type GetAllOrdersParams = {
@@ -125,9 +134,7 @@ export const orderApi = {
     return res.data.data;
   },
 
-  posCheckout: async (
-    payload: PosCheckoutPayload
-  ): Promise<{ id: number; total: number; status: string }> => {
+  posCheckout: async (payload: PosCheckoutPayload): Promise<CheckoutResult> => {
     const res = await api.post('/orders/pos-checkout', payload);
     clearOrdersListCache();
     return res.data.data;

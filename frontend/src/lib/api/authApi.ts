@@ -5,6 +5,11 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface PosLoginCredentials {
+  username: string;
+  pin: string;
+}
+
 export interface AuthUser {
   id: number;
   fullName: string;
@@ -118,6 +123,29 @@ export const authApi = {
     return { token, user: authUser };
   },
 
+  /** POS login — username + 4-digit PIN */
+  posLogin: async (credentials: PosLoginCredentials): Promise<LoginResponse> => {
+    const res = await api.post('/auth/pos-login', credentials);
+    const { token, user } = res.data;
+
+    const authUser: AuthUser = {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone || undefined,
+      role: user.role,
+      roleId: user.roleId,
+      createdAt: user.createdAt,
+    };
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', token);
+      saveUserToStorage(authUser);
+    }
+
+    return { token, user: authUser };
+  },
+
   /**
    * Get the currently logged-in user.
    */
@@ -144,7 +172,7 @@ export const authApi = {
   },
 
   /** Clear token + user cache and redirect to login. */
-  logout: async () => {
+  logout: async (redirectTo = '/login') => {
     try {
       await api.post('/auth/logout');
     } catch (error) {
@@ -152,7 +180,7 @@ export const authApi = {
     }
     clearUserFromStorage();
     if (typeof window !== 'undefined') {
-      window.location.href = '/login';
+      window.location.href = redirectTo;
     }
   },
 };

@@ -1181,14 +1181,6 @@ export const createPayment = async (req, res) => {
 
     const previousStatus = order.status
 
-    if (req.user?.id && !order.userId) {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { userId: req.user.id },
-      })
-      order.userId = req.user.id
-    }
-
     const payment = await prisma.payment.create({
       data: {
         orderId: order.id,
@@ -1200,44 +1192,49 @@ export const createPayment = async (req, res) => {
         internalRef: generateInternalRef(),
         paidAt: new Date()
       },
-      include: { order: { include: { table: true } } }
-    })
-
-    // Keep order in kitchen queue after staff/POS payment
-    if (order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'served') {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { status: 'pending' }
-      })
-    }
-
-    const methodLower = (method || 'cash').toLowerCase()
-    if (order.tableId && !MOBILE_WALLET_METHODS.includes(methodLower)) {
-      await prisma.table.update({
-        where: { id: order.tableId },
-        data: { status: 'active' }
-      })
-    }
-
-    const fullOrder = await prisma.order.findUnique({
-      where: { id: order.id },
       include: {
-        table: true,
-        orderitem: { include: { menuitem: true } },
+        order: {
+          include: {
+            table: true,
+            orderitem: true,
+          },
+        },
       },
     })
 
-    if (fullOrder) {
+    await Promise.all([
+      req.user?.id && !order.userId
+        ? prisma.order.update({
+            where: { id: order.id },
+            data: { userId: req.user.id },
+          })
+        : Promise.resolve(),
+      order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'served'
+        ? prisma.order.update({
+            where: { id: order.id },
+            data: { status: 'pending' },
+          })
+        : Promise.resolve(),
+      order.tableId && !MOBILE_WALLET_METHODS.includes((method || 'cash').toLowerCase())
+        ? prisma.table.update({
+            where: { id: order.tableId },
+            data: { status: 'active' },
+          })
+        : Promise.resolve(),
+    ])
+
+    emitPaymentSuccess(payment.order)
+    res.json({ success: true, data: payment })
+
+    const fullOrder = payment.order
+    void (async () => {
+      if (!fullOrder) return
       if (previousStatus === 'unpaid') {
         await notifyNewOrder(fullOrder, req.user?.id)
       } else {
         emitOrderUpdate(fullOrder)
       }
-    }
-
-    emitPaymentSuccess(payment.order)
-
-    res.json({ success: true, data: payment })
+    })().catch((err) => console.error('Post-payment notify:', err))
 
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })

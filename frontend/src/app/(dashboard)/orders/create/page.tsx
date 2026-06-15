@@ -335,8 +335,8 @@ export default function WaiterCreateOrderPage() {
       return false;
     }
     const payPhone = paymentPhone.trim() || customerPhone.trim();
-    if (!payPhone) {
-      showToast("Enter payment mobile number", "error");
+    if (paymentMethod === "premier_wallet" && !payPhone) {
+      showToast("Enter payment mobile number for Premier Wallet", "error");
       return false;
     }
     return true;
@@ -352,6 +352,7 @@ export default function WaiterCreateOrderPage() {
     setSubmitting(true);
 
     let order: Order | null = pendingOrder;
+    let checkoutResult: Awaited<ReturnType<typeof orderApi.posCheckout>> | null = null;
 
     try {
       if (pendingOrderId) {
@@ -368,35 +369,39 @@ export default function WaiterCreateOrderPage() {
       }
 
       if (!order) {
-        order = await orderApi.createOrder({
+        checkoutResult = await orderApi.posCheckout({
           type: "dine-in",
           tableId: Number(formTableId),
           customerName: customerName.trim() || undefined,
           customerPhone: customerPhone.trim() || undefined,
           notes: notes.trim() || undefined,
-          status: "pending",
           items: cart.map(l => ({ menuItemId: l.menuItemId, quantity: l.quantity })),
+          paymentMethod,
+          ...(payPhone ? { paymentPhone: payPhone } : {}),
+          providerName: selectedPayment.providerName,
+          source: "dashboard",
         });
-        setPendingOrderId(order.id);
-        setPendingOrder(order);
-      }
-
-      if (paymentMethod === "premier_wallet") {
+      } else if (paymentMethod === "premier_wallet") {
         await paymentApi.processWaafiPayment(order.id, payPhone);
       } else {
         await paymentApi.createPayment({
           orderId: order.id.toString(),
           amount: order.total,
           method: paymentMethod,
-          phone: payPhone,
+          ...(payPhone ? { phone: payPhone } : {}),
           providerName: selectedPayment.providerName,
         });
       }
 
+      const receiptOrderId = checkoutResult?.id ?? order!.id;
+      const receiptSubtotal = checkoutResult?.subTotal ?? order!.subTotal ?? subtotal;
+      const receiptTax = checkoutResult?.taxAmount ?? order!.taxAmount ?? tax;
+      const receiptTotal = checkoutResult?.total ?? order!.total;
+
       setReceiptData({
-        orderId: order.id,
+        orderId: receiptOrderId,
         customerName: customerName.trim() || "Guest",
-        customerPhone: customerPhone.trim() || payPhone,
+        customerPhone: customerPhone.trim() || payPhone || undefined,
         paymentMethod: selectedPayment.providerName,
         orderTypeLabel: "Dine-in",
         locationLabel: locationLabel || undefined,
@@ -406,9 +411,9 @@ export default function WaiterCreateOrderPage() {
           price: l.price,
           quantity: l.quantity,
         })),
-        subtotal: order.subTotal ?? subtotal,
-        tax: order.taxAmount ?? tax,
-        total: order.total,
+        subtotal: receiptSubtotal,
+        tax: receiptTax,
+        total: receiptTotal,
         createdAt: new Date().toISOString(),
       });
       setIsCheckoutOpen(false);
@@ -797,11 +802,21 @@ export default function WaiterCreateOrderPage() {
                   );
                 })}
               </div>
+              <label className="text-sm font-bold text-[#1E293B]">
+                Payment mobile number
+                {paymentMethod === "premier_wallet" ? " *" : (
+                  <span className="text-zinc-400 font-normal"> (optional)</span>
+                )}
+              </label>
               <input
                 type="tel"
                 value={paymentPhone}
                 onChange={e => setPaymentPhone(e.target.value)}
-                placeholder="Payment mobile number *"
+                placeholder={
+                  paymentMethod === "premier_wallet"
+                    ? "Required for Premier Wallet"
+                    : "Optional — e.g. 61XXXXXXX"
+                }
                 className={formInputClass}
               />
             </section>

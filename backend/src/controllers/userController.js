@@ -1,5 +1,6 @@
 import prisma from '../config/db.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { logAudit } from '../utils/auditHelper.js';
 import { clearAuthCaches } from '../middlewares/authMiddleware.js';
 
@@ -15,19 +16,60 @@ export const clearUsersCache = () => {
   usersFetchInflight = null;
 };
 
+function sanitizeUser(user) {
+  if (!user) return user;
+  const { password, posPin, ...rest } = user;
+  return rest;
+}
+
+function isValidPosPin(pin) {
+  return typeof pin === 'string' && /^\d{4}$/.test(pin);
+}
+
+function isPosRole(role) {
+  return role?.name?.toLowerCase() === 'pos';
+}
+
+async function generateUniquePosEmail(username) {
+  const base = `pos.${username}@internal.local`;
+  let email = base;
+  let suffix = 0;
+
+  while (await prisma.user.findUnique({ where: { email } })) {
+    suffix += 1;
+    email = `pos.${username}.${suffix}@internal.local`;
+  }
+
+  return email;
+}
+
+async function validateUsername(username, excludeUserId) {
+  if (!username) return null;
+  const normalized = username.trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,30}$/.test(normalized)) {
+    return 'Username must be 3–30 characters (letters, numbers, . _ -)';
+  }
+  const existing = await prisma.user.findUnique({ where: { username: normalized } });
+  if (existing && existing.id !== excludeUserId) {
+    return 'Username already taken';
+  }
+  return null;
+}
+
 // CREATE USER
 export const createUser = async (req, res) => {
   try {
-    let { fullName, email, phone, password, roleId, isActive } = req.body
+    let { fullName, email, phone, password, roleId, isActive, username, posPin } = req.body
 
     fullName = fullName?.trim()
     email = email?.trim().toLowerCase()
     phone = phone?.trim()
+    username = username?.trim().toLowerCase() || null
 
-    if (!fullName || !email || !password || !roleId) {
+    if (!fullName || !roleId) {
       return res.status(400).json({
         success: false,
-        message: 'fullName, email, password and roleId are required'
+        message: 'fullName and roleId are required'
       })
     }
 
@@ -40,13 +82,6 @@ export const createUser = async (req, res) => {
       })
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 6 characters'
-      })
-    }
-
     const existingRole = await prisma.role.findUnique({
       where: { id: roleId }
     })
@@ -55,6 +90,49 @@ export const createUser = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Role not found'
+      })
+    }
+
+    const posRole = isPosRole(existingRole)
+
+    if (posRole) {
+      if (!username) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username is required for POS staff',
+        })
+      }
+
+      if (!posPin || !isValidPosPin(String(posPin))) {
+        return res.status(400).json({
+          success: false,
+          message: 'POS PIN must be exactly 4 digits',
+        })
+      }
+
+      if (!email) {
+        email = await generateUniquePosEmail(username)
+      }
+
+      if (!password) {
+        password = crypto.randomBytes(24).toString('hex')
+      }
+    } else {
+      username = null
+      posPin = null
+
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email and password are required',
+        })
+      }
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters'
       })
     }
 
@@ -82,13 +160,25 @@ export const createUser = async (req, res) => {
       }
     }
 
+    if (posRole) {
+      const usernameError = await validateUsername(username)
+      if (usernameError) {
+        return res.status(400).json({ success: false, message: usernameError })
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10)
+    const hashedPosPin = posRole
+      ? await bcrypt.hash(String(posPin), 10)
+      : null
 
     const user = await prisma.user.create({
       data: {
         fullName,
         email,
         phone: phone || null,
+        username: posRole ? username : null,
+        posPin: hashedPosPin,
         password: hashedPassword,
         roleId,
         isActive: typeof isActive === 'boolean' ? isActive : true
@@ -98,7 +188,7 @@ export const createUser = async (req, res) => {
       }
     })
 
-    const { password: _, ...userWithoutPassword } = user
+    const userWithoutSecrets = sanitizeUser(user)
 
     logAudit({ userId: req.user?.id, action: 'Created', entity: 'User', entityId: user.id, description: `Created user "${user.fullName}"` })
     clearAuthCaches()
@@ -107,7 +197,7 @@ export const createUser = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: 'User created successfully',
-      data: userWithoutPassword
+      data: userWithoutSecrets
     })
   } catch (error) {
     console.error('Create User Error:', error)
@@ -123,7 +213,7 @@ export const createUser = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params
-    let { fullName, email, phone, password, roleId, isActive } = req.body
+    let { fullName, email, phone, password, roleId, isActive, username, posPin } = req.body
 
     const userId = parseInt(id)
 
@@ -215,12 +305,62 @@ export const updateUser = async (req, res) => {
       hashedPassword = await bcrypt.hash(password, 10)
     }
 
+    const targetRoleId = roleId ?? existingUser.roleId
+    const targetRole = await prisma.role.findUnique({ where: { id: targetRoleId } })
+    const posRole = isPosRole(targetRole)
+
+    let nextUsername = null
+    let nextPosPin = null
+
+    if (posRole) {
+      nextUsername =
+        username !== undefined
+          ? username?.trim().toLowerCase() || null
+          : existingUser.username
+
+      if (!nextUsername) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username is required for POS staff',
+        })
+      }
+
+      const usernameError = await validateUsername(nextUsername, userId)
+      if (usernameError) {
+        return res.status(400).json({ success: false, message: usernameError })
+      }
+
+      if (posPin !== undefined) {
+        if (posPin === null || posPin === '') {
+          nextPosPin = existingUser.posPin
+        } else if (!isValidPosPin(String(posPin))) {
+          return res.status(400).json({
+            success: false,
+            message: 'POS PIN must be exactly 4 digits',
+          })
+        } else {
+          nextPosPin = await bcrypt.hash(String(posPin), 10)
+        }
+      } else {
+        nextPosPin = existingUser.posPin
+      }
+
+      if (!nextPosPin) {
+        return res.status(400).json({
+          success: false,
+          message: 'POS PIN must be exactly 4 digits',
+        })
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         fullName: fullName ?? existingUser.fullName,
         email: email ?? existingUser.email,
         phone: phone !== undefined ? phone : existingUser.phone,
+        username: nextUsername,
+        posPin: nextPosPin,
         password: hashedPassword,
         roleId: roleId ?? existingUser.roleId,
         isActive: typeof isActive === 'boolean' ? isActive : existingUser.isActive
@@ -230,7 +370,7 @@ export const updateUser = async (req, res) => {
       }
     })
 
-    const { password: _, ...userWithoutPassword } = updatedUser
+    const userWithoutSecrets = sanitizeUser(updatedUser)
 
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'User', entityId: updatedUser.id, description: `Updated user "${updatedUser.fullName}"` })
     clearAuthCaches()
@@ -239,7 +379,7 @@ export const updateUser = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'User updated successfully',
-      data: userWithoutPassword
+      data: userWithoutSecrets
     })
   } catch (error) {
     console.error('Update User Error:', error)
@@ -278,6 +418,7 @@ export const getAllUsers = async (req, res) => {
           id: true,
           fullName: true,
           email: true,
+          username: true,
           phone: true,
           isActive: true,
           roleId: true,
@@ -397,7 +538,7 @@ export const getUsersByRole = async (req, res) => {
       }
     })
 
-    const usersWithoutPasswords = users.map(({ password, ...user }) => user)
+    const usersWithoutPasswords = users.map((user) => sanitizeUser(user))
 
     res.status(200).json({
       success: true,

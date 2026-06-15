@@ -40,7 +40,7 @@ import { roomApi, Room } from "@/lib/api/roomApi";
 import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
 import { customerApi, Customer } from "@/lib/api/customerApi";
-import { paymentApi, PaymentMethod } from "@/lib/api/paymentApi";
+import { PaymentMethod } from "@/lib/api/paymentApi";
 import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
 import { authApi } from "@/lib/api/authApi";
 import api from "@/lib/api/axios";
@@ -761,8 +761,9 @@ export default function AllOrdersPage() {
   };
 
   const handleConfirmPayment = async () => {
-    if (!paymentPhone.trim()) {
-      showToast("Enter the mobile number for payment", "error");
+    const payPhone = paymentPhone.trim();
+    if (paymentMethod === "premier_wallet" && !payPhone) {
+      showToast("Enter the mobile number for Premier Wallet payment", "error");
       return;
     }
 
@@ -795,42 +796,33 @@ export default function AllOrdersPage() {
         addressId = addrRes.data.data?.id;
       }
 
-      const order = await orderApi.createOrder({
+      const order = await orderApi.posCheckout({
         tableId: orderType === "dine-in" ? Number(formTableId) : undefined,
         addressId,
         type: orderType,
         customerName,
         customerPhone,
         notes: formNotes.trim() || undefined,
-        status: "pending",
         items: cartItems.map(line => ({
           menuItemId: line.menuItemId,
           quantity: line.quantity
-        }))
+        })),
+        paymentMethod,
+        ...(payPhone ? { paymentPhone: payPhone } : {}),
+        providerName: selectedPaymentMethod.providerName,
+        source: "dashboard",
       });
-
-      if (paymentMethod === "premier_wallet") {
-        await paymentApi.processWaafiPayment(order.id, paymentPhone.trim());
-      } else {
-        await paymentApi.createPayment({
-          orderId: order.id.toString(),
-          amount: order.total,
-          method: paymentMethod,
-          phone: paymentPhone.trim(),
-          providerName: selectedPaymentMethod.providerName,
-        });
-      }
 
       setReceiptData({
         orderId: order.id,
         customerName: customerName || "Guest",
-        customerPhone: customerPhone || paymentPhone.trim(),
+        customerPhone: customerPhone || payPhone || undefined,
         paymentMethod: selectedPaymentMethod.providerName,
         orderTypeLabel,
         locationLabel,
         items: cartItems.map(line => ({ ...line })),
-        subtotal: order.subTotal,
-        tax: order.taxAmount,
+        subtotal: order.subTotal ?? orderSubtotal,
+        tax: order.taxAmount ?? orderTax,
         total: order.total,
         createdAt: new Date().toISOString(),
       });
@@ -840,7 +832,7 @@ export default function AllOrdersPage() {
       setIsAddOpen(false);
       resetCreateForm();
       setIsReceiptOpen(true);
-      fetchOrders();
+      void fetchOrders(true);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -1828,7 +1820,12 @@ export default function AllOrdersPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Mobile number *</label>
+              <label className="text-sm font-bold text-[#1E293B]">
+                Mobile number
+                {paymentMethod === "premier_wallet" ? " *" : (
+                  <span className="text-zinc-400 font-normal"> (optional)</span>
+                )}
+              </label>
               <input
                 type="tel"
                 value={paymentPhone}
@@ -1839,7 +1836,7 @@ export default function AllOrdersPage() {
               <p className="text-xs text-zinc-500">
                 {paymentMethod === "premier_wallet"
                   ? "Premier Wallet will send a payment request to this number."
-                  : "Enter the number used for this mobile payment."}
+                  : "Optional. Leave empty if not needed for this payment."}
               </p>
             </div>
           </div>

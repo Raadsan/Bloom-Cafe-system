@@ -57,6 +57,10 @@ import {
 let _usersCache: User[] | null = null;
 let _rolesCache: Role[] | null = null;
 
+function isPosRoleName(roleName?: string) {
+  return roleName?.toLowerCase() === "pos";
+}
+
 export default function UsersPage() {
   const { showToast } = useToast();
   const { canAdd: checkAdd, canEdit: checkEdit, canDelete: checkDelete } = usePermissions();
@@ -83,6 +87,8 @@ export default function UsersPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formPassword, setFormPassword] = useState("");
+  const [formUsername, setFormUsername] = useState("");
+  const [formPosPin, setFormPosPin] = useState("");
   const [formRoleId, setFormRoleId] = useState<number>(0);
   const [formIsActive, setFormIsActive] = useState(true);
 
@@ -90,6 +96,12 @@ export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [roleFilter, setRoleFilter] = useState("all");
+
+  const selectedRole = useMemo(
+    () => roles.find((r) => r.id === formRoleId),
+    [roles, formRoleId]
+  );
+  const isPosRole = isPosRoleName(selectedRole?.name);
 
   const fetchData = async (force = false) => {
     try {
@@ -151,6 +163,7 @@ export default function UsersPage() {
     return users.filter((u) => {
       const matchesSearch = u.fullName.toLowerCase().includes(search.toLowerCase()) ||
         u.email.toLowerCase().includes(search.toLowerCase()) ||
+        (u.username && u.username.toLowerCase().includes(search.toLowerCase())) ||
         (u.phone && u.phone.toLowerCase().includes(search.toLowerCase()));
 
       const matchesRole = roleFilter === "all" || String(u.roleId) === roleFilter || u.role?.name.toLowerCase() === roleFilter.toLowerCase();
@@ -174,6 +187,8 @@ export default function UsersPage() {
     setFormEmail("");
     setFormPhone("");
     setFormPassword("");
+    setFormUsername("");
+    setFormPosPin("");
     setFormRoleId(roles[0]?.id || 0);
     setFormIsActive(true);
     setIsAddOpen(true);
@@ -184,7 +199,9 @@ export default function UsersPage() {
     setFormName(u.fullName);
     setFormEmail(u.email);
     setFormPhone(u.phone || "");
-    setFormPassword(""); // Don't show password
+    setFormPassword("");
+    setFormUsername(u.username || "");
+    setFormPosPin("");
     setFormRoleId(u.roleId);
     setFormIsActive(u.isActive);
     setIsEditOpen(true);
@@ -201,30 +218,69 @@ export default function UsersPage() {
   };
 
   const handleSave = async () => {
-    if (!formName || !formEmail || (isAddOpen && !formPassword) || !formRoleId) {
+    if (!formName || !formRoleId) {
       showToast("Please fill in all required fields", "error");
       return;
+    }
+
+    if (isPosRole) {
+      if (!formUsername.trim()) {
+        showToast("Username is required for POS staff", "error");
+        return;
+      }
+      if (isAddOpen && !/^\d{4}$/.test(formPosPin)) {
+        showToast("POS PIN must be exactly 4 digits", "error");
+        return;
+      }
+      if (isEditOpen && formPosPin && !/^\d{4}$/.test(formPosPin)) {
+        showToast("POS PIN must be exactly 4 digits", "error");
+        return;
+      }
+    } else {
+      if (!formEmail || (isAddOpen && !formPassword)) {
+        showToast("Please fill in all required fields", "error");
+        return;
+      }
     }
 
     try {
       setSaving(true);
       if (isEditOpen && selectedUser) {
-        await userApi.updateUser(selectedUser.id, {
+        const updatePayload = {
           fullName: formName,
-          email: formEmail,
           phone: formPhone,
           roleId: formRoleId,
           isActive: formIsActive,
-          ...(formPassword ? { password: formPassword } : {})
-        });
+          ...(isPosRole
+            ? {
+                username: formUsername.trim(),
+                ...(formPosPin ? { posPin: formPosPin } : {}),
+              }
+            : {
+                email: formEmail,
+                username: null,
+                posPin: null,
+                ...(formPassword ? { password: formPassword } : {}),
+              }),
+        };
+        await userApi.updateUser(selectedUser.id, updatePayload);
         showToast("Staff profile updated", "success");
+      } else if (isPosRole) {
+        await userApi.createUser({
+          fullName: formName,
+          phone: formPhone,
+          roleId: formRoleId,
+          username: formUsername.trim(),
+          posPin: formPosPin,
+        });
+        showToast("New POS staff member registered", "success");
       } else {
         await userApi.createUser({
           fullName: formName,
           email: formEmail,
           phone: formPhone,
           password: formPassword,
-          roleId: formRoleId
+          roleId: formRoleId,
         });
         showToast("New staff member registered", "success");
       }
@@ -477,33 +533,61 @@ export default function UsersPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Email Address *</label>
-              <input
-                type="email"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                placeholder="staff@example.com"
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
-              />
-            </div>
+            {!isPosRole && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-[#1E293B]">Email Address *</label>
+                  <input
+                    type="email"
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                    placeholder="staff@example.com"
+                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Phone Number</label>
-              <input
-                type="text"
-                value={formPhone}
-                onChange={(e) => setFormPhone(e.target.value)}
-                placeholder="+252..."
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
-              />
-            </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-[#1E293B]">Phone Number</label>
+                  <input
+                    type="text"
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    placeholder="+252..."
+                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
+                  />
+                </div>
+              </>
+            )}
+
+            {isPosRole && (
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-[#1E293B]">Phone Number</label>
+                <input
+                  type="text"
+                  value={formPhone}
+                  onChange={(e) => setFormPhone(e.target.value)}
+                  placeholder="+252..."
+                  className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-sm font-bold text-[#1E293B]">Access Role *</label>
               <select
                 value={formRoleId}
-                onChange={(e) => setFormRoleId(Number(e.target.value))}
+                onChange={(e) => {
+                  const nextRoleId = Number(e.target.value);
+                  setFormRoleId(nextRoleId);
+                  const nextRole = roles.find((r) => r.id === nextRoleId);
+                  if (isPosRoleName(nextRole?.name)) {
+                    setFormEmail("");
+                    setFormPassword("");
+                  } else {
+                    setFormUsername("");
+                    setFormPosPin("");
+                  }
+                }}
                 className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
               >
                 <option value={0}>Select a role...</option>
@@ -525,21 +609,59 @@ export default function UsersPage() {
               </select>
             </div>
 
-            <div className="col-span-2 space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">
-                {isEditOpen ? "Update Password (Optional)" : "Account Password *"}
-              </label>
-              <div className="relative group">
-                <Lock className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                <input
-                  type="password"
-                  value={formPassword}
-                  onChange={(e) => setFormPassword(e.target.value)}
-                  placeholder={isEditOpen ? "Leave blank to keep current" : "Min. 6 characters"}
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
-                />
+            {isPosRole ? (
+              <>
+                <div className="col-span-2 space-y-2 pt-2 border-t border-zinc-100">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                    POS login credentials
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-[#1E293B]">Username *</label>
+                  <input
+                    type="text"
+                    value={formUsername}
+                    onChange={(e) => setFormUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
+                    placeholder="e.g. mohamed.pos"
+                    autoComplete="off"
+                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-[#1E293B]">
+                    {isEditOpen ? "New PIN (optional)" : "PIN (4 digits) *"}
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={formPosPin}
+                    onChange={(e) => setFormPosPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder={isEditOpen ? "Leave blank to keep current" : "1234"}
+                    autoComplete="off"
+                    className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium tracking-[0.3em]"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="col-span-2 space-y-2">
+                <label className="text-sm font-bold text-[#1E293B]">
+                  {isEditOpen ? "Update Password (Optional)" : "Account Password *"}
+                </label>
+                <div className="relative group">
+                  <Lock className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="password"
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder={isEditOpen ? "Leave blank to keep current" : "Min. 6 characters"}
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <DialogFooter className="p-6 bg-zinc-50/50 border-t border-zinc-100 gap-3">
@@ -623,6 +745,18 @@ export default function UsersPage() {
                   </div>
                 </div>
               </div>
+
+              {isPosRoleName(selectedUser?.role?.name) && selectedUser?.username && (
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-center gap-4">
+                  <div className="size-10 rounded-lg bg-white flex items-center justify-center shadow-sm text-primary">
+                    <Lock className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-primary font-bold uppercase tracking-wider">POS Username</p>
+                    <p className="text-sm font-medium text-[#1E293B]">{selectedUser.username}</p>
+                  </div>
+                </div>
+              )}
 
               <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-center gap-4">
                 <div className="size-10 rounded-lg bg-white flex items-center justify-center shadow-sm text-primary">

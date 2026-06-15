@@ -47,7 +47,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     authApi.getMe().then(setUser).catch(() => {
-      window.location.href = "/login";
+      window.location.href = "/pos/login";
     });
 
     const handleProfileUpdate = () => {
@@ -273,7 +273,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
                   <DropdownMenuItem
                     className="text-[11px] font-bold uppercase tracking-widest text-red-500 dark:text-white py-3 cursor-pointer hover:bg-red-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-white focus:bg-red-50 dark:focus:bg-white/10 focus:text-red-600 dark:focus:text-white"
                     onClick={async () => {
-                      await authApi.logout();
+                      await authApi.logout("/pos/login");
                     }}
                   >
                     <LogOut className="mr-2.5 size-4 dark:text-white" />

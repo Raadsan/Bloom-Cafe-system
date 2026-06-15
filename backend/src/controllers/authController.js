@@ -2,7 +2,7 @@ import prisma from '../config/db.js'
 import { getCachedUser, invalidateUserCache } from '../middlewares/authMiddleware.js'
 
 function formatAuthUser(user) {
-  const { password, role, ...rest } = user
+  const { password, posPin, role, ...rest } = user
   return {
     ...rest,
     role: role.name,
@@ -12,6 +12,94 @@ function formatAuthUser(user) {
 }
 import bcrypt from 'bcryptjs'
 import generateToken from '../utils/generateToken.js'
+
+const POS_LOGIN_ROLES = new Set(['pos', 'cashier', 'waiter', 'admin', 'manager'])
+
+function isValidPosPin(pin) {
+  return typeof pin === 'string' && /^\d{4}$/.test(pin)
+}
+
+// POS LOGIN — username + 4-digit PIN
+export const posLogin = async (req, res) => {
+  try {
+    const username = req.body.username?.trim().toLowerCase()
+    const pin = req.body.pin?.trim()
+
+    if (!username || !pin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username and 4-digit PIN are required',
+      })
+    }
+
+    if (!isValidPosPin(pin)) {
+      return res.status(400).json({
+        success: false,
+        message: 'PIN must be exactly 4 digits',
+      })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { username },
+      include: { role: true },
+    })
+
+    if (!user || !user.posPin) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid username or PIN',
+      })
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'User account is inactive',
+      })
+    }
+
+    const roleName = user.role?.name?.toLowerCase() || ''
+    if (!POS_LOGIN_ROLES.has(roleName)) {
+      return res.status(403).json({
+        success: false,
+        message: 'This account is not allowed to use POS',
+      })
+    }
+
+    const isMatch = await bcrypt.compare(pin, user.posPin)
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid username or PIN',
+      })
+    }
+
+    const token = generateToken(user)
+
+    await prisma.auditlog.create({
+      data: {
+        userId: user.id,
+        action: 'LOGIN',
+        entity: 'AUTH',
+        description: `Staff ${user.fullName} logged into POS.`,
+      },
+    })
+
+    res.status(200).json({
+      success: true,
+      message: 'POS login successful',
+      token,
+      user: formatAuthUser(user),
+    })
+  } catch (error) {
+    console.error('POS Login Error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to login to POS',
+      error: error.message,
+    })
+  }
+}
 
 // LOGIN
 export const login = async (req, res) => {
