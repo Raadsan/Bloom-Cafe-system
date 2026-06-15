@@ -140,9 +140,36 @@ model menuitem {
   category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
   menuitembom menuitembom[]
   orderitem   orderitem[]
-
+  discountAdvertisementProduct discountAdvertisementProduct[]
 
   @@index([categoryId], map: "MenuItem_categoryId_fkey")
+}
+
+model discountAdvertisement {
+  id              Int       @id @default(autoincrement())
+  type            String
+  title           String?
+  description     String?   @db.Text
+  imageUrl        String?   @db.LongText
+  url             String?
+  discountPercent Float?
+  startAt         DateTime?
+  endAt           DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  products        discountAdvertisementProduct[]
+}
+
+model discountAdvertisementProduct {
+  id                      Int                   @id @default(autoincrement())
+  discountAdvertisementId Int
+  menuItemId              Int
+  discountAdvertisement   discountAdvertisement @relation(fields: [discountAdvertisementId], references: [id], onDelete: Cascade)
+  menuitem                menuitem              @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([discountAdvertisementId, menuItemId])
+  @@index([menuItemId])
 }
 
 model menuitembom {

@@ -6,6 +6,7 @@ let roomsMenuEnsured = false;
 let createOrderMenuEnsured = false;
 let pickupOrdersMenuEnsured = false;
 let pickupHistoryMenuEnsured = false;
+let discountAdvertisementMenuEnsured = false;
 
 const roleMenusCache = new Map();
 const ROLE_MENUS_CACHE_TTL = 5 * 60 * 1000;
@@ -631,6 +632,85 @@ export async function ensureRoomsMenuItem() {
     roomsMenuEnsured = true;
   } catch (error) {
     console.error("ensureRoomsMenuItem error:", error);
+  }
+}
+
+export async function ensureDiscountAdvertisementMenuItem() {
+  if (discountAdvertisementMenuEnsured) return;
+  try {
+    const roles = await prisma.role.findMany({
+      where: {
+        OR: [
+          { name: { contains: "admin" } },
+          { name: { contains: "Admin" } },
+          { name: { contains: "manager" } },
+          { name: { contains: "Manager" } }
+        ]
+      }
+    });
+
+    if (roles.length === 0) return;
+
+    let promoMenu = await prisma.menu.findFirst({
+      where: {
+        OR: [
+          { url: "/discount-advertisements" },
+          { title: "Promotions" },
+          { title: "Discount & Ads" }
+        ]
+      }
+    });
+
+    if (promoMenu) {
+      promoMenu = await prisma.menu.update({
+        where: { id: promoMenu.id },
+        data: {
+          title: "Promotions",
+          url: "/discount-advertisements",
+          icon: "Percent",
+          isActive: true,
+          order: promoMenu.order > 0 ? promoMenu.order : 7
+        }
+      });
+    } else {
+      promoMenu = await prisma.menu.create({
+        data: {
+          title: "Promotions",
+          url: "/discount-advertisements",
+          icon: "Percent",
+          order: 7,
+          isActive: true
+        }
+      });
+    }
+
+    for (const role of roles) {
+      await prisma.roleMenuAccess.upsert({
+        where: {
+          roleId_menuId: {
+            roleId: role.id,
+            menuId: promoMenu.id
+          }
+        },
+        update: {
+          canView: true,
+          canAdd: true,
+          canEdit: true,
+          canDelete: true
+        },
+        create: {
+          roleId: role.id,
+          menuId: promoMenu.id,
+          canView: true,
+          canAdd: true,
+          canEdit: true,
+          canDelete: true
+        }
+      });
+    }
+    discountAdvertisementMenuEnsured = true;
+  } catch (error) {
+    console.error("ensureDiscountAdvertisementMenuItem error:", error);
   }
 }
 

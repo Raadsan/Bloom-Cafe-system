@@ -25,6 +25,7 @@ import receiptSettingsRoutes from './routes/receiptSettingsRoutes.js'
 import systemSettingsRoutes from './routes/systemSettingsRoutes.js'
 import addressRoutes from './routes/addressRoutes.js'
 import roomRoutes from './routes/roomRoutes.js'
+import discountAdvertisementRoutes from './routes/discountAdvertisementRoutes.js'
 
 const app = express();
 app.use(express.json({ limit: '50mb' }))
@@ -55,6 +56,7 @@ app.use('/api/addresses', addressRoutes)
 app.use('/api/rooms', roomRoutes)
 app.use('/api/receipt-settings', receiptSettingsRoutes)
 app.use('/api/system-settings', systemSettingsRoutes)
+app.use('/api/discount-advertisements', discountAdvertisementRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');
