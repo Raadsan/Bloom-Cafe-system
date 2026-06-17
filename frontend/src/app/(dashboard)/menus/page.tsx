@@ -35,6 +35,7 @@ import {
   getMenuItemDiscountLabel,
 } from "@/lib/menu-item-pricing";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
+import { compressImageFile } from "@/lib/compress-image";
 import { useToast } from "@/components/ui/toast";
 import {
   dashboardPageClass,
@@ -188,17 +189,23 @@ export default function MenuPage() {
     setIsViewOpen(true);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        return showToast("Image size should be less than 2MB", "error");
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormImageUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      return showToast("Please select an image file", "error");
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return showToast("Image size should be less than 5MB", "error");
+    }
+
+    try {
+      const compressed = await compressImageFile(file);
+      setFormImageUrl(compressed);
+    } catch {
+      showToast("Failed to process image", "error");
     }
   };
 

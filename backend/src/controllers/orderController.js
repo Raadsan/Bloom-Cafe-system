@@ -741,7 +741,7 @@
 
 import prisma from '../config/db.js'
 import { emitOrderUpdate, emitPaymentSuccess } from '../utils/socketEvents.js'
-import { notifyNewOrder, notifyOrderReady } from '../utils/orderNotifications.js'
+import { notifyNewOrder, notifyOrderReady, notifyCustomerOrderStatus } from '../utils/orderNotifications.js'
 import { logAudit } from '../utils/auditHelper.js'
 import { sendWaafiPayment } from '../utils/waafiPayment.js'
 
@@ -1202,6 +1202,8 @@ export const updateOrderStatus = async (req, res) => {
 
     if (status === 'ready') {
       await notifyOrderReady(updatedOrder, req.user?.id)
+    } else if (updatedOrder.userId) {
+      await notifyCustomerOrderStatus(updatedOrder, order.status)
     }
 
     // 🔥 TABLE FREE

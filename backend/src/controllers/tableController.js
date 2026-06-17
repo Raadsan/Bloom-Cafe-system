@@ -266,9 +266,35 @@ export const getAllTables = async (req, res) => {
 };
 
 // GET TABLE BY QR CODE
+function extractQrCodeFromScan(value) {
+  if (!value) return value
+
+  let decoded = decodeURIComponent(String(value).trim())
+
+  try {
+    const uri = new URL(decoded)
+    const segments = uri.pathname.split('/').filter(Boolean)
+    const menuIndex = segments.indexOf('menu')
+    if (menuIndex >= 0 && segments[menuIndex + 1]) {
+      return decodeURIComponent(segments[menuIndex + 1])
+    }
+  } catch (_) {
+    // Not a full URL — use raw value below.n
+  }
+
+  const marker = '/menu/'
+  const markerIndex = decoded.toLowerCase().indexOf(marker)
+  if (markerIndex >= 0) {
+    decoded = decoded.slice(markerIndex + marker.length).split(/[?#]/)[0]
+    return decodeURIComponent(decoded.trim())
+  }
+
+  return decoded
+}
+
 export const getTableByQrCode = async (req, res) => {
   try {
-    const { qrCode } = req.params;
+    const qrCode = extractQrCodeFromScan(req.params.qrCode)
 
     if (!qrCode) {
       return res.status(400).json({

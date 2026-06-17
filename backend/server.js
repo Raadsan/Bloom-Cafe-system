@@ -39,10 +39,17 @@ server.listen(PORT, async () => {
   }
 })
 
-async function shutdown() {
+async function shutdown(signal) {
+  console.log(`\n${signal ?? 'Shutdown'}: releasing database connections...`)
   await prisma.$disconnect().catch(() => {})
   server.close(() => process.exit(0))
+  setTimeout(() => process.exit(1), 5000).unref()
 }
 
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+process.on('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+
+process.once('SIGUSR2', async () => {
+  await prisma.$disconnect().catch(() => {})
+  process.kill(process.pid, 'SIGUSR2')
+})

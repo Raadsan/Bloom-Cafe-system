@@ -81,6 +81,9 @@ export const emitOrderUpdate = (order) => {
   io.to('kitchen').emit('order_update', payload)
   io.to('admin').emit('order_update', payload)
   io.to('manager').emit('order_update', payload)
+  if (order.userId) {
+    io.to(`user_${order.userId}`).emit('order_update', payload)
+  }
   io.to(`order_${order.id}`).emit('order_update', payload)
 }
 

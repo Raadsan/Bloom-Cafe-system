@@ -1,5 +1,6 @@
 import prisma from '../config/db.js'
 import { emitNewOrder, emitOrderReady } from './socketEvents.js'
+import { sendOrderStatusPush } from './fcmService.js'
 
 function getTableLabel(order) {
   if (order.table?.number) return `Table ${order.table.number}`
@@ -84,4 +85,27 @@ export async function notifyOrderReady(order, _senderId = null) {
 
   await prisma.notification.createMany({ data: notifications })
   emitOrderReady(order)
+
+  if (order.userId) {
+    await sendOrderStatusPush(order.userId, {
+      orderId: order.id,
+      status: 'ready',
+    })
+  }
+}
+
+/**
+ * Push notification to delivery app user when order status changes.
+ */
+export async function notifyCustomerOrderStatus(order, oldStatus = null) {
+  if (!order?.id || !order?.userId) return
+
+  const next = String(order.status || '').toLowerCase().trim()
+  const prev = oldStatus ? String(oldStatus).toLowerCase().trim() : null
+  if (prev === next) return
+
+  await sendOrderStatusPush(order.userId, {
+    orderId: order.id,
+    status: next,
+  })
 }

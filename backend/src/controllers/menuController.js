@@ -665,9 +665,9 @@ export async function ensureDiscountAdvertisementMenuItem() {
       promoMenu = await prisma.menu.update({
         where: { id: promoMenu.id },
         data: {
-          title: "Promotions",
+          title: "Advertisements",
           url: "/discount-advertisements",
-          icon: "Percent",
+          icon: "Megaphone",
           isActive: true,
           order: promoMenu.order > 0 ? promoMenu.order : 7
         }
@@ -675,9 +675,9 @@ export async function ensureDiscountAdvertisementMenuItem() {
     } else {
       promoMenu = await prisma.menu.create({
         data: {
-          title: "Promotions",
+          title: "Advertisements",
           url: "/discount-advertisements",
-          icon: "Percent",
+          icon: "Megaphone",
           order: 7,
           isActive: true
         }

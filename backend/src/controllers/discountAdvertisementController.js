@@ -5,11 +5,10 @@ import {
   isCampaignActive,
   enrichMenuItemsWithFlashSale,
   computeDiscountedPrice,
-  getActiveFlashSaleMap,
-  enrichMenuItemWithFlashSale,
+  getDiscountedMenuItems,
 } from '../utils/flashSaleHelper.js'
 
-const VALID_TYPES = ['discount', 'advertisement']
+const VALID_TYPES = ['advertisement']
 
 const includeProducts = {
   products: {
@@ -98,30 +97,17 @@ function validatePayload(body, { isUpdate = false } = {}) {
 
 function assertCreateRules(payload) {
   if (!payload.type) {
-    throw new Error('type is required (discount or advertisement)')
+    throw new Error('type is required (advertisement)')
   }
 
-  if (payload.type === 'advertisement') {
-    if (!payload.title) throw new Error('title is required for advertisement')
-    if (!payload.imageUrl) throw new Error('image is required for advertisement')
-    if (!validatePngImage(payload.imageUrl)) {
-      throw new Error('Advertisement image must be PNG format')
-    }
+  if (payload.type !== 'advertisement') {
+    throw new Error('Only advertisement campaigns are supported. Set product discounts on Menu Items.')
   }
 
-  if (payload.type === 'discount') {
-    if (payload.discountPercent === undefined || Number.isNaN(payload.discountPercent)) {
-      throw new Error('discountPercent is required for discount')
-    }
-    if (payload.discountPercent <= 0 || payload.discountPercent > 100) {
-      throw new Error('discountPercent must be between 1 and 100')
-    }
-    if (!payload.startAt || !payload.endAt) {
-      throw new Error('startAt and endAt are required for discount')
-    }
-    if (!Array.isArray(payload.menuItemIds) || payload.menuItemIds.length === 0) {
-      throw new Error('Select at least one product for discount')
-    }
+  if (!payload.title) throw new Error('title is required for advertisement')
+  if (!payload.imageUrl) throw new Error('image is required for advertisement')
+  if (!validatePngImage(payload.imageUrl)) {
+    throw new Error('Advertisement image must be PNG format')
   }
 }
 
@@ -158,25 +144,22 @@ export const createDiscountAdvertisement = async (req, res) => {
     await ensureDiscountAdvertisementMenuItem()
 
     const payload = validatePayload(req.body)
+    payload.type = 'advertisement'
     assertCreateRules(payload)
 
     const created = await prisma.discountAdvertisement.create({
       data: {
-        type: payload.type,
+        type: 'advertisement',
         title: payload.title || null,
         description: payload.description ?? null,
-        imageUrl: payload.type === 'advertisement' ? payload.imageUrl : null,
-        url: payload.type === 'advertisement' ? payload.url ?? null : null,
-        discountPercent: payload.type === 'discount' ? payload.discountPercent : null,
-        startAt: payload.type === 'discount' ? payload.startAt : payload.startAt ?? null,
-        endAt: payload.type === 'discount' ? payload.endAt : payload.endAt ?? null,
+        imageUrl: payload.imageUrl,
+        url: payload.url ?? null,
+        discountPercent: null,
+        startAt: payload.startAt ?? null,
+        endAt: payload.endAt ?? null,
         isActive: payload.isActive !== undefined ? payload.isActive : true,
       },
     })
-
-    if (payload.type === 'discount') {
-      await syncProducts(created.id, payload.menuItemIds)
-    }
 
     const data = await prisma.discountAdvertisement.findUnique({
       where: { id: created.id },
@@ -217,6 +200,7 @@ export const createDiscountAdvertisement = async (req, res) => {
 export const getAllDiscountAdvertisements = async (req, res) => {
   try {
     const items = await prisma.discountAdvertisement.findMany({
+      where: { type: 'advertisement' },
       include: includeProducts,
       orderBy: [{ createdAt: 'desc' }],
     })
@@ -280,13 +264,12 @@ export const getHomepagePromotions = async (req, res) => {
     const now = new Date()
 
     const campaigns = await prisma.discountAdvertisement.findMany({
-      where: { isActive: true },
-      include: includeProducts,
+      where: { isActive: true, type: 'advertisement' },
       orderBy: [{ createdAt: 'desc' }],
     })
 
     const advertisements = campaigns
-      .filter((item) => item.type === 'advertisement' && isCampaignActive(item, now))
+      .filter((item) => isCampaignActive(item, now))
       .map((item) => ({
         id: item.id,
         title: item.title,
@@ -295,35 +278,21 @@ export const getHomepagePromotions = async (req, res) => {
         url: item.url,
       }))
 
-    const activeDiscounts = campaigns.filter(
-      (item) => item.type === 'discount' && isCampaignActive(item, now)
-    )
+    const menuItems = await prisma.menuitem.findMany({
+      where: { isAvailable: true },
+      include: {
+        category: { select: { id: true, name: true } },
+      },
+      orderBy: { id: 'asc' },
+    })
 
-    const flashSaleMap = await getActiveFlashSaleMap()
-    const productMap = new Map()
-
-    for (const campaign of activeDiscounts) {
-      for (const link of campaign.products) {
-        const menuItem = link.menuitem
-        if (!menuItem || !menuItem.isAvailable) continue
-
-        const enriched = enrichMenuItemWithFlashSale(menuItem, flashSaleMap)
-        if (!enriched.flashSale) continue
-
-        productMap.set(menuItem.id, {
-          ...enriched,
-          discountPercent: enriched.flashSale.discountPercent,
-          originalPrice: menuItem.price,
-          salePrice: enriched.salePrice,
-        })
-      }
-    }
+    const flashSaleProducts = getDiscountedMenuItems(menuItems)
 
     return res.status(200).json({
       success: true,
       data: {
         advertisements,
-        flashSaleProducts: Array.from(productMap.values()),
+        flashSaleProducts,
       },
     })
   } catch (error) {
@@ -353,98 +322,47 @@ export const updateDiscountAdvertisement = async (req, res) => {
     }
 
     const payload = validatePayload(req.body, { isUpdate: true })
-    const nextType = payload.type ?? existing.type
 
-    if (nextType === 'advertisement') {
-      const nextImage = payload.imageUrl ?? existing.imageUrl
-      if (!nextImage) {
-        return res.status(400).json({ success: false, message: 'image is required for advertisement' })
-      }
-      if (payload.imageUrl !== undefined && !validatePngImage(payload.imageUrl)) {
-        return res.status(400).json({ success: false, message: 'Advertisement image must be PNG format' })
-      }
+    if (payload.type && payload.type !== 'advertisement') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only advertisement campaigns are supported. Set product discounts on Menu Items.',
+      })
     }
 
-    if (nextType === 'discount') {
-      const nextPercent = payload.discountPercent ?? existing.discountPercent
-      if (nextPercent === null || nextPercent <= 0 || nextPercent > 100) {
-        return res.status(400).json({
-          success: false,
-          message: 'discountPercent must be between 1 and 100',
-        })
-      }
+    if (existing.type !== 'advertisement') {
+      return res.status(400).json({
+        success: false,
+        message: 'Legacy discount campaigns are no longer supported. Manage discounts on Menu Items.',
+      })
+    }
 
-      const nextStart = payload.startAt !== undefined ? payload.startAt : existing.startAt
-      const nextEnd = payload.endAt !== undefined ? payload.endAt : existing.endAt
-      if (!nextStart || !nextEnd) {
-        return res.status(400).json({
-          success: false,
-          message: 'startAt and endAt are required for discount',
-        })
-      }
-      if (new Date(nextStart) > new Date(nextEnd)) {
-        return res.status(400).json({ success: false, message: 'startAt must be before endAt' })
-      }
+    const nextImage = payload.imageUrl ?? existing.imageUrl
+    if (!nextImage) {
+      return res.status(400).json({ success: false, message: 'image is required for advertisement' })
+    }
+    if (payload.imageUrl !== undefined && !validatePngImage(payload.imageUrl)) {
+      return res.status(400).json({ success: false, message: 'Advertisement image must be PNG format' })
     }
 
     const updated = await prisma.discountAdvertisement.update({
       where: { id },
       data: {
-        type: nextType,
+        type: 'advertisement',
         title: payload.title !== undefined ? payload.title || null : existing.title,
         description: payload.description !== undefined ? payload.description : existing.description,
-        imageUrl:
-          nextType === 'advertisement'
-            ? payload.imageUrl !== undefined
-              ? payload.imageUrl
-              : existing.imageUrl
-            : null,
-        url:
-          nextType === 'advertisement'
-            ? payload.url !== undefined
-              ? payload.url
-              : existing.url
-            : null,
-        discountPercent:
-          nextType === 'discount'
-            ? payload.discountPercent !== undefined
-              ? payload.discountPercent
-              : existing.discountPercent
-            : null,
-        startAt:
-          nextType === 'discount'
-            ? payload.startAt !== undefined
-              ? payload.startAt
-              : existing.startAt
-            : payload.startAt !== undefined
-              ? payload.startAt
-              : existing.startAt,
-        endAt:
-          nextType === 'discount'
-            ? payload.endAt !== undefined
-              ? payload.endAt
-              : existing.endAt
-            : payload.endAt !== undefined
-              ? payload.endAt
-              : existing.endAt,
+        imageUrl: payload.imageUrl !== undefined ? payload.imageUrl : existing.imageUrl,
+        url: payload.url !== undefined ? payload.url : existing.url,
+        discountPercent: null,
+        startAt: payload.startAt !== undefined ? payload.startAt : existing.startAt,
+        endAt: payload.endAt !== undefined ? payload.endAt : existing.endAt,
         isActive: payload.isActive !== undefined ? payload.isActive : existing.isActive,
       },
     })
 
-    if (nextType === 'discount') {
-      if (Array.isArray(payload.menuItemIds)) {
-        await syncProducts(updated.id, payload.menuItemIds)
-      } else if (existing.type !== 'discount') {
-        return res.status(400).json({
-          success: false,
-          message: 'Select at least one product for discount',
-        })
-      }
-    } else {
-      await prisma.discountAdvertisementProduct.deleteMany({
-        where: { discountAdvertisementId: updated.id },
-      })
-    }
+    await prisma.discountAdvertisementProduct.deleteMany({
+      where: { discountAdvertisementId: updated.id },
+    })
 
     const data = await prisma.discountAdvertisement.findUnique({
       where: { id: updated.id },

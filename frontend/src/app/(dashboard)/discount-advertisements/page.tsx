@@ -6,9 +6,7 @@ import {
   Edit,
   Trash2,
   RefreshCw,
-  Percent,
   Megaphone,
-  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,10 +28,8 @@ import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
 import {
   discountAdvertisementApi,
-  CampaignType,
   DiscountAdvertisement,
 } from "@/lib/api/discountAdvertisementApi";
-import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
 import {
   dashboardPageClass,
   dashboardPageStyle,
@@ -78,40 +74,30 @@ export default function DiscountAdvertisementsPage() {
   const canDelete = checkDelete("/discount-advertisements");
 
   const [campaigns, setCampaigns] = useState<DiscountAdvertisement[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | CampaignType>("all");
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<DiscountAdvertisement | null>(null);
 
-  const [formType, setFormType] = useState<CampaignType>("advertisement");
   const [formTitle, setFormTitle] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formImage, setFormImage] = useState("");
   const [formUrl, setFormUrl] = useState("");
-  const [formPercent, setFormPercent] = useState("20");
   const [formStartAt, setFormStartAt] = useState("");
   const [formEndAt, setFormEndAt] = useState("");
   const [formActive, setFormActive] = useState(true);
-  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
-  const [productSearch, setProductSearch] = useState("");
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [campaignData, productData] = await Promise.all([
-        discountAdvertisementApi.getAll(),
-        menuItemApi.getAllMenuItems(),
-      ]);
+      const campaignData = await discountAdvertisementApi.getAll();
       setCampaigns(campaignData || []);
-      setMenuItems(productData || []);
     } catch (err) {
       console.error(err);
-      showToast("Failed to load promotions", "error");
+      showToast("Failed to load advertisements", "error");
     } finally {
       setLoading(false);
     }
@@ -123,33 +109,19 @@ export default function DiscountAdvertisementsPage() {
 
   const filtered = useMemo(() => {
     return campaigns.filter((item) => {
-      const matchesType = typeFilter === "all" || item.type === typeFilter;
-      const haystack = `${item.title || ""} ${item.description || ""} ${item.type}`.toLowerCase();
-      const matchesSearch = !search || haystack.includes(search.toLowerCase());
-      return matchesType && matchesSearch;
+      const haystack = `${item.title || ""} ${item.description || ""}`.toLowerCase();
+      return !search || haystack.includes(search.toLowerCase());
     });
-  }, [campaigns, search, typeFilter]);
-
-  const filteredProducts = useMemo(() => {
-    const q = productSearch.trim().toLowerCase();
-    if (!q) return menuItems;
-    return menuItems.filter((item) =>
-      `${item.name} ${item.category?.name || ""}`.toLowerCase().includes(q)
-    );
-  }, [menuItems, productSearch]);
+  }, [campaigns, search]);
 
   const resetForm = () => {
-    setFormType("advertisement");
     setFormTitle("");
     setFormDescription("");
     setFormImage("");
     setFormUrl("");
-    setFormPercent("20");
     setFormStartAt("");
     setFormEndAt("");
     setFormActive(true);
-    setSelectedProductIds([]);
-    setProductSearch("");
   };
 
   const openCreate = () => {
@@ -160,29 +132,19 @@ export default function DiscountAdvertisementsPage() {
 
   const openEdit = (item: DiscountAdvertisement) => {
     setSelected(item);
-    setFormType(item.type);
     setFormTitle(item.title || "");
     setFormDescription(item.description || "");
     setFormImage(item.imageUrl || "");
     setFormUrl(item.url || "");
-    setFormPercent(String(item.discountPercent ?? 20));
     setFormStartAt(toLocalInputValue(item.startAt));
     setFormEndAt(toLocalInputValue(item.endAt));
     setFormActive(item.isActive);
-    setSelectedProductIds(item.products?.map((p) => p.menuItemId) || []);
-    setProductSearch("");
     setIsFormOpen(true);
   };
 
   const openDelete = (item: DiscountAdvertisement) => {
     setSelected(item);
     setIsDeleteOpen(true);
-  };
-
-  const toggleProduct = (id: number) => {
-    setSelectedProductIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -202,57 +164,40 @@ export default function DiscountAdvertisementsPage() {
   };
 
   const handleSave = async () => {
-    if (formType === "advertisement" && !formTitle.trim()) {
+    if (!formTitle.trim()) {
       showToast("Title is required", "error");
       return;
     }
-    if (formType === "advertisement" && !formImage) {
+    if (!formImage) {
       showToast("PNG image is required", "error");
       return;
-    }
-    if (formType === "discount") {
-      const pct = Number(formPercent);
-      if (!pct || pct <= 0 || pct > 100) {
-        showToast("Discount percentage must be between 1 and 100", "error");
-        return;
-      }
-      if (!formStartAt || !formEndAt) {
-        showToast("Start and end time are required", "error");
-        return;
-      }
-      if (selectedProductIds.length === 0) {
-        showToast("Select at least one product", "error");
-        return;
-      }
     }
 
     setSaving(true);
     try {
       const payload = {
-        type: formType,
-        title: formTitle.trim() || undefined,
+        type: "advertisement" as const,
+        title: formTitle.trim(),
         description: formDescription.trim() || undefined,
-        imageUrl: formType === "advertisement" ? formImage : undefined,
-        url: formType === "advertisement" ? formUrl.trim() || undefined : undefined,
-        discountPercent: formType === "discount" ? Number(formPercent) : undefined,
-        startAt: formType === "discount" ? new Date(formStartAt).toISOString() : undefined,
-        endAt: formType === "discount" ? new Date(formEndAt).toISOString() : undefined,
+        imageUrl: formImage,
+        url: formUrl.trim() || undefined,
+        startAt: formStartAt ? new Date(formStartAt).toISOString() : undefined,
+        endAt: formEndAt ? new Date(formEndAt).toISOString() : undefined,
         isActive: formActive,
-        menuItemIds: formType === "discount" ? selectedProductIds : undefined,
       };
 
       if (selected) {
         await discountAdvertisementApi.update(selected.id, payload);
-        showToast("Campaign updated successfully", "success");
+        showToast("Advertisement updated successfully", "success");
       } else {
         await discountAdvertisementApi.create(payload);
-        showToast("Campaign created successfully", "success");
+        showToast("Advertisement created successfully", "success");
       }
 
       setIsFormOpen(false);
       await fetchData();
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || "Failed to save campaign";
+      const msg = err.response?.data?.message || err.message || "Failed to save advertisement";
       showToast(msg, "error");
     } finally {
       setSaving(false);
@@ -264,11 +209,11 @@ export default function DiscountAdvertisementsPage() {
     setSaving(true);
     try {
       await discountAdvertisementApi.delete(selected.id);
-      showToast("Campaign deleted successfully", "success");
+      showToast("Advertisement deleted successfully", "success");
       setIsDeleteOpen(false);
       await fetchData();
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || "Failed to delete campaign";
+      const msg = err.response?.data?.message || err.message || "Failed to delete advertisement";
       showToast(msg, "error");
     } finally {
       setSaving(false);
@@ -279,9 +224,9 @@ export default function DiscountAdvertisementsPage() {
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       <div className="mb-8 px-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className={pageHeaderTitleClass}>Promotions</h1>
+          <h1 className={pageHeaderTitleClass}>Advertisements</h1>
           <p className={pageHeaderSubtitleClass}>
-            Manage flash sale discounts and homepage advertisement banners
+            Manage homepage advertisement banners for the mobile app. Product discounts are set on Menu Items.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -292,7 +237,7 @@ export default function DiscountAdvertisementsPage() {
           {canAdd && (
             <Button className={btnCreatePage} onClick={openCreate}>
               <Plus className="w-4 h-4 mr-2" />
-              Add Campaign
+              Add Advertisement
             </Button>
           )}
         </div>
@@ -302,18 +247,9 @@ export default function DiscountAdvertisementsPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search campaigns..."
+          placeholder="Search advertisements..."
           className={`${formInputClass} max-w-xs`}
         />
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as "all" | CampaignType)}
-          className={`${formInputClass} max-w-[180px]`}
-        >
-          <option value="all">All types</option>
-          <option value="advertisement">Advertisement</option>
-          <option value="discount">Discount</option>
-        </select>
       </div>
 
       <div className="px-4">
@@ -321,9 +257,8 @@ export default function DiscountAdvertisementsPage() {
           <Table>
             <TableHeader className={dashboardTableHeaderClass}>
               <TableRow className={dashboardTableHeadRowClass}>
-                <TableHead className={dashboardTableHeadClass}>Type</TableHead>
                 <TableHead className={dashboardTableHeadClass}>Title</TableHead>
-                <TableHead className={dashboardTableHeadClass}>Details</TableHead>
+                <TableHead className={dashboardTableHeadClass}>Description</TableHead>
                 <TableHead className={dashboardTableHeadClass}>Schedule</TableHead>
                 <TableHead className={dashboardTableHeadClass}>Status</TableHead>
                 <TableHead className={dashboardTableHeadClass}>Actions</TableHead>
@@ -332,40 +267,27 @@ export default function DiscountAdvertisementsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10">
+                  <TableCell colSpan={5} className="text-center py-10">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10">
-                    No campaigns found
+                  <TableCell colSpan={5} className="text-center py-10">
+                    No advertisements found
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((item) => (
                   <TableRow key={item.id} className={dashboardTableBodyRowClass}>
                     <TableCell className={dashboardTableCellClass}>
-                      <span className="inline-flex items-center gap-1 capitalize">
-                        {item.type === "discount" ? (
-                          <Percent className="w-4 h-4" />
-                        ) : (
-                          <Megaphone className="w-4 h-4" />
-                        )}
-                        {item.type}
+                      <span className="inline-flex items-center gap-2">
+                        <Megaphone className="w-4 h-4" />
+                        {item.title || "-"}
                       </span>
                     </TableCell>
                     <TableCell className={dashboardTableCellClass}>
-                      {item.title || "-"}
-                    </TableCell>
-                    <TableCell className={dashboardTableCellClass}>
-                      {item.type === "discount" ? (
-                        <span>
-                          {item.discountPercent}% off • {item.products?.length || 0} products
-                        </span>
-                      ) : (
-                        <span className="line-clamp-2">{item.description || "-"}</span>
-                      )}
+                      <span className="line-clamp-2">{item.description || "-"}</span>
                     </TableCell>
                     <TableCell className={dashboardTableCellClass}>
                       <div className="text-xs">
@@ -424,33 +346,19 @@ export default function DiscountAdvertisementsPage() {
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogTitle>{selected ? "Edit Campaign" : "Create Campaign"}</DialogTitle>
+          <DialogTitle>{selected ? "Edit Advertisement" : "Create Advertisement"}</DialogTitle>
           <DialogDescription>
-            Choose type first. Discount applies percentage off selected products for a time range.
-            Advertisement shows a PNG banner on the mobile homepage.
+            Upload a PNG banner for the mobile app homepage. Product discounts are managed from Menu Items.
           </DialogDescription>
 
           <div className="space-y-4 py-2">
-            <div>
-              <label className={formLabelClass}>Type</label>
-              <select
-                value={formType}
-                onChange={(e) => setFormType(e.target.value as CampaignType)}
-                className={formInputClass}
-                disabled={!!selected}
-              >
-                <option value="advertisement">Advertisement</option>
-                <option value="discount">Discount (Flash Sale)</option>
-              </select>
-            </div>
-
             <div>
               <label className={formLabelClass}>Title</label>
               <input
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
                 className={formInputClass}
-                placeholder={formType === "advertisement" ? "Fresh & Hot" : "Summer Flash Sale"}
+                placeholder="Fresh & Hot"
               />
             </div>
 
@@ -464,97 +372,46 @@ export default function DiscountAdvertisementsPage() {
               />
             </div>
 
-            {formType === "advertisement" && (
-              <>
-                <div>
-                  <label className={formLabelClass}>Banner Image (PNG only)</label>
-                  <input type="file" accept="image/png" onChange={handleImageUpload} />
-                  {formImage && (
-                    <div className="mt-3 rounded-lg overflow-hidden border border-zinc-200 dark:border-[#2a2a2a]">
-                      <img src={formImage} alt="Preview" className="w-full max-h-48 object-cover" />
-                    </div>
-                  )}
+            <div>
+              <label className={formLabelClass}>Banner Image (PNG only)</label>
+              <input type="file" accept="image/png" onChange={handleImageUpload} />
+              {formImage && (
+                <div className="mt-3 rounded-lg overflow-hidden border border-zinc-200 dark:border-[#2a2a2a]">
+                  <img src={formImage} alt="Preview" className="w-full max-h-48 object-cover" />
                 </div>
-                <div>
-                  <label className={formLabelClass}>URL (optional website link)</label>
-                  <input
-                    value={formUrl}
-                    onChange={(e) => setFormUrl(e.target.value)}
-                    className={formInputClass}
-                    placeholder="https://example.com/shop"
-                  />
-                </div>
-              </>
-            )}
+              )}
+            </div>
 
-            {formType === "discount" && (
-              <>
-                <div>
-                  <label className={formLabelClass}>Discount Percentage (%)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={formPercent}
-                    onChange={(e) => setFormPercent(e.target.value)}
-                    className={formInputClass}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className={formLabelClass}>Start Time</label>
-                    <input
-                      type="datetime-local"
-                      value={formStartAt}
-                      onChange={(e) => setFormStartAt(e.target.value)}
-                      className={formInputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className={formLabelClass}>End Time</label>
-                    <input
-                      type="datetime-local"
-                      value={formEndAt}
-                      onChange={(e) => setFormEndAt(e.target.value)}
-                      className={formInputClass}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className={formLabelClass}>Select Products</label>
-                  <input
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    className={`${formInputClass} mb-3`}
-                    placeholder="Search products..."
-                  />
-                  <div className="max-h-56 overflow-y-auto border border-zinc-200 dark:border-[#2a2a2a] rounded-lg divide-y divide-zinc-100 dark:divide-[#2a2a2a]">
-                    {filteredProducts.map((product) => (
-                      <label
-                        key={product.id}
-                        className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-[#1a1a1a]"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedProductIds.includes(product.id)}
-                          onChange={() => toggleProduct(product.id)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{product.name}</div>
-                          <div className="text-xs text-zinc-500">
-                            ${product.price.toFixed(2)}
-                            {product.category?.name ? ` • ${product.category.name}` : ""}
-                          </div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="text-xs text-zinc-500 mt-2">
-                    Selected: {selectedProductIds.length} product(s)
-                  </p>
-                </div>
-              </>
-            )}
+            <div>
+              <label className={formLabelClass}>URL (optional website link)</label>
+              <input
+                value={formUrl}
+                onChange={(e) => setFormUrl(e.target.value)}
+                className={formInputClass}
+                placeholder="https://example.com/shop"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className={formLabelClass}>Start Time (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={formStartAt}
+                  onChange={(e) => setFormStartAt(e.target.value)}
+                  className={formInputClass}
+                />
+              </div>
+              <div>
+                <label className={formLabelClass}>End Time (optional)</label>
+                <input
+                  type="datetime-local"
+                  value={formEndAt}
+                  onChange={(e) => setFormEndAt(e.target.value)}
+                  className={formInputClass}
+                />
+              </div>
+            </div>
 
             <label className="inline-flex items-center gap-2 text-sm">
               <input
@@ -579,9 +436,9 @@ export default function DiscountAdvertisementsPage() {
 
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent>
-          <DialogTitle>Delete Campaign</DialogTitle>
+          <DialogTitle>Delete Advertisement</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete &quot;{selected?.title || selected?.type}&quot;?
+            Are you sure you want to delete &quot;{selected?.title}&quot;?
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>

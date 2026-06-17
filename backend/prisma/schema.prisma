@@ -130,7 +130,7 @@ model menuitem {
   tax            Float         @default(0)
   discountType   String?
   discountValue  Float         @default(0)
-  imageUrl       String?       @db.Text
+  imageUrl       String?       @db.LongText
   isAvailable    Boolean       @default(true)
   isRecommended  Boolean       @default(false)
   options        Json?
@@ -383,6 +383,11 @@ model user {
   dateOfBirth DateTime?
   gender    String?
   avatarUrl String?    @db.LongText
+  authProvider String?  @default("local")
+  googleId     String?  @unique
+  facebookId   String?  @unique
+  fcmToken  String?    @db.Text
+  fcmTokenUpdatedAt DateTime?
   updatedAt DateTime   @default(now()) @updatedAt
   roleId    Int
   auditlog          auditlog[]
