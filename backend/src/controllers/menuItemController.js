@@ -105,6 +105,14 @@ export const createMenuItem = async (req, res) => {
     })
   } catch (error) {
     console.error('Create MenuItem Error:', error)
+
+    if (error.code === 'P2000' && error.meta?.column_name === 'imageUrl') {
+      return res.status(400).json({
+        success: false,
+        message: 'Image is too large. Use a smaller image (under 1MB recommended).',
+      })
+    }
+
     res.status(500).json({
       success: false,
       message: 'Failed to create menu item',
@@ -241,6 +249,14 @@ export const updateMenuItem = async (req, res) => {
     })
   } catch (error) {
     console.error('Update MenuItem Error:', error)
+
+    if (error.code === 'P2000' && error.meta?.column_name === 'imageUrl') {
+      return res.status(400).json({
+        success: false,
+        message: 'Image is too large. Use a smaller image (under 1MB recommended).',
+      })
+    }
+
     res.status(500).json({
       success: false,
       message: 'Failed to update menu item',

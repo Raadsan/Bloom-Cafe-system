@@ -123,6 +123,38 @@ export const authApi = {
     return { token, user: authUser };
   },
 
+  loginWithGoogle: async (payload: {
+    idToken: string;
+    audience?: "client" | "staff";
+  }): Promise<LoginResponse> => {
+    const res = await api.post("/auth/google", payload);
+    const { token, user } = res.data;
+    const authUser = mapAuthUser(user);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("token", token);
+      saveUserToStorage(authUser);
+    }
+
+    return { token, user: authUser };
+  },
+
+  loginWithFacebook: async (payload: {
+    accessToken: string;
+    audience?: "client" | "staff";
+  }): Promise<LoginResponse> => {
+    const res = await api.post("/auth/facebook", payload);
+    const { token, user } = res.data;
+    const authUser = mapAuthUser(user);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("token", token);
+      saveUserToStorage(authUser);
+    }
+
+    return { token, user: authUser };
+  },
+
   /** POS login — username + 4-digit PIN */
   posLogin: async (credentials: PosLoginCredentials): Promise<LoginResponse> => {
     const res = await api.post('/auth/pos-login', credentials);

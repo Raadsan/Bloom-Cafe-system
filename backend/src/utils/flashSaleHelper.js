@@ -1,5 +1,3 @@
-import prisma from '../config/db.js'
-
 export function isCampaignActive(record, now = new Date()) {
   if (!record?.isActive) return false
   if (record.startAt && new Date(record.startAt) > now) return false
@@ -14,81 +12,67 @@ export function computeDiscountedPrice(price, discountPercent) {
   return Math.round(discounted * 100) / 100
 }
 
-export async function getActiveFlashSaleMap() {
-  if (!prisma.discountAdvertisement?.findMany) {
-    return new Map()
+export function computeMenuItemDiscount(item) {
+  const price = Math.max(0, Number(item.price) || 0)
+  const value = Math.max(0, Number(item.discountValue) || 0)
+  const type = item.discountType
+
+  if (!type || value <= 0 || price <= 0) return null
+
+  let discountAmount = 0
+  let discountPercent = 0
+
+  if (type === 'percentage') {
+    discountPercent = Math.min(100, value)
+    discountAmount = price * (discountPercent / 100)
+  } else if (type === 'fixed') {
+    discountAmount = Math.min(price, value)
+    discountPercent = Math.round((discountAmount / price) * 100)
+  } else {
+    return null
   }
 
-  try {
-    const now = new Date()
-    const campaigns = await prisma.discountAdvertisement.findMany({
-      where: {
-        type: 'discount',
-        isActive: true,
-      },
-      include: {
-        products: {
-          select: { menuItemId: true },
-        },
-      },
-    })
+  if (discountAmount <= 0) return null
 
-    const map = new Map()
+  const salePrice = Math.round((price - discountAmount) * 100) / 100
 
-    for (const campaign of campaigns) {
-      if (!isCampaignActive(campaign, now)) continue
-
-      const pct = Math.min(100, Math.max(0, Number(campaign.discountPercent) || 0))
-      if (!pct) continue
-
-      for (const { menuItemId } of campaign.products) {
-        const existing = map.get(menuItemId)
-        if (!existing || pct > existing.discountPercent) {
-          map.set(menuItemId, {
-            discountPercent: pct,
-            campaignId: campaign.id,
-            startAt: campaign.startAt,
-            endAt: campaign.endAt,
-          })
-        }
-      }
-    }
-
-    return map
-  } catch (error) {
-    console.warn('Flash sale lookup skipped:', error.message)
-    return new Map()
+  return {
+    discountPercent,
+    originalPrice: price,
+    salePrice,
+    flashSale: {
+      discountPercent,
+      discountType: type,
+      discountValue: value,
+      source: 'menu_item',
+    },
   }
 }
 
-export function enrichMenuItemWithFlashSale(item, flashSaleMap) {
-  const flash = flashSaleMap.get(item.id)
-  if (!flash) {
+export function enrichMenuItemWithFlashSale(item) {
+  const discount = computeMenuItemDiscount(item)
+  if (!discount) {
     return {
       ...item,
       flashSale: null,
       originalPrice: item.price,
       salePrice: item.price,
+      discountPercent: null,
     }
   }
 
-  const salePrice = computeDiscountedPrice(item.price, flash.discountPercent)
-
   return {
     ...item,
-    flashSale: {
-      discountPercent: flash.discountPercent,
-      campaignId: flash.campaignId,
-      startAt: flash.startAt,
-      endAt: flash.endAt,
-    },
-    originalPrice: item.price,
-    salePrice,
-    discountPercent: flash.discountPercent,
+    ...discount,
   }
 }
 
 export async function enrichMenuItemsWithFlashSale(items) {
-  const flashSaleMap = await getActiveFlashSaleMap()
-  return items.map((item) => enrichMenuItemWithFlashSale(item, flashSaleMap))
+  return items.map((item) => enrichMenuItemWithFlashSale(item))
+}
+
+export function getDiscountedMenuItems(items) {
+  return items
+    .map((item) => enrichMenuItemWithFlashSale(item))
+    .filter((item) => item.flashSale != null && item.isAvailable !== false)
 }

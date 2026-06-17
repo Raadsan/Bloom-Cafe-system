@@ -5,6 +5,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SocketProvider } from "@/components/SocketProvider";
+import { GoogleAuthProviderWrapper } from "@/components/auth/GoogleAuthProviderWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -54,7 +55,9 @@ export default function RootLayout({
         >
           <SocketProvider>
             <TooltipProvider>
-              <ToastProvider>{children}</ToastProvider>
+              <GoogleAuthProviderWrapper>
+                <ToastProvider>{children}</ToastProvider>
+              </GoogleAuthProviderWrapper>
             </TooltipProvider>
           </SocketProvider>
         </ThemeProvider>

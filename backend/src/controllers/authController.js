@@ -12,6 +12,11 @@ function formatAuthUser(user) {
 }
 import bcrypt from 'bcryptjs'
 import generateToken from '../utils/generateToken.js'
+import {
+  verifyGoogleToken,
+  verifyFacebookToken,
+  loginOrRegisterWithSocial,
+} from '../utils/socialAuthService.js'
 
 const POS_LOGIN_ROLES = new Set(['pos', 'cashier', 'waiter', 'admin', 'manager'])
 
@@ -189,6 +194,8 @@ export const register = async (req, res) => {
     let { fullName, email, password, phone } = req.body
 
     email = email?.trim().toLowerCase()
+    fullName = fullName?.trim()
+    phone = phone?.trim() || null
 
     if (!fullName || !email || !password) {
       return res.status(400).json({ success: false, message: 'All fields are required' })
@@ -201,23 +208,23 @@ export const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Find default 'client' role (case-insensitive check or fallback)
-    let role = await prisma.role.findFirst({ 
-      where: { 
-        name: { equals: 'client' } 
-      } 
+    // Default role for app users
+    let role = await prisma.role.findFirst({
+      where: {
+        name: { equals: 'client' }
+      }
     })
-    
+
     if (!role) {
-      role = await prisma.role.findFirst({ 
-        where: { 
-          name: { equals: 'Client' } 
-        } 
+      role = await prisma.role.findFirst({
+        where: {
+          name: { equals: 'Client' }
+        }
       })
     }
 
     if (!role) {
-      return res.status(500).json({ success: false, message: 'Default Client role not found in system' })
+      return res.status(500).json({ success: false, message: 'Default client role not found in system' })
     }
 
     const user = await prisma.user.create({
@@ -238,13 +245,7 @@ export const register = async (req, res) => {
       success: true,
       message: 'Registration successful',
       token,
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        role: user.role.name
-      }
+      user: formatAuthUser(user)
     })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
@@ -257,7 +258,28 @@ export const updateProfile = async (req, res) => {
     const { fullName, email, phone, currentPassword, newPassword, address, dateOfBirth, gender, avatarUrl } = req.body
     const userId = req.user.id
 
-    const updateData = { fullName, email, phone }
+    const updateData = {}
+
+    if (fullName !== undefined) updateData.fullName = fullName
+    if (email !== undefined) updateData.email = email
+    if (phone !== undefined) {
+      const normalizedPhone = phone?.trim() || null
+      if (normalizedPhone) {
+        const phoneTaken = await prisma.user.findFirst({
+          where: {
+            phone: normalizedPhone,
+            NOT: { id: userId },
+          },
+        })
+        if (phoneTaken) {
+          return res.status(400).json({
+            success: false,
+            message: 'This phone number is already used by another account',
+          })
+        }
+      }
+      updateData.phone = normalizedPhone
+    }
 
     if (address !== undefined) updateData.address = address;
     if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
@@ -290,6 +312,16 @@ export const updateProfile = async (req, res) => {
       user: formatAuthUser(user)
     })
   } catch (error) {
+    if (error.code === 'P2002') {
+      const target = error.meta?.target
+      const field = Array.isArray(target) ? target.join(', ') : 'field'
+      return res.status(400).json({
+        success: false,
+        message: field.includes('phone')
+          ? 'This phone number is already used by another account'
+          : `This ${field} is already in use`,
+      })
+    }
     res.status(500).json({ success: false, message: error.message })
   }
 }
@@ -356,8 +388,13 @@ export const resetPassword = async (req, res) => {
 // LOGOUT
 export const logout = async (req, res) => {
   try {
-    // Log Logout Activity
     if (req.user) {
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: { fcmToken: null, fcmTokenUpdatedAt: null },
+      })
+      invalidateUserCache(req.user.id)
+
       await prisma.auditlog.create({
         data: {
           userId: req.user.id,
@@ -378,5 +415,161 @@ export const logout = async (req, res) => {
       success: false,
       message: 'Failed to logout'
     });
+  }
+}
+
+// SAVE FCM TOKEN (delivery app push notifications)
+export const updateFcmToken = async (req, res) => {
+  try {
+    const { fcmToken } = req.body
+
+    if (!fcmToken || typeof fcmToken !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'fcmToken is required',
+      })
+    }
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        fcmToken: fcmToken.trim(),
+        fcmTokenUpdatedAt: new Date(),
+      },
+    })
+    invalidateUserCache(req.user.id)
+
+    res.status(200).json({
+      success: true,
+      message: 'FCM token saved',
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// CLEAR FCM TOKEN (on logout from mobile app)
+export const clearFcmToken = async (req, res) => {
+  try {
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { fcmToken: null, fcmTokenUpdatedAt: null },
+    })
+    invalidateUserCache(req.user.id)
+
+    res.status(200).json({
+      success: true,
+      message: 'FCM token cleared',
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+function socialAuthErrorResponse(res, error) {
+  const code = error.message
+
+  if (code === 'NO_ACCOUNT') {
+    return res.status(404).json({
+      success: false,
+      message: 'No account found for this social login. Contact your administrator.',
+    })
+  }
+
+  if (code === 'STAFF_ONLY') {
+    return res.status(403).json({
+      success: false,
+      message: 'This login is for staff accounts only.',
+    })
+  }
+
+  if (code === 'EMAIL_REQUIRED') {
+    return res.status(400).json({
+      success: false,
+      message: 'Email permission is required for social sign in.',
+    })
+  }
+
+  if (code === 'INACTIVE') {
+    return res.status(403).json({
+      success: false,
+      message: 'User account is inactive',
+    })
+  }
+
+  if (code === 'CLIENT_ROLE_MISSING') {
+    return res.status(500).json({
+      success: false,
+      message: 'Default client role is missing in the system.',
+    })
+  }
+
+  if (code.includes('not configured')) {
+    return res.status(503).json({
+      success: false,
+      message: error.message,
+    })
+  }
+
+  return res.status(401).json({
+    success: false,
+    message: 'Social login failed',
+    error: error.message,
+  })
+}
+
+export const loginWithGoogle = async (req, res) => {
+  try {
+    const { idToken, audience = 'client' } = req.body
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google idToken is required',
+      })
+    }
+
+    const profile = await verifyGoogleToken(idToken)
+    const result = await loginOrRegisterWithSocial({
+      profile,
+      provider: 'google',
+      audience,
+    })
+
+    res.status(200).json({
+      success: true,
+      message: 'Google login successful',
+      ...result,
+    })
+  } catch (error) {
+    console.error('Google Login Error:', error)
+    return socialAuthErrorResponse(res, error)
+  }
+}
+
+export const loginWithFacebook = async (req, res) => {
+  try {
+    const { accessToken, audience = 'client' } = req.body
+    if (!accessToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Facebook accessToken is required',
+      })
+    }
+
+    const profile = await verifyFacebookToken(accessToken)
+    const result = await loginOrRegisterWithSocial({
+      profile,
+      provider: 'facebook',
+      audience,
+    })
+
+    res.status(200).json({
+      success: true,
+      message: 'Facebook login successful',
+      ...result,
+    })
+  } catch (error) {
+    console.error('Facebook Login Error:', error)
+    return socialAuthErrorResponse(res, error)
   }
 }
