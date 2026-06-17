@@ -25,10 +25,22 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
-      const isLoginPage = window.location.pathname === '/login';
+      const path = window.location.pathname;
+      const isLoginPage =
+        path === '/login' ||
+        path === '/login/pos' ||
+        path === '/pos' ||
+        path === '/pos/login';
+      const isPosRoute =
+        path.startsWith('/pos-') ||
+        path === '/pos-terminal' ||
+        path === '/ready-orders' ||
+        path === '/my-sales' ||
+        path === '/my-profile';
       if (!isLoginPage) {
         localStorage.removeItem('token');
-        window.location.href = '/login';
+        localStorage.removeItem('auth_user');
+        window.location.href = isPosRoute ? '/pos/login' : '/login';
       }
     }
     return Promise.reject(error);

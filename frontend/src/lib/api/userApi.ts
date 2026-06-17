@@ -4,6 +4,7 @@ export interface User {
   id: number;
   fullName: string;
   email: string;
+  username?: string | null;
   phone?: string;
   isActive: boolean;
   roleId: number;
@@ -14,10 +15,12 @@ export interface User {
 
 export interface CreateUserPayload {
   fullName: string;
-  email: string;
-  password: string;
+  email?: string;
+  password?: string;
   roleId: number;
   phone?: string;
+  username?: string;
+  posPin?: string;
 }
 
 export interface UpdateUserPayload {
@@ -27,6 +30,8 @@ export interface UpdateUserPayload {
   roleId?: number;
   phone?: string;
   isActive?: boolean;
+  username?: string | null;
+  posPin?: string | null;
 }
 
 const USERS_CACHE_KEY = 'users_list';

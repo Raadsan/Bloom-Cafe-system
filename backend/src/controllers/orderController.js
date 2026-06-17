@@ -1070,7 +1070,7 @@ export const createPosCheckout = async (req, res) => {
         discountValue: discountAmount > 0 ? parsedDiscountValue : 0,
         total: orderTotal,
         status: 'pending',
-        source: 'pos',
+        source: req.body.source || 'pos',
         orderitem: { create: orderItemsData },
         payment: {
           create: {
@@ -1087,36 +1087,40 @@ export const createPosCheckout = async (req, res) => {
       },
       include: {
         table: true,
-        payment: true,
-        orderitem: { include: { menuitem: { select: { id: true, name: true } } } },
+        orderitem: true,
       },
     })
-
-    if (order.tableId && !MOBILE_WALLET_METHODS.includes(method)) {
-      await prisma.table.update({
-        where: { id: order.tableId },
-        data: { status: 'active' },
-      })
-    }
-
-    await Promise.all([
-      notifyNewOrder(order, req.user?.id),
-      logAudit({
-        userId: req.user?.id,
-        action: 'Created',
-        entity: 'Order',
-        entityId: order.id,
-        description: `POS checkout order #${order.id}`,
-      }),
-    ])
 
     clearOrderListCache()
     emitPaymentSuccess(order)
 
     res.status(201).json({
       success: true,
-      data: { id: order.id, total: order.total, status: order.status },
+      data: {
+        id: order.id,
+        total: order.total,
+        subTotal: order.subTotal,
+        taxAmount: order.taxAmount,
+        status: order.status,
+      },
     })
+
+    void Promise.all([
+      order.tableId && !MOBILE_WALLET_METHODS.includes(method)
+        ? prisma.table.update({
+            where: { id: order.tableId },
+            data: { status: 'active' },
+          })
+        : Promise.resolve(),
+      notifyNewOrder(order, req.user?.id),
+      logAudit({
+        userId: req.user?.id,
+        action: 'Created',
+        entity: 'Order',
+        entityId: order.id,
+        description: `Checkout order #${order.id}`,
+      }),
+    ]).catch((err) => console.error('Post-checkout side effects:', err))
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }

@@ -5,8 +5,11 @@ import { Lock, Mail, ArrowRight, Store, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { authApi } from "@/lib/api/authApi";
+import { useSystemBranding } from "@/hooks/use-system-branding";
+import SystemBrandMark from "@/components/branding/SystemBrandMark";
 
 export default function LoginPage() {
+  const { branding } = useSystemBranding();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -38,9 +41,11 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error("Login caught error:", err);
       const message =
-        err.response?.data?.message ||
-        err.message ||
-        "Failed to login. Please try again.";
+        !err.response && err.message === "Network Error"
+          ? "Cannot connect to server. Make sure the backend is running on port 5000."
+          : err.response?.data?.message ||
+            err.message ||
+            "Failed to login. Please try again.";
       setError(message);
       showToast(message, "error");
     } finally {
@@ -58,8 +63,20 @@ export default function LoginPage() {
       {/* Login Card */}
       <div className="w-full max-w-md bg-card/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-border/50 p-8 relative z-10">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4 shadow-inner ring-1 ring-primary/20">
-            <Store className="w-8 h-8 text-primary" />
+          <div className="mb-5 flex h-28 w-full max-w-[300px] items-center justify-center overflow-visible">
+            {branding.systemLogoUrl ? (
+              <SystemBrandMark
+                logoUrl={branding.systemLogoUrl}
+                systemName={branding.systemName}
+                variant="plain"
+                fit="width"
+                className="h-24 w-auto max-w-[280px] scale-[1.25] origin-center object-contain"
+              />
+            ) : (
+              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center shadow-inner ring-1 ring-primary/20">
+                <Store className="w-8 h-8 text-primary" />
+              </div>
+            )}
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Welcome Back
@@ -154,18 +171,6 @@ export default function LoginPage() {
             </span>
           </Button>
         </form>
-
-        <div className="mt-8 pt-6 border-t border-border text-center">
-          <p className="text-sm text-muted-foreground">
-            Need an account?{" "}
-            <a
-              href="#"
-              className="text-primary font-medium hover:underline transition-all"
-            >
-              Contact Support
-            </a>
-          </p>
-        </div>
       </div>
     </div>
   );

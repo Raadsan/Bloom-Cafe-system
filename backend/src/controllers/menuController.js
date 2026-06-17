@@ -1,6 +1,6 @@
 import prisma from "../config/db.js";
 import { trackingController } from "./trackingController.js";
-import { clearPermissionCache } from "../middlewares/authMiddleware.js";
+import { clearPermissionCache, clearAuthCaches } from "../middlewares/authMiddleware.js";
 
 let roomsMenuEnsured = false;
 let createOrderMenuEnsured = false;
