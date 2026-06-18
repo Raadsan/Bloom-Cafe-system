@@ -1,7 +1,6 @@
 import prisma from '../config/db.js';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../utils/auditHelper.js';
-import { ensureDefaultRooms } from './roomController.js';
 
 function normalizeTableStatus(status) {
   return status === 'inactive' ? 'inactive' : 'active';
@@ -21,7 +20,7 @@ async function fixLegacyTableStatuses() {
 // CREATE TABLE
 export const createTable = async (req, res) => {
   try {
-    const { number, name, roomId, status } = req.body;
+    const { number, name, status } = req.body;
     const descriptionValue = Object.prototype.hasOwnProperty.call(req.body, 'description')
       ? (req.body.description == null ? null : String(req.body.description).trim() || null)
       : undefined;
@@ -30,21 +29,6 @@ export const createTable = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Table number is required',
-      });
-    }
-
-    if (!roomId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Room is required',
-      });
-    }
-
-    const room = await prisma.room.findUnique({ where: { id: Number(roomId) } });
-    if (!room) {
-      return res.status(404).json({
-        success: false,
-        message: 'Room not found',
       });
     }
 
@@ -66,14 +50,18 @@ export const createTable = async (req, res) => {
         number: Number(number),
         name: name || `Table ${number}`,
         description: descriptionValue !== undefined ? descriptionValue : null,
-        roomId: Number(roomId),
         qrCode,
         status: normalizeTableStatus(status || 'active'),
       },
-      include: { room: true },
     });
 
-    logAudit({ userId: req.user?.id, action: 'Created', entity: 'Table', entityId: table.id, description: `Created table #${table.number} in ${room.name}` });
+    logAudit({
+      userId: req.user?.id,
+      action: 'Created',
+      entity: 'Table',
+      entityId: table.id,
+      description: `Created table #${table.number}`,
+    });
 
     return res.status(201).json({
       success: true,
@@ -94,7 +82,7 @@ export const createTable = async (req, res) => {
 export const updateTable = async (req, res) => {
   try {
     const { id } = req.params;
-    const { number, name, roomId, status } = req.body;
+    const { number, name, status } = req.body;
     const descriptionValue = Object.prototype.hasOwnProperty.call(req.body, 'description')
       ? (req.body.description == null ? null : String(req.body.description).trim() || null)
       : undefined;
@@ -119,16 +107,6 @@ export const updateTable = async (req, res) => {
       });
     }
 
-    if (roomId) {
-      const room = await prisma.room.findUnique({ where: { id: Number(roomId) } });
-      if (!room) {
-        return res.status(404).json({
-          success: false,
-          message: 'Room not found',
-        });
-      }
-    }
-
     if (number && Number(number) !== existingTable.number) {
       const numberExists = await prisma.table.findUnique({
         where: { number: Number(number) },
@@ -148,13 +126,17 @@ export const updateTable = async (req, res) => {
         number: number ? Number(number) : existingTable.number,
         name: name !== undefined ? name : existingTable.name,
         description: descriptionValue !== undefined ? descriptionValue : existingTable.description,
-        roomId: roomId !== undefined ? Number(roomId) : existingTable.roomId,
         status: status !== undefined ? normalizeTableStatus(status) : existingTable.status,
       },
-      include: { room: true },
     });
 
-    logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Table', entityId: updatedTable.id, description: `Updated table #${updatedTable.number}` });
+    logAudit({
+      userId: req.user?.id,
+      action: 'Updated',
+      entity: 'Table',
+      entityId: updatedTable.id,
+      description: `Updated table #${updatedTable.number}`,
+    });
 
     return res.status(200).json({
       success: true,
@@ -209,7 +191,13 @@ export const deleteTable = async (req, res) => {
       where: { id: tableId },
     });
 
-    logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Table', entityId: tableId, description: `Deleted table #${existingTable.number}` });
+    logAudit({
+      userId: req.user?.id,
+      action: 'Deleted',
+      entity: 'Table',
+      entityId: tableId,
+      description: `Deleted table #${existingTable.number}`,
+    });
 
     return res.status(200).json({
       success: true,
@@ -228,19 +216,12 @@ export const deleteTable = async (req, res) => {
 // GET ALL TABLES
 export const getAllTables = async (req, res) => {
   try {
-    try {
-      await ensureDefaultRooms();
-    } catch (seedErr) {
-      console.warn('ensureDefaultRooms skipped:', seedErr.message);
-    }
-
     await fixLegacyTableStatuses();
 
     const tables = await prisma.table.findMany({
-      include: { room: true },
       orderBy: {
-        number: 'asc'
-      }
+        number: 'asc',
+      },
     });
 
     const normalized = tables.map((t) => ({
@@ -251,50 +232,49 @@ export const getAllTables = async (req, res) => {
     res.status(200).json({
       success: true,
       count: normalized.length,
-      data: normalized
+      data: normalized,
     });
-
   } catch (error) {
     console.error('Get Tables Error:', error);
 
     res.status(500).json({
       success: false,
       message: 'Failed to fetch tables',
-      error: error.message
+      error: error.message,
     });
   }
 };
 
 // GET TABLE BY QR CODE
 function extractQrCodeFromScan(value) {
-  if (!value) return value
+  if (!value) return value;
 
-  let decoded = decodeURIComponent(String(value).trim())
+  let decoded = decodeURIComponent(String(value).trim());
 
   try {
-    const uri = new URL(decoded)
-    const segments = uri.pathname.split('/').filter(Boolean)
-    const menuIndex = segments.indexOf('menu')
+    const uri = new URL(decoded);
+    const segments = uri.pathname.split('/').filter(Boolean);
+    const menuIndex = segments.indexOf('menu');
     if (menuIndex >= 0 && segments[menuIndex + 1]) {
-      return decodeURIComponent(segments[menuIndex + 1])
+      return decodeURIComponent(segments[menuIndex + 1]);
     }
   } catch (_) {
-    // Not a full URL — use raw value below.n
+    // Not a full URL — use raw value below.
   }
 
-  const marker = '/menu/'
-  const markerIndex = decoded.toLowerCase().indexOf(marker)
+  const marker = '/menu/';
+  const markerIndex = decoded.toLowerCase().indexOf(marker);
   if (markerIndex >= 0) {
-    decoded = decoded.slice(markerIndex + marker.length).split(/[?#]/)[0]
-    return decodeURIComponent(decoded.trim())
+    decoded = decoded.slice(markerIndex + marker.length).split(/[?#]/)[0];
+    return decodeURIComponent(decoded.trim());
   }
 
-  return decoded
+  return decoded;
 }
 
 export const getTableByQrCode = async (req, res) => {
   try {
-    const qrCode = extractQrCodeFromScan(req.params.qrCode)
+    const qrCode = extractQrCodeFromScan(req.params.qrCode);
 
     if (!qrCode) {
       return res.status(400).json({
@@ -305,7 +285,6 @@ export const getTableByQrCode = async (req, res) => {
 
     const table = await prisma.table.findFirst({
       where: { qrCode: qrCode },
-      include: { room: true },
     });
 
     if (!table) {

@@ -25,6 +25,7 @@ import express from 'express'
 import {
   createMenuItem,
   getAllMenuItems,
+  getPosMenuCatalog,
   getMenuItemsByCategory,
   updateMenuItem,
   deleteMenuItem,
@@ -38,6 +39,7 @@ const router = express.Router()
 router.post('/', protect, checkPermission('/menus', 'canAdd'), createMenuItem)
 
 // Get all menu items
+router.get('/pos-catalog', protect, getPosMenuCatalog)
 router.get('/all', getAllMenuItems)
 
 // Get menu items by category

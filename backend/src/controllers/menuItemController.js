@@ -2,6 +2,16 @@ import prisma from '../config/db.js'
 import { logAudit } from '../utils/auditHelper.js'
 import { enrichMenuItemsWithFlashSale } from '../utils/flashSaleHelper.js'
 
+const posCatalogCache = { data: null, at: 0 }
+const POS_CATALOG_TTL_MS = 60 * 1000
+
+function sanitizeMenuImageUrl(url) {
+  if (!url || typeof url !== 'string') return null
+  if (url.startsWith('data:')) return null
+  if (url.length > 600) return null
+  return url
+}
+
 function normalizeDiscountInput(discountType, discountValue, price) {
   const value = Math.max(0, Number(discountValue) || 0)
   const basePrice = Math.max(0, Number(price) || 0)
@@ -97,6 +107,7 @@ export const createMenuItem = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Created', entity: 'MenuItem', entityId: item.id, description: `Created menu item "${item.name}"` })
+    invalidatePosMenuCatalogCache()
 
     return res.status(201).json({
       success: true,
@@ -119,6 +130,64 @@ export const createMenuItem = async (req, res) => {
       error: error.message
     })
   }
+}
+
+// GET POS MENU CATALOG (lightweight — no descriptions / base64 images)
+export const getPosMenuCatalog = async (req, res) => {
+  try {
+    const now = Date.now()
+    if (posCatalogCache.data && now - posCatalogCache.at < POS_CATALOG_TTL_MS) {
+      return res.status(200).json({
+        success: true,
+        count: posCatalogCache.data.length,
+        data: posCatalogCache.data,
+      })
+    }
+
+    const items = await prisma.menuitem.findMany({
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        tax: true,
+        discountType: true,
+        discountValue: true,
+        isAvailable: true,
+        isRecommended: true,
+        categoryId: true,
+        options: true,
+        imageUrl: true,
+      },
+      orderBy: { id: 'asc' },
+    })
+
+    const slim = items.map((item) => ({
+      ...item,
+      imageUrl: sanitizeMenuImageUrl(item.imageUrl),
+    }))
+
+    const enriched = await enrichMenuItemsWithFlashSale(slim)
+    posCatalogCache.data = enriched
+    posCatalogCache.at = now
+
+    res.status(200).json({
+      success: true,
+      count: enriched.length,
+      data: enriched,
+    })
+  } catch (error) {
+    console.error('Get POS Menu Catalog Error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch POS menu catalog',
+      error: error.message,
+    })
+  }
+}
+
+export const invalidatePosMenuCatalogCache = () => {
+  posCatalogCache.data = null
+  posCatalogCache.at = 0
 }
 
 // GET ALL MENU ITEMS
@@ -241,6 +310,7 @@ export const updateMenuItem = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'MenuItem', entityId: updated.id, description: `Updated menu item "${updated.name}"` })
+    invalidatePosMenuCatalogCache()
 
     return res.status(200).json({
       success: true,
@@ -283,6 +353,7 @@ export const deleteMenuItem = async (req, res) => {
     await prisma.menuitem.delete({ where: { id: itemId } })
 
     logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'MenuItem', entityId: itemId, description: `Deleted menu item "${existing.name}"` })
+    invalidatePosMenuCatalogCache()
 
     return res.status(200).json({
       success: true,
@@ -305,7 +376,6 @@ export const getPublicMenuByQrCode = async (req, res) => {
 
     const table = await prisma.table.findUnique({
       where: { qrCode },
-      include: { room: { select: { id: true, name: true } } },
     })
 
     if (!table) {

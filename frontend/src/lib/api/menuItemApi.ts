@@ -1,5 +1,9 @@
 import api from './axios';
 
+const POS_MENU_TTL_MS = 2 * 60 * 1000;
+let posMenuCache: { data: MenuItem[]; at: number } | null = null;
+let posMenuInflight: Promise<MenuItem[]> | null = null;
+
 export interface MenuItem {
   id: number;
   name: string;
@@ -76,6 +80,35 @@ export const menuItemApi = {
     return res.data.data || [];
   },
 
+  /** Lightweight catalog for POS — cached, no heavy fields. */
+  getPosMenuCatalog: async (forceRefresh = false): Promise<MenuItem[]> => {
+    const now = Date.now();
+    if (!forceRefresh && posMenuCache && now - posMenuCache.at < POS_MENU_TTL_MS) {
+      return posMenuCache.data;
+    }
+    if (posMenuInflight && !forceRefresh) return posMenuInflight;
+
+    posMenuInflight = api
+      .get('/menu-items/pos-catalog')
+      .then((res) => {
+        const data: MenuItem[] = res.data.data || [];
+        posMenuCache = { data, at: Date.now() };
+        posMenuInflight = null;
+        return data;
+      })
+      .catch((err) => {
+        posMenuInflight = null;
+        throw err;
+      });
+
+    return posMenuInflight;
+  },
+
+  clearPosMenuCache: () => {
+    posMenuCache = null;
+    posMenuInflight = null;
+  },
+
   getMenuItemsByCategory: async (categoryId: number): Promise<MenuItem[]> => {
     const res = await api.get(`/menu-items/category/${categoryId}`);
     return res.data.data || [];
@@ -110,7 +143,6 @@ export interface PublicMenuTable {
   id: number;
   number: number;
   name?: string | null;
-  room?: { id: number; name: string } | null;
 }
 
 export interface PublicMenuData {

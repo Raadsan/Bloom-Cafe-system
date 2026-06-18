@@ -26,23 +26,37 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchAllData = async () => {
       try {
-        // 1. Fetch user first to determine role
-        const currentUser = await authApi.getMe();
+        // 1. Use cached user when available for faster first paint
+        const currentUser = authApi.getCachedUser() ?? (await authApi.getMe());
         setUser(currentUser);
         
         const role = currentUser?.role?.toLowerCase() || 'admin';
         const isAdminOrManager = role === 'admin' || role === 'manager';
         const isWaiter = role === 'waiter';
+        const isKitchen = role === 'kitchen';
 
-        // 2. Conditionally fetch data based on role to avoid 403 Forbidden errors
-        const promises: Promise<any>[] = [
-          orderApi.getAllOrders(isWaiter ? { onlyMine: true } : undefined),
-        ];
-        
+        const promises: Promise<any>[] = [];
+
         if (isAdminOrManager) {
-          promises.push(reportApi.getDashboardSummary());
+          promises.push(
+            orderApi.getAllOrders({ limit: 10 }),
+            reportApi.getDashboardSummary()
+          );
+        } else if (isWaiter) {
+          promises.push(
+            orderApi.getAllOrders({ onlyMine: true, limit: 50 }),
+            Promise.resolve({ data: null })
+          );
+        } else if (isKitchen) {
+          promises.push(
+            orderApi.getAllOrders({ limit: 80 }),
+            Promise.resolve({ data: null })
+          );
         } else {
-          promises.push(Promise.resolve({ data: null })); // mock for non-admins
+          promises.push(
+            orderApi.getAllOrders({ limit: 20 }),
+            Promise.resolve({ data: null })
+          );
         }
 
         const [ordersRes, summaryRes] = await Promise.all(promises);

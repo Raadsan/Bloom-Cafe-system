@@ -29,7 +29,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 import {
@@ -94,7 +93,6 @@ export default function MySalesPage() {
       <div className={cn(pageHeaderWrapperClass, "flex flex-col sm:flex-row sm:items-center justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>My Sales Analytics</h1>
-          <p className={pageHeaderSubtitleClass}>Detailed tracking of your personal sales and performance.</p>
         </div>
         <div className="flex items-center gap-3">
           <Button onClick={fetchMyOrders} variant="outline" className="h-10 border-zinc-200 text-zinc-600 rounded-xl shadow-sm font-bold px-4 hover:bg-zinc-50 flex items-center gap-2 text-xs uppercase tracking-widest">

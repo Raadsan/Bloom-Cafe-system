@@ -38,7 +38,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   actionBtnView,
   actionBtnEdit,
@@ -186,7 +185,6 @@ export default function ClientsPage() {
       {/* Page Header: Outside the box */}
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Client Management</h1>
-        <p className={pageHeaderSubtitleClass}>View and manage customer data, loyalty points, and purchase history.</p>
       </div>
 
       {/* Main Container Box */}

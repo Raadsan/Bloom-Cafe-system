@@ -17,17 +17,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { orderApi, Order } from "@/lib/api/orderApi";
+import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { isKitchenPendingStatus } from "@/lib/kitchen-order-utils";
 import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
 import { matchesReadyAudience } from "@/lib/order-type-utils";
 import OrderQueueCard from "@/components/orders/OrderQueueCard";
+import KitchenOrderDetailDialog from "@/components/orders/KitchenOrderDetailDialog";
 import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 
@@ -61,15 +62,23 @@ function matchesTab(order: Order, tab: PosQueueTab) {
 export default function PosOrdersQueueView() {
   const { showToast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<PosQueueTab>("pending");
   const [servingId, setServingId] = useState<number | null>(null);
+  const [preparingId, setPreparingId] = useState<number | null>(null);
+  const [readyingId, setReadyingId] = useState<number | null>(null);
+  const [viewOrderId, setViewOrderId] = useState<number | null>(null);
   const [confirmOrder, setConfirmOrder] = useState<Order | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const fetchOrders = useCallback(async (force = false) => {
     try {
-      const data = await orderApi.getAllOrders({ posQueue: true }, force);
+      const [data, items] = await Promise.all([
+        orderApi.getAllOrders({ posQueue: true }, force),
+        menuItemApi.getAllMenuItems(),
+      ]);
+      setMenuItems(items || []);
       setOrders(
         (data || [])
           .filter(order => matchesReadyAudience(order, "pos"))
@@ -111,6 +120,45 @@ export default function PosOrdersQueueView() {
     [orders, activeTab]
   );
 
+  const viewOrder = useMemo(
+    () => (viewOrderId ? orders.find(o => o.id === viewOrderId) ?? null : null),
+    [orders, viewOrderId]
+  );
+
+  const handleStartPreparing = async (order: Order) => {
+    setPreparingId(order.id);
+    try {
+      const updated = await orderApi.updateStatus(order.id, "preparing");
+      setOrders(prev => prev.map(o => (o.id === order.id ? updated : o)));
+      showToast(`Order #${order.id} is now preparing`, "success");
+      setActiveTab("preparing");
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || "Failed to start preparing";
+      showToast(message, "error");
+    } finally {
+      setPreparingId(null);
+    }
+  };
+
+  const handleMarkReady = async (order: Order) => {
+    setReadyingId(order.id);
+    try {
+      const updated = await orderApi.updateStatus(order.id, "ready");
+      setOrders(prev => prev.map(o => (o.id === order.id ? updated : o)));
+      showToast(`Order #${order.id} is ready`, "success");
+      setActiveTab("ready");
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || "Failed to mark order ready";
+      showToast(message, "error");
+    } finally {
+      setReadyingId(null);
+    }
+  };
+
   const handleMarkServed = async () => {
     if (!confirmOrder) return;
     setServingId(confirmOrder.id);
@@ -137,11 +185,11 @@ export default function PosOrdersQueueView() {
     },
     preparing: {
       title: "Nothing preparing",
-      hint: "Orders being cooked will show here.",
+      hint: "Start preparing from the Pending tab.",
     },
     ready: {
       title: "No orders ready yet",
-      hint: "When kitchen marks orders ready, they appear here.",
+      hint: "Mark orders ready from the Preparing tab.",
     },
   }[activeTab];
 
@@ -152,9 +200,6 @@ export default function PosOrdersQueueView() {
       <div className={cn(pageHeaderWrapperClass, "flex flex-col sm:flex-row sm:items-center justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Order Queue</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Takeaway and delivery — pending, preparing, and ready.
-          </p>
         </div>
         <div className="flex items-center gap-2 text-[12px] text-zinc-500 uppercase tracking-wider font-medium">
           <ClipboardList className="size-4 text-primary" />
@@ -220,8 +265,17 @@ export default function PosOrdersQueueView() {
               <OrderQueueCard
                 key={order.id}
                 order={order}
+                showPrepareAction={
+                  activeTab === "pending" && isKitchenPendingStatus(order.status || "pending")
+                }
+                showReadyAction={activeTab === "preparing"}
                 showServedAction={activeTab === "ready"}
                 isActionLoading={servingId === order.id}
+                isPrepareLoading={preparingId === order.id}
+                isReadyLoading={readyingId === order.id}
+                onViewOrder={() => setViewOrderId(order.id)}
+                onStartPreparing={() => handleStartPreparing(order)}
+                onMarkReady={() => handleMarkReady(order)}
                 onMarkServed={() => {
                   setConfirmOrder(order);
                   setIsConfirmOpen(true);
@@ -293,6 +347,26 @@ export default function PosOrdersQueueView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <KitchenOrderDetailDialog
+        order={viewOrder}
+        menuItems={menuItems}
+        open={viewOrderId !== null}
+        onOpenChange={open => {
+          if (!open) setViewOrderId(null);
+        }}
+        onOrderUpdated={async updated => {
+          setOrders(prev => prev.map(o => (o.id === updated.id ? updated : o)));
+        }}
+        onStartedPreparing={() => {
+          setActiveTab("preparing");
+          setViewOrderId(null);
+        }}
+        onMarkedReady={() => {
+          setActiveTab("ready");
+          setViewOrderId(null);
+        }}
+      />
     </div>
   );
 }

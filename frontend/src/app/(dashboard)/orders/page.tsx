@@ -36,7 +36,6 @@ import {
 } from "@/components/ui/dialog";
 import { orderApi, Order, OrderStatus } from "@/lib/api/orderApi";
 import { tableApi, Table as RestaurantTable } from "@/lib/api/tableApi";
-import { roomApi, Room } from "@/lib/api/roomApi";
 import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
 import { customerApi, Customer } from "@/lib/api/customerApi";
@@ -50,7 +49,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   actionBtnEdit,
   actionBtnDelete,
@@ -59,6 +57,7 @@ import {
   btnCreateSubmit,
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
+import { isKitchenPendingStatus } from "@/lib/kitchen-order-utils";
 import KitchenOrdersView from "@/components/orders/KitchenOrdersView";
 import OrdersHistoryPanel from "@/components/orders/OrdersHistoryPanel";
 import { onDebouncedEvent, ORDERS_CHANGED, OrderSocketPayload } from "@/lib/live-updates";
@@ -116,13 +115,12 @@ const ORDER_PAYMENT_METHODS: {
 
 function getOrderLocationLabel(
   orderType: OrderType,
-  room: Room | null,
   table: RestaurantTable | null,
   deliveryStreet: string,
   deliveryDistrict: string
 ): string | undefined {
   if (orderType === "dine-in" && table) {
-    return room ? `${room.name} · Table ${table.number}` : `Table ${table.number}`;
+    return `Table ${table.number}`;
   }
   if (orderType === "delivery" && deliveryStreet.trim()) {
     return deliveryDistrict.trim()
@@ -221,6 +219,8 @@ function ReceiptBody({
 }
 const LIVE_STATUSES = ["pending", "preparing", "ready"] as const;
 const HISTORY_STATUSES = ["paid", "served", "cancelled"] as const;
+type OrderViewTab = "pending" | "preparing" | "ready" | "history";
+const ORDER_VIEW_TABS: OrderViewTab[] = ["pending", "preparing", "ready", "history"];
 
 function isLiveStatus(status: OrderStatus) {
   return (LIVE_STATUSES as readonly OrderStatus[]).includes(status);
@@ -229,6 +229,43 @@ function isLiveStatus(status: OrderStatus) {
 function isHistoryStatus(status: OrderStatus) {
   return (HISTORY_STATUSES as readonly OrderStatus[]).includes(status);
 }
+
+function matchesOrderViewTab(status: OrderStatus, tab: OrderViewTab) {
+  if (tab === "pending") return isKitchenPendingStatus(status) || status === "held";
+  if (tab === "preparing") return status === "preparing";
+  if (tab === "ready") return status === "ready";
+  return isHistoryStatus(status);
+}
+
+const VIEW_TAB_CONFIG: Record<
+  OrderViewTab,
+  { label: string; sectionTitle: string; emptyTitle: string; emptyHint: string }
+> = {
+  pending: {
+    label: "Pending",
+    sectionTitle: "Pending Orders",
+    emptyTitle: "No pending orders",
+    emptyHint: "New orders will appear here.",
+  },
+  preparing: {
+    label: "Preparing",
+    sectionTitle: "Preparing Orders",
+    emptyTitle: "Nothing preparing",
+    emptyHint: "Orders being prepared will show here.",
+  },
+  ready: {
+    label: "Ready",
+    sectionTitle: "Ready Orders",
+    emptyTitle: "No orders ready",
+    emptyHint: "Orders marked ready will appear here.",
+  },
+  history: {
+    label: "History",
+    sectionTitle: "Past Orders",
+    emptyTitle: "No past orders",
+    emptyHint: "Completed and cancelled orders appear here.",
+  },
+};
 
 const STATUS_CONFIG: Record<
   OrderStatus,
@@ -291,11 +328,6 @@ function getOrderTypeLabel(order: Order) {
   return "Takeaway";
 }
 
-function getTableRoomId(table: RestaurantTable): number | null {
-  const id = table.roomId ?? table.room?.id;
-  return id != null ? Number(id) : null;
-}
-
 function isTableSelectable(table: RestaurantTable) {
   return table.status !== "inactive";
 }
@@ -303,10 +335,7 @@ function isTableSelectable(table: RestaurantTable) {
 function getOrderLocation(order: Order): string | null {
   const type = order.orderType || (order.table ? "dine-in" : "takeaway");
   if (type === "dine-in" && order.table) {
-    const roomName = order.table.room?.name;
-    return roomName
-      ? `${roomName} · Table ${order.table.number}`
-      : `Table ${order.table.number}`;
+    return `Table ${order.table.number}`;
   }
   if (type === "delivery" && order.address) {
     const parts = [order.address.street, order.address.district].filter(Boolean);
@@ -321,11 +350,10 @@ export default function AllOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [viewTab, setViewTab] = useState<"live" | "history">("live");
+  const [viewTab, setViewTab] = useState<OrderViewTab>("pending");
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -353,7 +381,6 @@ export default function AllOrdersPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | "">("");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
-  const [selectedRoomId, setSelectedRoomId] = useState<number | "">("");
   const [formTableId, setFormTableId] = useState<number | "">("");
   const [deliveryStreet, setDeliveryStreet] = useState("");
   const [deliveryDistrict, setDeliveryDistrict] = useState("");
@@ -383,7 +410,7 @@ export default function AllOrdersPage() {
   // fetch data
   const fetchOrders = useCallback(async (forceRefresh = false) => {
     try {
-      const data = await orderApi.getAllOrders(undefined, forceRefresh);
+      const data = await orderApi.getAllOrders({ limit: 100 }, forceRefresh);
       setOrders(data || []);
     } catch (err) {
       console.error("Failed to fetch orders", err);
@@ -443,25 +470,21 @@ export default function AllOrdersPage() {
     }
   };
 
-  const fetchRooms = async () => {
-    try {
-      const data = await roomApi.getAllRooms();
-      setRooms((data || []).filter(r => r.isActive));
-    } catch (err) {
-      console.error("Failed to fetch rooms", err);
-    }
-  };
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const tab = new URLSearchParams(window.location.search).get("tab");
-    if (tab === "history") setViewTab("history");
+    if (tab === "live") {
+      setViewTab("pending");
+      return;
+    }
+    if (tab && ORDER_VIEW_TABS.includes(tab as OrderViewTab)) {
+      setViewTab(tab as OrderViewTab);
+    }
   }, []);
 
   useEffect(() => {
     fetchOrders();
     fetchTables();
-    fetchRooms();
     fetchMenuItems();
     fetchCategories();
     fetchCustomers();
@@ -494,7 +517,6 @@ export default function AllOrdersPage() {
     setSelectedCustomerId("");
     setGuestName("");
     setGuestPhone("");
-    setSelectedRoomId("");
     setFormTableId("");
     setDeliveryStreet("");
     setDeliveryDistrict("");
@@ -527,13 +549,6 @@ export default function AllOrdersPage() {
       setGuestPhone(order.customerPhone || "");
     }
 
-    const tableRecord = tables.find(t => t.id === (order.tableId ?? order.table?.id));
-    const roomId =
-      order.table?.room?.id ??
-      tableRecord?.roomId ??
-      tableRecord?.room?.id ??
-      "";
-    setSelectedRoomId(roomId ? Number(roomId) : "");
     setFormTableId(order.tableId ?? order.table?.id ?? "");
 
     if (order.address) {
@@ -556,17 +571,12 @@ export default function AllOrdersPage() {
     setSelectedCategoryId("");
   };
 
-  const roomTables = useMemo(() => {
-    if (!selectedRoomId) return [];
-    const roomId = Number(selectedRoomId);
-    return tables
-      .filter(t => isTableSelectable(t) && getTableRoomId(t) === roomId)
-      .sort((a, b) => a.number - b.number);
-  }, [tables, selectedRoomId]);
-
-  const selectedRoom = useMemo(
-    () => rooms.find(r => r.id === selectedRoomId) ?? null,
-    [rooms, selectedRoomId]
+  const selectableTables = useMemo(
+    () =>
+      tables
+        .filter(t => isTableSelectable(t))
+        .sort((a, b) => a.number - b.number),
+    [tables]
   );
 
   const selectedTable = useMemo(
@@ -591,7 +601,6 @@ export default function AllOrdersPage() {
 
   const handleOrderTypeChange = (type: OrderType) => {
     setOrderType(type);
-    setSelectedRoomId("");
     setFormTableId("");
     setDeliveryStreet("");
     setDeliveryDistrict("");
@@ -717,10 +726,6 @@ export default function AllOrdersPage() {
       return false;
     }
     if (orderType === "dine-in") {
-      if (!selectedRoomId) {
-        showToast("Please select a room", "error");
-        return false;
-      }
       if (!formTableId) {
         showToast("Please select a table", "error");
         return false;
@@ -769,7 +774,6 @@ export default function AllOrdersPage() {
 
     const locationLabel = getOrderLocationLabel(
       orderType,
-      selectedRoom,
       selectedTable,
       deliveryStreet,
       deliveryDistrict
@@ -843,12 +847,12 @@ export default function AllOrdersPage() {
     }
   };
 
+  const isActiveOrdersTab = viewTab !== "history";
+
   // search / tab filter
   const filtered = useMemo(() => {
     return orders.filter(o => {
-      const matchesTab = viewTab === "live"
-        ? isLiveStatus(o.status)
-        : isHistoryStatus(o.status);
+      const matchesTab = matchesOrderViewTab(o.status, viewTab);
       const matchesSearch =
         search === "" ||
         String(o.id).includes(search) ||
@@ -995,7 +999,7 @@ export default function AllOrdersPage() {
               <Eye className="size-4" />
               View
             </Button>
-            {viewTab === "live" && canEditOrder && (
+            {isActiveOrdersTab && canEditOrder && (
               <Button
                 type="button"
                 variant="ghost"
@@ -1027,14 +1031,23 @@ export default function AllOrdersPage() {
 
   // stats for tab buttons
   const stats = useMemo(() => {
-    const liveCount = orders.filter(o => isLiveStatus(o.status)).length;
-    const historyCount = isWaiter
-      ? historyOrders.length
-      : orders.filter(o => isHistoryStatus(o.status)).length;
+    const tabCounts = ORDER_VIEW_TABS.reduce(
+      (acc, tab) => {
+        if (tab === "history") {
+          acc[tab] = isWaiter
+            ? historyOrders.length
+            : orders.filter(o => isHistoryStatus(o.status)).length;
+        } else {
+          acc[tab] = orders.filter(o => matchesOrderViewTab(o.status, tab)).length;
+        }
+        return acc;
+      },
+      {} as Record<OrderViewTab, number>
+    );
     const todayRevenue = orders
       .filter(o => o.status === "paid" || o.status === "served")
       .reduce((sum, o) => sum + o.total, 0);
-    return { liveCount, historyCount, todayRevenue };
+    return { tabCounts, todayRevenue };
   }, [orders, historyOrders, isWaiter]);
 
   if (isKitchen) {
@@ -1055,12 +1068,9 @@ export default function AllOrdersPage() {
       <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-center justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Orders Management</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Manage active floor operations and historical transactions.
-          </p>
         </div>
         <div className="flex items-center gap-3">
-          {viewTab === "live" && (
+          {isActiveOrdersTab && (
           <div className="relative w-80 group">
             <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
             <input
@@ -1072,7 +1082,7 @@ export default function AllOrdersPage() {
             />
           </div>
           )}
-          {viewTab === "live" && canCreateOrder && (
+          {isActiveOrdersTab && canCreateOrder && (
             <Button onClick={openCreateModal} className={btnCreatePage}>
               <Plus className="size-4" />
               Create Order
@@ -1083,21 +1093,17 @@ export default function AllOrdersPage() {
 
       {/* Tab Switch + section header */}
       <div className="px-4 mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex gap-2">
-          <Button
-            variant={viewTab === "live" ? "default" : "outline"}
-            onClick={() => setViewTab("live")}
-            className="rounded-full h-10 px-5"
-          >
-            Live ({stats.liveCount})
-          </Button>
-          <Button
-            variant={viewTab === "history" ? "default" : "outline"}
-            onClick={() => setViewTab("history")}
-            className="rounded-full h-10 px-5"
-          >
-            History ({stats.historyCount})
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          {ORDER_VIEW_TABS.map(tab => (
+            <Button
+              key={tab}
+              variant={viewTab === tab ? "default" : "outline"}
+              onClick={() => setViewTab(tab)}
+              className="rounded-full h-10 px-5"
+            >
+              {VIEW_TAB_CONFIG[tab].label} ({stats.tabCounts[tab]})
+            </Button>
+          ))}
         </div>
         {/* {stats.todayRevenue > 0 && viewTab === "live" && (
           <p className="text-[12px] text-zinc-500 font-medium">
@@ -1123,7 +1129,7 @@ export default function AllOrdersPage() {
       <div className="px-4 py-2">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-lg font-bold text-[#1e293b]">Active Orders</h2>
+            <h2 className="text-lg font-bold text-[#1e293b]">{VIEW_TAB_CONFIG[viewTab].sectionTitle}</h2>
             <span className="px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 text-xs font-semibold">
               {filtered.length}
             </span>
@@ -1150,8 +1156,8 @@ export default function AllOrdersPage() {
         ) : paginated.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-center text-zinc-500 bg-white rounded-2xl border border-zinc-100">
             <PackageOpen className="size-14 text-zinc-200" />
-            <p className="mt-4 text-sm font-semibold text-zinc-600">No orders found</p>
-            <p className="text-xs text-zinc-400 mt-1">Try another tab or create a new order</p>
+            <p className="mt-4 text-sm font-semibold text-zinc-600">{VIEW_TAB_CONFIG[viewTab].emptyTitle}</p>
+            <p className="text-xs text-zinc-400 mt-1">{VIEW_TAB_CONFIG[viewTab].emptyHint}</p>
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -1164,7 +1170,7 @@ export default function AllOrdersPage() {
       )}
 
       {/* Pagination — live tab only */}
-      {viewTab === "live" && (
+      {isActiveOrdersTab && (
       <div className="flex items-center justify-between px-4 py-3 mt-2 text-xs text-zinc-400">
         <div>
           {filtered.length === 0
@@ -1517,41 +1523,17 @@ export default function AllOrdersPage() {
                 <h3 className="text-[11px] font-black uppercase tracking-widest text-zinc-400">Location</h3>
 
                 {orderType === "dine-in" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-[#1E293B]">Room *</label>
-                      <select
-                        value={selectedRoomId}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setSelectedRoomId(val ? Number(val) : "");
-                          setFormTableId("");
-                        }}
-                        className={formSelectClass}
-                        required
-                      >
-                        <option value="">Select a room</option>
-                        {rooms.map(room => (
-                          <option key={room.id} value={room.id}>
-                            {room.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
+                  <div className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-[#1E293B]">Table *</label>
                       <select
                         value={formTableId}
                         onChange={e => setFormTableId(e.target.value ? Number(e.target.value) : "")}
                         className={formSelectClass}
-                        disabled={!selectedRoomId}
                         required
                       >
-                        <option value="">
-                          {selectedRoomId ? "Select a table" : "Select a room first"}
-                        </option>
-                        {roomTables.map(table => (
+                        <option value="">Select a table</option>
+                        {selectableTables.map(table => (
                           <option key={table.id} value={table.id}>
                             {table.name || `Table ${table.number}`}
                           </option>
@@ -1560,10 +1542,10 @@ export default function AllOrdersPage() {
                     </div>
 
                     {selectedTable && (
-                      <div className="sm:col-span-2 rounded-lg border border-zinc-100 bg-zinc-50 p-3 text-sm">
+                      <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-3 text-sm">
                         <p className="text-[10px] font-bold uppercase text-zinc-400 mb-1">Table details</p>
                         <p className="font-semibold text-zinc-800">
-                          {selectedRoom?.name} · Table {selectedTable.number}
+                          Table {selectedTable.number}
                           {selectedTable.name ? ` (${selectedTable.name})` : ""}
                         </p>
                         {selectedTable.description && (

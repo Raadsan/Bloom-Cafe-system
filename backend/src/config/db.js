@@ -6,14 +6,13 @@ function getDatabaseUrl() {
   const url = process.env.DATABASE_URL || '';
   if (!url) return url;
 
-  // Remote/shared MySQL often has very low max_connections.
-  // Keep the dev pool tiny so nodemon restarts do not exhaust the server.
   const isDev = process.env.NODE_ENV !== 'production';
-  const defaultLimit = isDev ? '1' : '5';
+  const defaultLimit = process.env.DATABASE_POOL_LIMIT || (isDev ? '8' : '10');
 
   const params = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
   if (!params.has('connection_limit')) params.set('connection_limit', defaultLimit);
-  if (!params.has('pool_timeout')) params.set('pool_timeout', '30');
+  if (!params.has('pool_timeout')) params.set('pool_timeout', '60');
+  if (!params.has('connect_timeout')) params.set('connect_timeout', '30');
 
   const base = url.split('?')[0];
   const query = params.toString();

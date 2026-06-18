@@ -1,16 +1,14 @@
-import { pageHeaderSubtitleClass, pageHeaderTitleClass, pageHeaderWrapperClass } from "@/lib/dashboard-ui";
+import { pageHeaderTitleClass, pageHeaderWrapperClass } from "@/lib/dashboard-ui";
 
 interface PageHeaderProps {
   title: string;
-  subtitle: string;
   className?: string;
 }
 
-export function PageHeader({ title, subtitle, className }: PageHeaderProps) {
+export function PageHeader({ title, className }: PageHeaderProps) {
   return (
     <div className={className ?? pageHeaderWrapperClass}>
       <h1 className={pageHeaderTitleClass}>{title}</h1>
-      <p className={pageHeaderSubtitleClass}>{subtitle}</p>
     </div>
   );
 }

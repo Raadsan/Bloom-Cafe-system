@@ -38,7 +38,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   actionBtnEdit,
   actionBtnDelete,
@@ -237,9 +236,6 @@ export default function MenuManagementPage() {
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Menu Configuration</h1>
-        <p className={pageHeaderSubtitleClass}>
-          Manage sidebar navigation links, URLs, order and sub-modules.
-        </p>
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">

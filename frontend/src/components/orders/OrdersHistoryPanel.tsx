@@ -42,10 +42,7 @@ function getOrderTypeLabel(order: Order) {
 function getLocationLabel(order: Order) {
   const type = getOrderType(order);
   if (type === "dine-in" && order.table) {
-    const room = order.table.room?.name;
-    return room
-      ? `${room} · Table ${order.table.number}`
-      : `Table ${order.table.number}`;
+    return `Table ${order.table.number}`;
   }
   if (type === "delivery" && order.address) {
     return [order.address.street, order.address.district].filter(Boolean).join(", ");

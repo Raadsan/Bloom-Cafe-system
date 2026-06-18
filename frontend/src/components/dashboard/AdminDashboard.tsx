@@ -56,7 +56,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 
@@ -147,9 +146,6 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
       {/* Header Section */}
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Admin Dashboard</h1>
-        <p className={pageHeaderSubtitleClass}>
-          Track your restaurant performance and daily operations.
-        </p>
       </div>
 
       {/* Stat Cards Grid */}

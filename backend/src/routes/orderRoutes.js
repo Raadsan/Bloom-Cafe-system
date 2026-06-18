@@ -28,6 +28,7 @@ import {
   createOrder,
   createPosCheckout,
   getAllOrders,
+  getOrderQueueCounts,
   getOrderById,
   updateOrderStatus,
   updateOrder,
@@ -40,7 +41,15 @@ const router = express.Router()
 
 const canUpdateOrderStatus = (req, res, next) => {
   const role = req.user?.role?.toLowerCase()
-  if (role === 'kitchen' || role === 'waiter') {
+  if (role === 'kitchen' || role === 'waiter' || role === 'pos') {
+    return next()
+  }
+  return checkPermission('/orders', 'canEdit')(req, res, next)
+}
+
+const canEditOrder = (req, res, next) => {
+  const role = req.user?.role?.toLowerCase()
+  if (role === 'pos' || role === 'admin' || role === 'manager') {
     return next()
   }
   return checkPermission('/orders', 'canEdit')(req, res, next)
@@ -59,6 +68,7 @@ router.post('/pos-checkout', protect, createPosCheckout)
 
 // Get all orders (Accessible to any logged-in user for POS retrieval)
 router.get('/all', protect, getAllOrders)
+router.get('/counts', protect, getOrderQueueCounts)
 
 // Get orders by table
 router.get('/table/:tableId', protect, checkPermission('/orders', 'canView'), getOrdersByTable)
@@ -70,7 +80,7 @@ router.get('/:id', protect, canViewOrder, getOrderById)
 router.patch('/:id/status', protect, canUpdateOrderStatus, updateOrderStatus)
 
 // Update full order
-router.put('/:id', protect, checkPermission('/orders', 'canEdit'), updateOrder)
+router.put('/:id', protect, canEditOrder, updateOrder)
 
 // Delete order (Accessible to any logged-in user to allow resuming held orders)
 router.delete('/:id', protect, deleteOrder)

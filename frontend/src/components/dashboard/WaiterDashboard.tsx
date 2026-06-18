@@ -37,7 +37,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
@@ -148,9 +147,6 @@ export default function WaiterDashboard({ orders }: { orders: Order[] }) {
         <div className={cn(pageHeaderWrapperClass, "flex flex-col sm:flex-row sm:items-center justify-between gap-4")}>
           <div>
             <h1 className={pageHeaderTitleClass}>Waiter Dashboard</h1>
-            <p className={pageHeaderSubtitleClass}>
-              Your daily tasks, active orders, and performance overview.
-            </p>
           </div>
           <Link
             href="/orders/create"

@@ -1,7 +1,7 @@
 "use client";
 
-import PosOrdersQueueView from "@/components/orders/PosOrdersQueueView";
+import PosTableOrdersView from "@/components/orders/PosTableOrdersView";
 
 export default function PosReadyOrdersPage() {
-  return <PosOrdersQueueView />;
+  return <PosTableOrdersView />;
 }

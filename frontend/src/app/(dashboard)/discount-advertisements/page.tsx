@@ -34,7 +34,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   actionBtnEdit,
   actionBtnDelete,
   dashboardTableHeaderClass,
@@ -225,9 +224,6 @@ export default function DiscountAdvertisementsPage() {
       <div className="mb-8 px-4 flex items-start justify-between gap-4">
         <div>
           <h1 className={pageHeaderTitleClass}>Advertisements</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Manage homepage advertisement banners for the mobile app. Product discounts are set on Menu Items.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={fetchData}>

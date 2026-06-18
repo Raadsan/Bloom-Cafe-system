@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Clock, MapPin, Phone, User, Loader2, CheckCircle2 } from "lucide-react";
+import { Clock, MapPin, Phone, User, Loader2, CheckCircle2, Flame, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Order, OrderStatus } from "@/lib/api/orderApi";
 import { btnCreatePage } from "@/lib/dashboard-ui";
@@ -61,10 +61,7 @@ function getOrderTypeLabel(order: Order) {
 function getOrderLocation(order: Order): string | null {
   const type = order.orderType || "takeaway";
   if (type === "dine-in" && order.table) {
-    const roomName = order.table.room?.name;
-    return roomName
-      ? `${roomName} · Table ${order.table.number}`
-      : `Table ${order.table.number}`;
+    return `Table ${order.table.number}`;
   }
   if (type === "delivery" && order.address) {
     const parts = [order.address.street, order.address.district].filter(Boolean);
@@ -85,6 +82,13 @@ interface OrderQueueCardProps {
   showServedAction?: boolean;
   isActionLoading?: boolean;
   onMarkServed?: () => void;
+  showPrepareAction?: boolean;
+  showReadyAction?: boolean;
+  isPrepareLoading?: boolean;
+  isReadyLoading?: boolean;
+  onViewOrder?: () => void;
+  onStartPreparing?: () => void;
+  onMarkReady?: () => void;
 }
 
 export default function OrderQueueCard({
@@ -92,6 +96,13 @@ export default function OrderQueueCard({
   showServedAction = false,
   isActionLoading = false,
   onMarkServed,
+  showPrepareAction = false,
+  showReadyAction = false,
+  isPrepareLoading = false,
+  isReadyLoading = false,
+  onViewOrder,
+  onStartPreparing,
+  onMarkReady,
 }: OrderQueueCardProps) {
   const cfg = getStatusConfig(order);
   const itemTags = (order.orderitem || []).map(
@@ -180,6 +191,64 @@ export default function OrderQueueCard({
           </p>
           <p className="text-[11px] text-zinc-400 mt-1 uppercase tracking-wide">{typeLabel}</p>
         </div>
+        {showPrepareAction && onViewOrder && (
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              onClick={onViewOrder}
+              variant="outline"
+              className="w-full h-10 text-xs rounded-full gap-2"
+            >
+              <Eye className="size-4" />
+              View Order
+            </Button>
+            {onStartPreparing && (
+              <Button
+                type="button"
+                onClick={onStartPreparing}
+                disabled={isPrepareLoading}
+                className={cn(btnCreatePage, "w-full h-10 text-xs rounded-full gap-2")}
+              >
+                {isPrepareLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Flame className="size-4" />
+                )}
+                Start Preparing
+              </Button>
+            )}
+          </div>
+        )}
+        {showReadyAction && (
+          <div className="flex flex-col gap-2">
+            {onViewOrder && (
+              <Button
+                type="button"
+                onClick={onViewOrder}
+                variant="outline"
+                className="w-full h-10 text-xs rounded-full gap-2"
+              >
+                <Eye className="size-4" />
+                View Order
+              </Button>
+            )}
+            {onMarkReady && (
+              <Button
+                type="button"
+                onClick={onMarkReady}
+                disabled={isReadyLoading}
+                className="w-full h-10 text-xs rounded-full gap-2 bg-emerald-600 !text-white hover:bg-emerald-700 hover:!text-white border-none"
+              >
+                {isReadyLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="size-4" />
+                )}
+                Mark as Ready
+              </Button>
+            )}
+          </div>
+        )}
         {showServedAction && onMarkServed && (
           <Button
             type="button"

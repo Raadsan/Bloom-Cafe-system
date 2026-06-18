@@ -757,8 +757,14 @@ const orderListInflight = new Map()
 const ORDER_LIST_TTL_MS = 45 * 1000
 
 function orderListCacheKey(req) {
-  const { status, onlyMine, readyPickup, waiterHistory, posQueue } = req.query
-  return `${req.user?.id || 0}:${status || ''}:${onlyMine || ''}:${readyPickup || ''}:${waiterHistory || ''}:${posQueue || ''}`
+  const { status, onlyMine, readyPickup, waiterHistory, posQueue, kitchenQueue, includeServed, limit } = req.query
+  return `${req.user?.id || 0}:${status || ''}:${onlyMine || ''}:${readyPickup || ''}:${waiterHistory || ''}:${posQueue || ''}:${kitchenQueue || ''}:${includeServed || ''}:${limit || ''}`
+}
+
+function parseOrderLimit(req, fallback = 80) {
+  const parsed = parseInt(req.query.limit, 10)
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback
+  return Math.min(parsed, 200)
 }
 
 export const clearOrderListCache = () => {
@@ -1146,15 +1152,24 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     const userRole = req.user?.role?.toLowerCase()
-    if (userRole === 'kitchen') {
-      const allowed =
+
+    if (userRole === 'kitchen' || userRole === 'pos') {
+      const kitchenAllowed =
         (order.status === 'pending' && status === 'preparing') ||
         (order.status === 'paid' && status === 'preparing') ||
         (order.status === 'preparing' && status === 'ready')
-      if (!allowed) {
+      const posServeAllowed =
+        userRole === 'pos' &&
+        order.status === 'ready' &&
+        status === 'served'
+
+      if (!kitchenAllowed && !posServeAllowed) {
         return res.status(400).json({
           success: false,
-          message: 'Kitchen can only move pending/paid → preparing or preparing → ready',
+          message:
+            userRole === 'pos'
+              ? 'POS can move pending/paid → preparing, preparing → ready, or mark ready orders as served'
+              : 'Kitchen can only move pending/paid → preparing or preparing → ready',
         })
       }
     }
@@ -1165,22 +1180,6 @@ export const updateOrderStatus = async (req, res) => {
         return res.status(400).json({
           success: false,
           message: 'Waiter can only mark ready orders as served',
-        })
-      }
-    }
-
-    if (userRole === 'pos') {
-      const channel =
-        order.orderType ||
-        (order.tableId ? 'dine-in' : order.addressId ? 'delivery' : 'takeaway')
-      const allowed =
-        order.status === 'ready' &&
-        status === 'served' &&
-        (channel === 'takeaway' || channel === 'delivery')
-      if (!allowed) {
-        return res.status(400).json({
-          success: false,
-          message: 'POS can only complete ready takeaway or delivery orders',
         })
       }
     }
@@ -1351,8 +1350,9 @@ const orderUserInclude = {
 
 const orderListInclude = {
   table: {
-    include: {
-      room: { select: { id: true, name: true } },
+    select: {
+      id: true,
+      number: true,
     },
   },
   address: true,
@@ -1381,7 +1381,6 @@ const orderListLightInclude = {
     select: {
       id: true,
       number: true,
-      room: { select: { id: true, name: true } },
     },
   },
   address: {
@@ -1391,10 +1390,42 @@ const orderListLightInclude = {
   orderitem: {
     include: {
       menuitem: {
-        select: { id: true, name: true, price: true, imageUrl: true },
+        select: { id: true, name: true, price: true },
       },
     },
   },
+}
+
+/**
+ * Lightweight queue counts for POS header badges (no full order payload).
+ */
+export const getOrderQueueCounts = async (req, res) => {
+  try {
+    const role = req.user?.role?.toLowerCase()
+    if (role !== 'pos' && role !== 'admin' && role !== 'manager') {
+      return res.status(403).json({ success: false, message: 'Access denied' })
+    }
+
+    const [kitchenCount, readyCount] = await Promise.all([
+      prisma.order.count({
+        where: { status: { in: ['pending', 'paid', 'preparing'] } },
+      }),
+      prisma.order.count({
+        where: {
+          status: 'ready',
+          tableId: { not: null },
+        },
+      }),
+    ])
+
+    res.json({
+      success: true,
+      data: { kitchenCount, readyCount },
+    })
+  } catch (error) {
+    console.error('Get Order Queue Counts Error:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
 }
 
 /**
@@ -1431,6 +1462,13 @@ export const getAllOrders = async (req, res) => {
       where.orderType = 'dine-in'
       useLightInclude = true
       takeLimit = 80
+    } else if (userRole === 'pos' && req.query.kitchenQueue === 'true') {
+      const includeServed = req.query.includeServed === 'true'
+      where.status = includeServed
+        ? { in: ['pending', 'paid', 'preparing', 'ready', 'served'] }
+        : { in: ['pending', 'paid', 'preparing', 'ready'] }
+      useLightInclude = true
+      takeLimit = includeServed ? 200 : 150
     } else if (userRole === 'pos' && req.query.posQueue === 'true') {
       where.orderType = { in: ['takeaway', 'delivery'] }
       where.status = { in: ['pending', 'paid', 'preparing', 'ready'] }
@@ -1445,7 +1483,11 @@ export const getAllOrders = async (req, res) => {
       where.userId = req.user.id
       where.status = 'served'
       useLightInclude = true
-      takeLimit = 100
+      takeLimit = parseOrderLimit(req, 100)
+    } else if (userRole === 'kitchen') {
+      where.status = { in: ['pending', 'paid', 'preparing', 'ready'] }
+      useLightInclude = true
+      takeLimit = parseOrderLimit(req, 100)
     } else {
       const ownOrdersOnly = ['client', 'customer', 'waiter']
       if (ownOrdersOnly.includes(userRole)) {
@@ -1453,13 +1495,20 @@ export const getAllOrders = async (req, res) => {
       } else if (onlyMine === 'true' && req.user?.id) {
         where.userId = req.user.id
       }
+      useLightInclude = true
+      takeLimit = parseOrderLimit(req, 80)
     }
+
+    const fifoQueue =
+      userRole === 'kitchen' ||
+      (userRole === 'pos' &&
+        (req.query.kitchenQueue === 'true' || req.query.posQueue === 'true'))
 
     const fetchPromise = prisma.order
       .findMany({
         where,
         include: useLightInclude ? orderListLightInclude : orderListInclude,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: fifoQueue ? 'asc' : 'desc' },
         ...(takeLimit ? { take: takeLimit } : {}),
       })
       .then((orders) => {

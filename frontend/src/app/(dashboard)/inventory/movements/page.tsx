@@ -39,7 +39,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   actionBtnDelete,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
@@ -163,7 +162,6 @@ export default function StockMovementsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2 px-4">
         <div>
           <h1 className={pageHeaderTitleClass}>Stock Movements</h1>
-          <p className={pageHeaderSubtitleClass}>Track all incoming and outgoing inventory changes.</p>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/inventory">

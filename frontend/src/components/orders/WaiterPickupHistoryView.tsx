@@ -15,7 +15,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
@@ -32,10 +31,7 @@ function getPickupLabel(order: Order) {
     return `${order.address.street}, ${order.address.district}`;
   }
   if (order.table?.number) {
-    const room = order.table.room?.name;
-    return room
-      ? `Table ${order.table.number} · ${room}`
-      : `Table ${order.table.number}`;
+    return `Table ${order.table.number}`;
   }
   if (order.orderType === "takeaway") return "Takeaway";
   return order.orderType?.replace("-", " ") || "—";
@@ -95,9 +91,6 @@ export default function WaiterPickupHistoryView() {
       <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-center justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Pickup History</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Orders you created and marked as served after pickup.
-          </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-zinc-500">
           <History className="size-4 text-primary" />

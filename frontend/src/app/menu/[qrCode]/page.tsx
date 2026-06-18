@@ -23,8 +23,8 @@ import {
   getMenuItemDiscountPercent,
   menuItemHasDiscount,
 } from "@/lib/menu-item-pricing";
-import { useSystemBranding } from "@/hooks/use-system-branding";
-import SystemBrandMark from "@/components/branding/SystemBrandMark";
+import { STATIC_APP_LOGO } from "@/lib/branding";
+import { APP_SYSTEM_NAME } from "@/lib/constants";
 
 export default function PublicTableMenuPage() {
   const params = useParams();
@@ -33,7 +33,6 @@ export default function PublicTableMenuPage() {
     Array.isArray(rawCode) ? rawCode[0] : rawCode || ""
   );
 
-  const { branding } = useSystemBranding();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuData, setMenuData] = useState<PublicMenuData | null>(null);
@@ -103,8 +102,6 @@ export default function PublicTableMenuPage() {
     ? menuData.table.name?.trim() || `Table ${menuData.table.number}`
     : "";
 
-  const roomName = menuData?.table.room?.name;
-
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-[#faf8f5] to-[#f0ebe3] gap-4">
@@ -142,24 +139,18 @@ export default function PublicTableMenuPage() {
         <div className="relative max-w-2xl mx-auto px-5 pt-8 pb-10 text-white">
           <div className="flex items-center gap-4 mb-5">
             <div className="size-14 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center p-2 shrink-0">
-              {branding.systemLogoUrl ? (
-                <SystemBrandMark
-                  logoUrl={branding.systemLogoUrl}
-                  systemName={branding.systemName}
-                  variant="plain"
-                  fit="width"
-                  className="h-full w-full max-h-10 object-contain brightness-0 invert"
-                />
-              ) : (
-                <UtensilsCrossed className="size-7 text-white" />
-              )}
+              <img
+                src={STATIC_APP_LOGO}
+                alt={APP_SYSTEM_NAME}
+                className="h-full w-full max-h-10 object-contain brightness-0 invert"
+              />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 mb-0.5">
                 Digital Menu
               </p>
               <h1 className="text-2xl font-black tracking-tight truncate">
-                {branding.systemName}
+                {APP_SYSTEM_NAME}
               </h1>
             </div>
           </div>
@@ -169,11 +160,6 @@ export default function PublicTableMenuPage() {
               <MapPin className="size-3.5" />
               {tableLabel}
             </span>
-            {roomName && (
-              <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 text-xs font-medium text-white/90">
-                {roomName}
-              </span>
-            )}
             <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 text-xs font-medium text-white/80">
               <Sparkles className="size-3" />
               {allItems.length} dishes · {categories.length} categories
@@ -242,7 +228,7 @@ export default function PublicTableMenuPage() {
 
       <footer className="py-5 text-center border-t border-zinc-200/80 bg-white/60 backdrop-blur-sm">
         <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-400">
-          {branding.systemTagline || "Enjoy your meal"}
+          Enjoy your meal
         </p>
       </footer>
     </div>

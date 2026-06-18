@@ -23,7 +23,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   actionBtnEdit,
   actionBtnDelete,
   dashboardTableHeaderClass,
@@ -160,7 +159,6 @@ export default function ExpensesPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-4">
         <div>
           <h1 className={pageHeaderTitleClass}>Expenses Management</h1>
-          <p className={pageHeaderSubtitleClass}>Record and track operational costs, salaries, and company spending.</p>
         </div>
       </div>
 

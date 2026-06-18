@@ -16,15 +16,14 @@ import {
   ShoppingCart,
   Printer,
   RotateCw,
-  Bell
+  Bell,
+  ChefHat
 } from "lucide-react";
 import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
 import { orderApi } from "@/lib/api/orderApi";
-import { matchesReadyAudience } from "@/lib/order-type-utils";
-import { ToastProvider } from "@/components/ui/toast";
+import { PermissionProvider } from "@/context/PermissionContext";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useSystemBranding } from "@/hooks/use-system-branding";
-import SystemBrandMark from "@/components/branding/SystemBrandMark";
+import { STATIC_APP_LOGO } from "@/lib/branding";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -40,12 +39,15 @@ import {
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { branding } = useSystemBranding();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [readyCount, setReadyCount] = useState(0);
+  const [kitchenCount, setKitchenCount] = useState(0);
 
   useEffect(() => {
+    const cached = authApi.getCachedUser();
+    if (cached) setUser(cached);
+
     authApi.getMe().then(setUser).catch(() => {
       window.location.href = "/pos/login";
     });
@@ -77,23 +79,19 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     window.addEventListener("cart-updated", handleCartEvent);
     window.addEventListener("storage", updateCountFromStorage);
 
-    const syncReadyCount = async () => {
+    const syncCounts = async () => {
       try {
-        const data = await orderApi.getAllOrders({ posQueue: true }, true);
-        setReadyCount(
-          (data || []).filter(
-            order => matchesReadyAudience(order, "pos") && order.status === "ready"
-          ).length
-        );
+        const counts = await orderApi.getQueueCounts();
+        setKitchenCount(counts.kitchenCount);
+        setReadyCount(counts.readyCount);
       } catch {
+        setKitchenCount(0);
         setReadyCount(0);
       }
     };
 
-    syncReadyCount();
-    const removeOrdersListener = onDebouncedEvent(ORDERS_CHANGED, () => {
-      syncReadyCount();
-    }, 700);
+    syncCounts();
+    const removeOrdersListener = onDebouncedEvent(ORDERS_CHANGED, syncCounts, 700);
 
     return () => {
       window.removeEventListener("cart-updated", handleCartEvent);
@@ -104,25 +102,17 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ToastProvider>
+    <PermissionProvider>
       <div className="flex flex-col h-screen bg-zinc-50 dark:bg-[#161616] font-sans overflow-hidden">
         {/* POS Header */}
         <header className="h-[56px] shrink-0 bg-white dark:bg-[#161616] border-b border-gray-200 dark:border-[#2a2a2a] flex items-center px-6 gap-6 shadow-sm z-50">
           {/* Logo */}
-          <Link href="/pos-terminal" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity min-w-0">
-            <SystemBrandMark
-              logoUrl={branding.systemLogoUrl}
-              systemName={branding.systemName}
-              size="sm"
+          <Link href="/pos-terminal" className="flex items-center hover:opacity-80 transition-opacity shrink-0">
+            <img
+              src={STATIC_APP_LOGO}
+              alt="Restaurant POS"
+              className="h-10 w-auto max-w-[160px] object-contain"
             />
-            <div className="min-w-0">
-              <span className="text-[13px] font-black text-[#1E293B] dark:text-zinc-100 uppercase tracking-tight truncate block">
-                {branding.systemName}
-              </span>
-              <span className="block text-[9px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest leading-none truncate">
-                {branding.systemTagline || "POS Terminal"}
-              </span>
-            </div>
           </Link>
 
           <div className="flex-1" />
@@ -169,6 +159,31 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             </Link>
 
             <Link
+              href="/kitchen"
+              className={cn(
+                "size-8 rounded-xl flex items-center justify-center transition-all relative border",
+                pathname === "/kitchen"
+                  ? "bg-primary text-white border-primary shadow-sm"
+                  : kitchenCount > 0
+                    ? "bg-orange-50 text-orange-600 border-orange-200"
+                    : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
+              )}
+              title="Kitchen queue"
+            >
+              <ChefHat className="size-4" />
+              <span
+                className={cn(
+                  "absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center",
+                  kitchenCount > 0
+                    ? "bg-orange-600 text-white"
+                    : "bg-muted text-muted-foreground border border-border"
+                )}
+              >
+                {kitchenCount}
+              </span>
+            </Link>
+
+            <Link
               href="/ready-orders"
               className={cn(
                 "size-8 rounded-xl flex items-center justify-center transition-all relative border",
@@ -178,7 +193,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
                     ? "bg-emerald-50 text-emerald-600 border-emerald-200"
                     : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
               )}
-              title="Ready orders"
+              title="Table orders"
             >
               <Bell className="size-4" />
               <span
@@ -258,9 +273,9 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
                     </DropdownMenuItem>
                     {user?.role?.toLowerCase() === "admin" && (
                       <DropdownMenuItem asChild>
-                        <Link href="/settings" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
+                        <Link href="/receipt-settings" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
                           <Settings2 className="mr-2.5 size-4" />
-                          Settings
+                          Receipt Settings
                         </Link>
                       </DropdownMenuItem>
                     )}
@@ -273,7 +288,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
                   <DropdownMenuItem
                     className="text-[11px] font-bold uppercase tracking-widest text-red-500 dark:text-white py-3 cursor-pointer hover:bg-red-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-white focus:bg-red-50 dark:focus:bg-white/10 focus:text-red-600 dark:focus:text-white"
                     onClick={async () => {
-                      await authApi.logout("/pos/login");
+                      authApi.logout("/pos/login");
                     }}
                   >
                     <LogOut className="mr-2.5 size-4 dark:text-white" />
@@ -285,11 +300,11 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
           )}
         </header>
 
-        {/* POS Content — full height */}
-        <main className="pos-scope flex-1 overflow-hidden">
+        {/* POS Content — scrollable area */}
+        <main className="pos-scope flex-1 min-h-0 overflow-hidden">
           {children}
         </main>
       </div>
-    </ToastProvider>
+    </PermissionProvider>
   );
 }

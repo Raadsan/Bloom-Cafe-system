@@ -42,7 +42,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   dashboardStatIconClass,
   dashboardTableHeaderClass,
@@ -205,7 +204,6 @@ export default function OrdersReportPage() {
       <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-end justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Orders Report</h1>
-          <p className={pageHeaderSubtitleClass}>Volume, status & channel distribution</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 trezo-card p-2">
           <div className="flex items-center gap-2 px-2">

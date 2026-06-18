@@ -42,6 +42,7 @@ export interface LoginResponse {
 }
 
 const USER_STORAGE_KEY = 'auth_user';
+let getMeInflight: Promise<AuthUser> | null = null;
 
 /** Save user to localStorage */
 function saveUserToStorage(user: AuthUser): void {
@@ -178,6 +179,9 @@ export const authApi = {
     return { token, user: authUser };
   },
 
+  /** Read cached user without a network request. */
+  getCachedUser: (): AuthUser | null => getUserFromStorage(),
+
   /**
    * Get the currently logged-in user.
    */
@@ -187,11 +191,22 @@ export const authApi = {
       if (cached) return cached;
     }
 
-    const res = await api.get('/auth/me');
-    const authUser = mapAuthUser(res.data.data);
+    if (getMeInflight && !forceRefresh) return getMeInflight;
 
-    saveUserToStorage(authUser);
-    return authUser;
+    getMeInflight = api
+      .get('/auth/me')
+      .then((res) => {
+        const authUser = mapAuthUser(res.data.data);
+        saveUserToStorage(authUser);
+        getMeInflight = null;
+        return authUser;
+      })
+      .catch((err) => {
+        getMeInflight = null;
+        throw err;
+      });
+
+    return getMeInflight;
   },
 
   /** Update profile – updates the db then refreshes localStorage. */
@@ -203,16 +218,22 @@ export const authApi = {
     return authUser;
   },
 
+  forgotPassword: async (email: string): Promise<void> => {
+    await api.post('/auth/forgot-password', { email });
+  },
+
+  resetPassword: async (email: string, newPassword: string): Promise<void> => {
+    await api.post('/auth/reset-password', { email, newPassword });
+  },
+
   /** Clear token + user cache and redirect to login. */
-  logout: async (redirectTo = '/login') => {
-    try {
-      await api.post('/auth/logout');
-    } catch (error) {
-      console.error("Logout request error:", error);
-    }
-    clearUserFromStorage();
+  logout: (redirectTo = '/login') => {
     if (typeof window !== 'undefined') {
+      void api.post('/auth/logout').catch(() => {});
+      clearUserFromStorage();
       window.location.href = redirectTo;
+    } else {
+      clearUserFromStorage();
     }
   },
 };

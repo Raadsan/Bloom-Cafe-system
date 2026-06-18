@@ -1,18 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { Lock, Mail, ArrowRight, Store, Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { authApi } from "@/lib/api/authApi";
-import { useSystemBranding } from "@/hooks/use-system-branding";
-import SystemBrandMark from "@/components/branding/SystemBrandMark";
+import { APP_SYSTEM_NAME, APP_VERSION } from "@/lib/constants";
+import { LoginShell, loginSubmitButtonClass } from "@/components/auth/LoginShell";
 
 export default function LoginPage() {
-  const { branding } = useSystemBranding();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const { showToast } = useToast();
@@ -23,28 +24,25 @@ export default function LoginPage() {
     setError("");
 
     try {
-      console.log("Submitting login for:", email);
       const res = await authApi.login({ email, password });
-      console.log("Login response:", res);
-      
-      showToast("Login successful! Redirecting...", "success");
+      showToast("Login successful!", "success");
 
-      // Redirect based on role
       const userRole = res?.user?.role?.toLowerCase();
-      setTimeout(() => {
-        if (userRole === "pos") {
-          window.location.href = "/pos-terminal";
-        } else {
-          window.location.href = "/dashboard";
-        }
-      }, 1500);
-    } catch (err: any) {
-      console.error("Login caught error:", err);
+      if (userRole === "pos") {
+        window.location.href = "/pos-terminal";
+      } else {
+        window.location.href = "/dashboard";
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        message?: string;
+        response?: { data?: { message?: string } };
+      };
       const message =
-        !err.response && err.message === "Network Error"
+        !axiosErr.response && axiosErr.message === "Network Error"
           ? "Cannot connect to server. Make sure the backend is running on port 5000."
-          : err.response?.data?.message ||
-            err.message ||
+          : axiosErr.response?.data?.message ||
+            axiosErr.message ||
             "Failed to login. Please try again.";
       setError(message);
       showToast(message, "error");
@@ -54,124 +52,98 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4 relative overflow-hidden">
-      {/* Dynamic Background Elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-primary/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob" />
-      <div className="absolute top-[20%] right-[-10%] w-96 h-96 bg-secondary/30 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000" />
-      <div className="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-accent/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000" />
-
-      {/* Login Card */}
-      <div className="w-full max-w-md bg-card/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-border/50 p-8 relative z-10">
-        <div className="flex flex-col items-center mb-8">
-          <div className="mb-5 flex h-28 w-full max-w-[300px] items-center justify-center overflow-visible">
-            {branding.systemLogoUrl ? (
-              <SystemBrandMark
-                logoUrl={branding.systemLogoUrl}
-                systemName={branding.systemName}
-                variant="plain"
-                fit="width"
-                className="h-24 w-auto max-w-[280px] scale-[1.25] origin-center object-contain"
-              />
-            ) : (
-              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center shadow-inner ring-1 ring-primary/20">
-                <Store className="w-8 h-8 text-primary" />
-              </div>
-            )}
+    <LoginShell subtitle="Sign in to manage your restaurant system" error={error}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <label htmlFor="email" className="text-sm font-medium text-zinc-700">
+            Email Address
+          </label>
+          <div className="group relative">
+            <Mail className="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-primary" />
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="admin@restaurant.com"
+              autoComplete="email"
+              disabled={isLoading}
+              className="auth-input"
+              required
+            />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Welcome Back
-          </h1>
-          <p className="text-muted-foreground mt-2 text-center">
-            Sign in to manage your restaurant system
-          </p>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl text-sm text-center">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2 group">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-foreground ml-1"
+        <div className="space-y-2">
+          <label htmlFor="password" className="text-sm font-medium text-zinc-700">
+            Password
+          </label>
+          <div className="group relative">
+            <Lock className="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-primary" />
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              disabled={isLoading}
+              className="auth-input pr-12"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(value => !value)}
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-zinc-400 transition-colors hover:text-primary focus:outline-none"
+              aria-label={showPassword ? "Hide password" : "Show password"}
             >
-              Email Address
-            </label>
-            <div className="relative flex items-center">
-              <Mail className="absolute left-3 w-5 h-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@restaurant.com"
-                className="w-full pl-10 pr-4 py-3 bg-input/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all placeholder:text-muted-foreground/70"
-                required
-              />
-            </div>
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
           </div>
+        </div>
 
-          <div className="space-y-2 group">
-            <div className="flex justify-between items-center ml-1">
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-foreground"
-              >
-                Password
-              </label>
-              
-            </div>
-            <div className="relative flex items-center">
-              <Lock className="absolute left-3 w-5 h-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-10 pr-12 py-3 bg-input/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all placeholder:text-muted-foreground/70"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 p-1 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
-              >
-                {showPassword ? (
-                  <EyeOff className="w-5 h-5" />
-                ) : (
-                  <Eye className="w-5 h-5" />
-                )}
-              </button>
-              
-            </div>
-            <div className="flex justify-end items-right mr-1">
-              <a
-                href="#"
-                className="text-sm text-primary hover:text-primary/80 transition-colors"
-              >
-                Forgot password?
-              </a>
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full py-6 text-base font-semibold rounded-xl shadow-lg hover:shadow-primary/25 transition-all group relative overflow-hidden"
-            disabled={isLoading}
+        <div className="flex items-center justify-between gap-4">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={e => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary/30"
+            />
+            Remember me
+          </label>
+          <Link
+            href="/forgot-password"
+            className="text-sm font-semibold text-primary transition-colors hover:text-primary/80"
           >
-            {/* Shimmer effect */}
-            <div className="absolute inset-0 -translate-x-full bg-white/20 group-hover:animate-[shimmer_1.5s_infinite] skew-x-12" />
-            <span className="relative flex items-center gap-2">
-              {isLoading ? "Signing in..." : "Sign In"}
-              {!isLoading && <ArrowRight className="w-5 h-5" />}
-            </span>
-          </Button>
-        </form>
-      </div>
-    </div>
+            Forgot password?
+          </Link>
+        </div>
+
+        <Button
+          type="submit"
+          className={loginSubmitButtonClass(isLoading)}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            <>
+              Sign In
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
+        </Button>
+
+        <p className="text-center text-xs leading-relaxed text-zinc-400">
+          {APP_SYSTEM_NAME}
+          <br />
+          Version {APP_VERSION}
+        </p>
+      </form>
+    </LoginShell>
   );
 }

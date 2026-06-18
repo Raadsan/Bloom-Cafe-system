@@ -22,7 +22,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   btnCreatePage,
 } from "@/lib/dashboard-ui";
 import {
@@ -172,13 +171,6 @@ export default function KitchenOrderPreparePage() {
         <h1 className={pageHeaderTitleClass}>
           Order #{order.id}
         </h1>
-        <p className={cn(pageHeaderSubtitleClass, "mb-6 normal-case")}>
-          {order.status === "preparing"
-            ? "Preparing — read all items below"
-            : order.status === "ready"
-              ? "Ready for pickup"
-              : "Review the order, then start preparing"}
-        </p>
 
         <div className="space-y-2 text-sm text-zinc-600 mb-6">
           <p className="flex items-center gap-2">

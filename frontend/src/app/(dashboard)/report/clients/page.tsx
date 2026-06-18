@@ -40,7 +40,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   dashboardStatIconClass,
   dashboardTableHeaderClass,
@@ -173,7 +172,6 @@ export default function ClientsReportPage() {
       <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-end justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Clients Report</h1>
-          <p className={pageHeaderSubtitleClass}>Customer value & retention analysis</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 trezo-card p-2">
           <div className="flex items-center gap-2 px-2">

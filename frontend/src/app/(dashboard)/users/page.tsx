@@ -28,7 +28,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   actionBtnView,
   actionBtnEdit,
@@ -318,7 +317,6 @@ export default function UsersPage() {
       {/* Page Header: Outside the box */}
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Users management</h1>
-        <p className={pageHeaderSubtitleClass}>Manage system administrators, roles, and security permissions in one place.</p>
       </div>
 
       {/* Main Container Box */}

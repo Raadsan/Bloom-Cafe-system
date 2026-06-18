@@ -34,6 +34,7 @@ api.interceptors.response.use(
       const isPosRoute =
         path.startsWith('/pos-') ||
         path === '/pos-terminal' ||
+        path === '/kitchen' ||
         path === '/ready-orders' ||
         path === '/my-sales' ||
         path === '/my-profile';

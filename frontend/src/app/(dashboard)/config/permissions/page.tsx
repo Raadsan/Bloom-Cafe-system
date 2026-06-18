@@ -20,7 +20,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
@@ -226,21 +225,38 @@ export default function PermissionsPage() {
     if (!selectedRoleId) return;
     try {
       setSaving(true);
-      const payload = Object.entries(permissions).map(([mId, data]) => ({
-        menuId: Number(mId),
-        ...data.menu,
-        submenus: Object.entries(data.submenus).map(([smId, sData]) => ({
-          submenuId: Number(smId),
-          ...sData
-        }))
-      }));
+      const payload = Object.entries(permissions)
+        .filter(([, data]) => {
+          const menuActive =
+            data.menu.canView ||
+            data.menu.canAdd ||
+            data.menu.canEdit ||
+            data.menu.canDelete;
+          const subActive = Object.values(data.submenus).some(
+            (s) => s.canView || s.canAdd || s.canEdit || s.canDelete
+          );
+          return menuActive || subActive;
+        })
+        .map(([mId, data]) => ({
+          menuId: Number(mId),
+          ...data.menu,
+          submenus: Object.entries(data.submenus)
+            .filter(
+              ([, sData]) =>
+                sData.canView || sData.canAdd || sData.canEdit || sData.canDelete
+            )
+            .map(([smId, sData]) => ({
+              submenuId: Number(smId),
+              ...sData,
+            })),
+        }));
 
       await menuApi.updatePermissions(selectedRoleId, payload);
       menuApi.clearMenuCache(selectedRoleId);
       showToast("Permissions updated successfully", "success");
 
-      const currentUser = await authApi.getMe();
-      if (currentUser.roleId === selectedRoleId) {
+      const currentUser = authApi.getCachedUser();
+      if (currentUser?.roleId === selectedRoleId) {
         window.dispatchEvent(
           new CustomEvent("sidebar-menu-updated", { detail: { roleId: selectedRoleId } })
         );
@@ -292,7 +308,6 @@ export default function PermissionsPage() {
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Role Permissions</h1>
-        <p className={pageHeaderSubtitleClass}>Configure view, add, edit and delete access for each module by role.</p>
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">

@@ -24,6 +24,18 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
 
   const fetchPermissions = async () => {
     try {
+      const cached = authApi.getCachedUser();
+      if (cached) {
+        const adminRole = cached.role?.toLowerCase?.() === 'admin';
+        setIsAdmin(adminRole);
+        if (adminRole) return;
+        if (cached.roleId) {
+          const menus = await menuApi.getMenusByRole(cached.roleId);
+          setPermissions(menus || []);
+          return;
+        }
+      }
+
       const user = await authApi.getMe();
       if (user) {
         // Admin bypass — full access

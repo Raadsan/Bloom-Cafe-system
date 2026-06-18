@@ -24,7 +24,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   btnCreatePage,
 } from "@/lib/dashboard-ui";
@@ -99,9 +98,6 @@ export default function ReceiptSettingsPage() {
       <div className={cn(pageHeaderWrapperClass, "flex justify-between items-end")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Receipt settings</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Configure the information that appears on your customer receipts.
-          </p>
         </div>
         <div className="flex gap-3 shrink-0">
           <Button

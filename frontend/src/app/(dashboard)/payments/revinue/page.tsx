@@ -20,7 +20,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
   dashboardTableHeadClass,
@@ -170,9 +169,6 @@ export default function RevenuePage() {
       <div className="px-4 mb-1 flex items-start justify-between gap-4">
         <div>
           <h1 className={pageHeaderTitleClass}>Revenue Analytics</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Detailed tracking of sales, costs, and net profitability.
-          </p>
         </div>
         <Button
           type="button"

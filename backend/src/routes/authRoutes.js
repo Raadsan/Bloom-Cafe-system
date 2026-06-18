@@ -1,5 +1,5 @@
 import express from 'express'
-import { login, getMe, register, updateProfile, forgotPassword, resetPassword, logout, updateFcmToken, clearFcmToken, loginWithGoogle, loginWithFacebook } from '../controllers/authController.js'
+import { login, posLogin, getMe, register, updateProfile, forgotPassword, resetPassword, logout, updateFcmToken, clearFcmToken, loginWithGoogle, loginWithFacebook } from '../controllers/authController.js'
 import { protect } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()

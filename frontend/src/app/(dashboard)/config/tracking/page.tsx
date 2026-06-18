@@ -18,7 +18,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
@@ -117,7 +116,6 @@ export default function TrackingPage() {
       <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-center justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Activity Tracking</h1>
-          <p className={pageHeaderSubtitleClass}>Monitor logins, changes and actions across the system.</p>
         </div>
         <button 
           onClick={fetchLogs}

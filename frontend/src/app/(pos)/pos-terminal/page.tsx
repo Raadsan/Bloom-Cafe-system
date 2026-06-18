@@ -21,6 +21,7 @@ import {
   Percent,
   Copy,
   History,
+  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
@@ -31,17 +32,17 @@ import {
   getMenuItemDiscountPercent,
 } from "@/lib/menu-item-pricing";
 import { tableApi, Table } from "@/lib/api/tableApi";
-import { roomApi, Room } from "@/lib/api/roomApi";
 import { orderApi } from "@/lib/api/orderApi";
 import api from "@/lib/api/axios";
 import { PaymentMethod } from "@/lib/api/paymentApi";
 import { customerApi, Customer } from "@/lib/api/customerApi";
 import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
-import { ReceiptHeader } from "@/components/receipt/ReceiptBody";
+import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { btnCreatePage } from "@/lib/dashboard-ui";
 import PosCustomerProfileCard from "@/components/pos/PosCustomerProfileCard";
+import PosMenuItemImage from "@/components/pos/PosMenuItemImage";
 import {
   Dialog,
   DialogContent,
@@ -114,11 +115,6 @@ const formInputClass =
 const priceAmountClass = "text-primary dark:text-white";
 const summaryAmountClass = "font-semibold text-foreground dark:text-white";
 
-function getTableRoomId(table: Table): number | null {
-  const id = table.roomId ?? table.room?.id;
-  return id != null ? Number(id) : null;
-}
-
 interface ProductOpts {
   variant?: string;
 }
@@ -173,8 +169,6 @@ export default function PosTerminalPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [selectedRoomId, setSelectedRoomId] = useState<number | "">("");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings | null>(null);
 
@@ -207,6 +201,8 @@ export default function PosTerminalPage() {
   const [editingLineKey, setEditingLineKey] = useState<string | null>(null);
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState<ReceiptSnapshot | null>(null);
   const [isTableDialogOpen, setIsTableDialogOpen] = useState(false);
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [isRecentOrdersOpen, setIsRecentOrdersOpen] = useState(false);
@@ -320,25 +316,32 @@ export default function PosTerminalPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [cats, items, tbls, rms, custs, sett] = await Promise.all([
+      const [cats, items] = await Promise.all([
         categoryApi.getAllCategories(),
-        menuItemApi.getAllMenuItems(),
-        tableApi.getAllTables(),
-        roomApi.getAllRooms(),
-        customerApi.getAllCustomers(),
-        receiptSettingsApi.getSettings(),
+        menuItemApi.getPosMenuCatalog(),
       ]);
       setCategories(cats);
       setProducts(items);
-      setTables(tbls.filter(t => t.status === "active"));
-      setRooms((rms || []).filter(r => r.isActive));
-      setCustomers(custs);
-      setReceiptSettings(sett);
     } catch {
-      showToast("Failed to load POS data", "error");
+      showToast("Failed to load POS menu", "error");
     } finally {
       setLoading(false);
     }
+
+    void Promise.all([
+      tableApi.getAllTables(),
+      receiptSettingsApi.getSettings(),
+    ])
+      .then(([tbls, sett]) => {
+        setTables(tbls);
+        setReceiptSettings(sett);
+      })
+      .catch(() => {});
+
+    void customerApi
+      .getAllCustomers()
+      .then(setCustomers)
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -364,26 +367,18 @@ export default function PosTerminalPage() {
     [tables, selectedTable]
   );
 
-  const selectedRoom = useMemo(
-    () => rooms.find(r => r.id === selectedRoomId) ?? null,
-    [rooms, selectedRoomId]
+  const activeTables = useMemo(
+    () =>
+      tables
+        .filter(t => t.status === "active")
+        .sort((a, b) => a.number - b.number),
+    [tables]
   );
-
-  const roomTables = useMemo(() => {
-    if (!selectedRoomId) return [];
-    const roomId = Number(selectedRoomId);
-    return tables
-      .filter(t => t.status === "active" && getTableRoomId(t) === roomId)
-      .sort((a, b) => a.number - b.number);
-  }, [tables, selectedRoomId]);
 
   const orderLocationLabel = useMemo(() => {
     if (orderType === "dine-in") {
       if (selectedTableRecord) {
-        const roomName = selectedRoom?.name;
-        return roomName
-          ? `Table ${selectedTableRecord.number} · ${roomName}`
-          : `Table ${selectedTableRecord.number}`;
+        return `Table ${selectedTableRecord.number}`;
       }
       return "Select table";
     }
@@ -404,7 +399,6 @@ export default function PosTerminalPage() {
   }, [
     orderType,
     selectedTableRecord,
-    selectedRoom,
     takeawayTiming,
     pickupDate,
     pickupTime,
@@ -516,7 +510,6 @@ export default function PosTerminalPage() {
     }
     if (type !== "dine-in") {
       setSelectedTable(null);
-      setSelectedRoomId("");
     }
   };
 
@@ -599,7 +592,6 @@ export default function PosTerminalPage() {
   const resetOrderDetails = () => {
     setOrderType("takeaway");
     setSelectedTable(null);
-    setSelectedRoomId("");
     setSelectedCustomer(null);
     setCustomerName("");
     setCustomerPhone("");
@@ -771,12 +763,8 @@ export default function PosTerminalPage() {
   const applyHeldOrderMeta = (order: any) => {
     if (order.tableId) {
       setSelectedTable(order.tableId);
-      const table = tables.find(t => t.id === order.tableId);
-      const roomId = table ? getTableRoomId(table) : null;
-      setSelectedRoomId(roomId ?? "");
     } else {
       setSelectedTable(null);
-      setSelectedRoomId("");
     }
     const resumedType = (order.orderType || "takeaway") as string;
     setOrderType(
@@ -886,6 +874,17 @@ export default function PosTerminalPage() {
     return cust?.phone || customerPhone.trim() || "";
   };
 
+  const getReceiptCustomerName = () => {
+    const cust = customers.find(c => c.id === selectedCustomer);
+    if (cust) return cust.fullName;
+    const name = customerName.trim();
+    return name && name !== "Walk-in Guest" ? name : "Guest";
+  };
+
+  const handlePrintReceipt = () => {
+    window.print();
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) {
       showToast("Your cart is empty", "error");
@@ -898,9 +897,28 @@ export default function PosTerminalPage() {
       return;
     }
 
+    const receiptSnapshot: ReceiptSnapshot = {
+      orderId: 0,
+      customerName: getReceiptCustomerName(),
+      customerPhone: payPhone || customerPhone.trim(),
+      paymentMethod: selectedPaymentMethod.providerName,
+      orderTypeLabel,
+      locationLabel: orderLocationLabel,
+      items: cart.map(item => ({
+        menuItemId: item.id,
+        name: item.variant ? `${item.name} (${item.variant})` : item.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      subtotal,
+      tax: taxAmount,
+      total,
+      createdAt: new Date().toISOString(),
+    };
+
     try {
       setIsProcessing(true);
-      await orderApi.posCheckout({
+      const result = await orderApi.posCheckout({
         ...(await buildOrderPayload()),
         ...(payPhone ? { customerPhone: payPhone } : {}),
         paymentMethod,
@@ -915,8 +933,17 @@ export default function PosTerminalPage() {
       if (idToDelete) {
         void clearLoadedHeldOrders([idToDelete]);
       }
+
+      setReceiptData({
+        ...receiptSnapshot,
+        orderId: result.id,
+        subtotal: result.subTotal ?? receiptSnapshot.subtotal,
+        tax: result.taxAmount ?? receiptSnapshot.tax,
+        total: result.total ?? receiptSnapshot.total,
+      });
       resetTransaction();
       closeCheckout(true);
+      setIsReceiptOpen(true);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -1053,13 +1080,7 @@ export default function PosTerminalPage() {
                   >
                     <div className="flex gap-3">
                       <div className="size-14 rounded-full overflow-hidden bg-muted shrink-0 border border-border">
-                        {product.imageUrl ? (
-                          <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Utensils className="size-5 text-muted-foreground/40" />
-                          </div>
-                        )}
+                        <PosMenuItemImage src={product.imageUrl} className="rounded-full" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] text-muted-foreground font-medium">
@@ -1126,11 +1147,7 @@ export default function PosTerminalPage() {
                   className="flex items-center gap-4 bg-white rounded-xl border border-border p-3 text-left hover:border-primary/30 disabled:opacity-50"
                 >
                   <div className="size-12 rounded-full overflow-hidden bg-muted shrink-0">
-                    {product.imageUrl ? (
-                      <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <Utensils className="size-5 m-3.5 text-muted-foreground/40" />
-                    )}
+                    <PosMenuItemImage src={product.imageUrl} iconClassName="m-3.5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold truncate">{product.name}</p>
@@ -1224,11 +1241,7 @@ export default function PosTerminalPage() {
                   className="flex items-center gap-2 bg-white border border-zinc-100 rounded-lg px-2.5 py-2 shadow-sm"
                 >
                   <div className="size-8 rounded-md overflow-hidden bg-zinc-50 border border-zinc-100 shrink-0">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <Utensils className="size-4 m-2 text-muted-foreground/40" />
-                    )}
+                    <PosMenuItemImage src={item.imageUrl} iconClassName="size-4 m-2" />
                   </div>
                   <button
                     type="button"
@@ -1417,27 +1430,6 @@ export default function PosTerminalPage() {
               <div className="border-t border-border/60 pt-4 space-y-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted-foreground uppercase block">
-                    Room
-                  </label>
-                  <select
-                    value={selectedRoomId}
-                    onChange={e => {
-                      const value = e.target.value;
-                      setSelectedRoomId(value ? Number(value) : "");
-                      setSelectedTable(null);
-                    }}
-                    className="w-full h-11 px-3 border border-border rounded-lg text-sm bg-white"
-                  >
-                    <option value="">Select room</option>
-                    {rooms.map(room => (
-                      <option key={room.id} value={room.id}>
-                        {room.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase block">
                     Table
                   </label>
                   <select
@@ -1445,17 +1437,12 @@ export default function PosTerminalPage() {
                     onChange={e =>
                       setSelectedTable(e.target.value ? Number(e.target.value) : null)
                     }
-                    disabled={!selectedRoomId}
-                    className="w-full h-11 px-3 border border-border rounded-lg text-sm bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full h-11 px-3 border border-border rounded-lg text-sm bg-white"
                   >
                     <option value="">
-                      {!selectedRoomId
-                        ? "Select room first"
-                        : roomTables.length === 0
-                          ? "No tables in this room"
-                          : "Select table"}
+                      {activeTables.length === 0 ? "No active tables" : "Select table"}
                     </option>
-                    {roomTables.map(table => (
+                    {activeTables.map(table => (
                       <option key={table.id} value={table.id}>
                         Table {table.number}
                       </option>
@@ -1702,6 +1689,57 @@ export default function PosTerminalPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Receipt after payment */}
+      <Dialog
+        open={isReceiptOpen}
+        onOpenChange={open => {
+          if (!open) {
+            setIsReceiptOpen(false);
+            setReceiptData(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl">
+          <DialogTitle className="sr-only">Receipt</DialogTitle>
+          <div className="p-6 border-b border-zinc-100">
+            <DialogTitle className="text-xl font-bold text-[#1e293b]">Receipt</DialogTitle>
+            <DialogDescription className="text-sm text-zinc-500 mt-1">
+              Payment confirmed. Review and print the receipt for the customer.
+            </DialogDescription>
+          </div>
+
+          {receiptData && (
+            <div className="p-6">
+              <div className="mx-auto max-w-[320px] rounded-lg border border-zinc-200 bg-white p-5 shadow-inner">
+                <ReceiptBody data={receiptData} settings={receiptSettings} />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="p-6 bg-zinc-50 border-t border-zinc-100 gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsReceiptOpen(false);
+                setReceiptData(null);
+              }}
+              className="rounded-lg font-bold px-6 h-11"
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={handlePrintReceipt}
+              className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold px-8 h-11 gap-2"
+            >
+              <Printer className="size-4" />
+              Print Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Discount */}
       <Dialog open={isDiscountModalOpen} onOpenChange={setIsDiscountModalOpen}>
         <DialogContent className="sm:max-w-[400px] rounded-2xl">
@@ -1800,38 +1838,12 @@ export default function PosTerminalPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Print receipt */}
-      <div id="printable-receipt" className="hidden print:block font-mono text-[10px] p-4 bg-white text-black">
-        <div className="mb-3">
-          <ReceiptHeader settings={receiptSettings} />
+      {/* Hidden printable receipt */}
+      {receiptData && (
+        <div id="printable-receipt" className="hidden print:block bg-white p-4">
+          <ReceiptBody data={receiptData} settings={receiptSettings} />
         </div>
-        <div className="border-b border-dashed mb-2 pb-2">
-          <p>Order: {draftOrderId}</p>
-          <p>{orderLocationLabel}</p>
-        </div>
-        {cart.map(item => (
-          <div key={item.key} className="flex justify-between py-0.5">
-            <span>{item.quantity}x {item.name}</span>
-            <span>${(item.quantity * item.price).toFixed(2)}</span>
-          </div>
-        ))}
-        {discountAmount > 0 && (
-          <div className="flex justify-between py-0.5 text-destructive">
-            <span>Discount</span>
-            <span>-${discountAmount.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="border-t border-dashed pt-2 mt-2 font-bold flex justify-between">
-          <span>TOTAL</span>
-          <span>${total.toFixed(2)}</span>
-        </div>
-        {(receiptSettings?.footerText || receiptSettings?.email) && (
-          <div className="text-center mt-4 text-[9px] text-zinc-600">
-            {receiptSettings?.footerText && <p className="italic">{receiptSettings.footerText}</p>}
-            {receiptSettings?.email && <p className="font-bold mt-1">{receiptSettings.email}</p>}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

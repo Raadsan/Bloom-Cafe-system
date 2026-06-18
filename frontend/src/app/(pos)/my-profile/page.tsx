@@ -10,7 +10,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
@@ -182,9 +181,6 @@ export default function ProfilePage() {
       <div className="w-full max-w-none space-y-4">
         <div className={pageHeaderWrapperClass}>
           <h1 className={pageHeaderTitleClass}>My Profile</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Manage your account information
-          </p>
         </div>
 
         <ProfileDetailsPanel

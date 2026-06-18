@@ -12,7 +12,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 import {
@@ -84,9 +83,6 @@ export default function NotificationsPage() {
     <div className={`${dashboardPageClass} w-full`} style={dashboardPageStyle}>
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Notifications</h1>
-        <p className={pageHeaderSubtitleClass}>
-          Alerts for new orders, ready orders, and system updates.
-        </p>
       </div>
 
       <div className="px-4 pb-8 w-full">

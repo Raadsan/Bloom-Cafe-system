@@ -2,7 +2,6 @@ import prisma from "../config/db.js";
 import { trackingController } from "./trackingController.js";
 import { clearPermissionCache, clearAuthCaches } from "../middlewares/authMiddleware.js";
 
-let roomsMenuEnsured = false;
 let createOrderMenuEnsured = false;
 let pickupOrdersMenuEnsured = false;
 let pickupHistoryMenuEnsured = false;
@@ -158,12 +157,8 @@ export const seedDefaultMenus = async (req, res) => {
         title: "Clients", url: "/clients", icon: "Users", order: 6,
         submenus: [] 
       },
-      {
-        title: "Rooms", url: "/rooms", icon: "DoorOpen", order: 7,
-        submenus: []
-      },
       { 
-        title: "User Management", url: "/users", icon: "Shield", order: 8,
+        title: "User Management", url: "/users", icon: "Shield", order: 7,
         submenus: [
           { title: "All Staff", url: "/users", order: 1 }
         ] 
@@ -544,94 +539,47 @@ export async function ensurePickupHistoryMenuItem() {
   }
 }
 
-/** Ensures Rooms is a top-level sidebar item (like Clients) with admin/manager permissions */
-export async function ensureRoomsMenuItem() {
-  if (roomsMenuEnsured) return;
+export async function deactivateSystemSettingsMenuItem() {
   try {
-    const roles = await prisma.role.findMany({
+    await prisma.menu.updateMany({
       where: {
         OR: [
-          { name: { contains: "admin" } },
-          { name: { contains: "Admin" } },
-          { name: { contains: "manager" } },
-          { name: { contains: "Manager" } }
-        ]
-      }
+          { url: '/settings' },
+          { title: { contains: 'System settings' } },
+          { title: { contains: 'System Settings' } },
+        ],
+      },
+      data: { isActive: false },
     });
-
-    if (roles.length === 0) return;
-
-    // Remove old Rooms sub-menu under Kitchen & Menu (if any)
-    const kitchenMenu = await prisma.menu.findFirst({
-      where: { title: "Kitchen & Menu" }
-    });
-    if (kitchenMenu) {
-      await prisma.submenu.updateMany({
-        where: { title: "Rooms", menuId: kitchenMenu.id },
-        data: { isActive: false }
-      });
-      await prisma.submenu.updateMany({
-        where: { title: "Table Setup", menuId: kitchenMenu.id },
-        data: { order: 3, isActive: true }
-      });
-    }
-
-    let roomsMenu = await prisma.menu.findFirst({
+    await prisma.submenu.updateMany({
       where: {
-        OR: [{ url: "/rooms" }, { title: "Rooms" }]
-      }
+        OR: [
+          { url: '/settings' },
+          { title: { contains: 'System settings' } },
+          { title: { contains: 'System Settings' } },
+        ],
+      },
+      data: { isActive: false },
     });
-
-    if (roomsMenu) {
-      roomsMenu = await prisma.menu.update({
-        where: { id: roomsMenu.id },
-        data: {
-          title: "Rooms",
-          url: "/rooms",
-          icon: "DoorOpen",
-          isActive: true,
-          order: roomsMenu.order > 0 ? roomsMenu.order : 6
-        }
-      });
-    } else {
-      roomsMenu = await prisma.menu.create({
-        data: {
-          title: "Rooms",
-          url: "/rooms",
-          icon: "DoorOpen",
-          order: 6,
-          isActive: true
-        }
-      });
-    }
-
-    for (const role of roles) {
-      await prisma.roleMenuAccess.upsert({
-        where: {
-          roleId_menuId: {
-            roleId: role.id,
-            menuId: roomsMenu.id
-          }
-        },
-        update: {
-          canView: true,
-          canAdd: true,
-          canEdit: true,
-          canDelete: true
-        },
-        create: {
-          roleId: role.id,
-          menuId: roomsMenu.id,
-          canView: true,
-          canAdd: true,
-          canEdit: true,
-          canDelete: true
-        }
-      });
-    }
-    roomsMenuEnsured = true;
+    clearAuthCaches();
   } catch (error) {
-    console.error("ensureRoomsMenuItem error:", error);
+    console.warn('deactivateSystemSettingsMenuItem skipped:', error?.message);
+  }
+}
+
+export async function deactivateRoomsMenuItem() {
+  try {
+    await prisma.menu.updateMany({
+      where: { OR: [{ url: '/rooms' }, { title: 'Rooms' }] },
+      data: { isActive: false },
+    });
+    await prisma.submenu.updateMany({
+      where: { title: 'Rooms' },
+      data: { isActive: false },
+    });
+    clearAuthCaches();
+  } catch (error) {
+    console.warn('deactivateRoomsMenuItem skipped:', error?.message);
   }
 }
 
@@ -888,41 +836,31 @@ export const updatePermissions = async (req, res) => {
     );
 
     await prisma.$transaction(async (tx) => {
-      const existingMenuAccess = await tx.roleMenuAccess.findMany({
-        where: { roleId },
-        select: { id: true },
-      });
-      const existingIds = existingMenuAccess.map((m) => m.id);
-
-      if (existingIds.length > 0) {
-        await tx.roleSubMenuAccess.deleteMany({
-          where: { roleMenuAccessId: { in: existingIds } },
-        });
-      }
-
       await tx.roleMenuAccess.deleteMany({ where: { roleId } });
 
       if (activeMenuPerms.length === 0) return;
 
-      const createdAccess = await Promise.all(
-        activeMenuPerms.map((menuPerm) =>
-          tx.roleMenuAccess.create({
-            data: {
-              roleId,
-              menuId: Number(menuPerm.menuId),
-              canView: !!menuPerm.canView,
-              canAdd: !!menuPerm.canAdd,
-              canEdit: !!menuPerm.canEdit,
-              canDelete: !!menuPerm.canDelete,
-            },
-          })
-        )
-      );
+      await tx.roleMenuAccess.createMany({
+        data: activeMenuPerms.map((menuPerm) => ({
+          roleId,
+          menuId: Number(menuPerm.menuId),
+          canView: !!menuPerm.canView,
+          canAdd: !!menuPerm.canAdd,
+          canEdit: !!menuPerm.canEdit,
+          canDelete: !!menuPerm.canDelete,
+        })),
+      });
+
+      const createdAccess = await tx.roleMenuAccess.findMany({
+        where: { roleId },
+        select: { id: true, menuId: true },
+      });
+      const accessByMenuId = new Map(createdAccess.map((row) => [row.menuId, row.id]));
 
       const allSubRows = [];
-      activeMenuPerms.forEach((menuPerm, index) => {
-        const roleMenuAccessId = createdAccess[index].id;
-        if (!Array.isArray(menuPerm.submenus)) return;
+      for (const menuPerm of activeMenuPerms) {
+        const roleMenuAccessId = accessByMenuId.get(Number(menuPerm.menuId));
+        if (!roleMenuAccessId || !Array.isArray(menuPerm.submenus)) continue;
 
         for (const sp of menuPerm.submenus) {
           if (!sp.canView && !sp.canAdd && !sp.canEdit && !sp.canDelete) continue;
@@ -935,7 +873,7 @@ export const updatePermissions = async (req, res) => {
             canDelete: !!sp.canDelete,
           });
         }
-      });
+      }
 
       if (allSubRows.length > 0) {
         await tx.roleSubMenuAccess.createMany({ data: allSubRows });

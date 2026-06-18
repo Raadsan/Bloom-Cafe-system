@@ -42,7 +42,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (pathname === "/dashboard") return "Dashboard";
     if (pathname === "/orders/create") return "Create Order";
     if (pathname.startsWith("/orders")) return "Orders";
-    if (pathname.startsWith("/rooms")) return "Rooms";
     if (pathname.startsWith("/users")) return "Users";
     if (pathname.startsWith("/clients")) return "Clients";
     if (pathname.startsWith("/tables")) return "Tables";
@@ -64,6 +63,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
+    const cached = authApi.getCachedUser();
+    if (cached) setUser(cached);
+
     const fetchUser = async () => {
       try {
         const currentUser = await authApi.getMe();
@@ -74,7 +76,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
 
     fetchUser();
-    fetchNotifications();
+
+    const notifTimer = window.setTimeout(() => {
+      fetchNotifications(true);
+    }, 1500);
 
     const handleProfileUpdate = () => {
       fetchUser();
@@ -103,6 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
 
     return () => {
+      window.clearTimeout(notifTimer);
       window.removeEventListener('profile_updated', handleProfileUpdate);
       window.removeEventListener(NOTIFICATION_READ, onNotificationRead);
       window.removeEventListener(NOTIFICATIONS_MARKED_ALL_READ, onAllNotificationsRead);
@@ -278,9 +284,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </DropdownMenuItem>
                     {user?.role?.toLowerCase() === "admin" && (
                       <DropdownMenuItem asChild>
-                        <Link href="/settings" className="flex w-full items-center text-xs font-bold uppercase tracking-widest py-2.5 cursor-pointer">
+                        <Link href="/receipt-settings" className="flex w-full items-center text-xs font-bold uppercase tracking-widest py-2.5 cursor-pointer">
                           <Settings2 className="mr-2 size-4" />
-                          Settings
+                          Receipt Settings
                         </Link>
                       </DropdownMenuItem>
                     )}
@@ -293,7 +299,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <DropdownMenuItem
                     className="text-xs font-bold uppercase tracking-widest text-destructive dark:text-white py-2.5 cursor-pointer"
                     onClick={async () => {
-                      await authApi.logout();
+                      authApi.logout();
                     }}
                   >
                     <LogOut className="mr-2 size-4 dark:text-white" />

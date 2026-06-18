@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
 import {
   LayoutGrid,
   Plus,
@@ -12,7 +11,6 @@ import {
   QrCode,
   Eye,
   Printer,
-  DoorOpen,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,14 +35,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { tableApi, Table as RestaurantTable, TableStatus } from "@/lib/api/tableApi";
-import { roomApi, Room } from "@/lib/api/roomApi";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
 import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   actionBtnView,
   actionBtnEdit,
@@ -64,12 +60,10 @@ const formSubmitBtnClass =
 
 export default function TablesPage() {
   const [tables, setTables] = useState<RestaurantTable[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roomFilter, setRoomFilter] = useState<string>("all");
   const { showToast } = useToast();
   const { canAdd: checkAdd, canEdit: checkEdit, canDelete: checkDelete } = usePermissions();
   const canAdd = checkAdd("/tables");
@@ -88,7 +82,6 @@ export default function TablesPage() {
     number: "",
     name: "",
     description: "",
-    roomId: "",
     capacity: "4",
     status: "active" as TableStatus
   });
@@ -100,12 +93,8 @@ export default function TablesPage() {
   const fetchTables = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const [tablesData, roomsData] = await Promise.all([
-        tableApi.getAllTables(),
-        roomApi.getAllRooms()
-      ]);
+      const tablesData = await tableApi.getAllTables();
       setTables(tablesData || []);
-      setRooms(roomsData || []);
     } catch (error) {
       console.error("Failed to fetch tables:", error);
       showToast("Failed to load tables", "error");
@@ -131,17 +120,12 @@ export default function TablesPage() {
 
   const handleAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.roomId) {
-      showToast("Please select a room", "error");
-      return;
-    }
     setSubmitting(true);
     try {
       const created = await tableApi.createTable({
         number: parseInt(formData.number),
         name: formData.name || `Table ${formData.number}`,
         description: formData.description.trim(),
-        roomId: parseInt(formData.roomId),
         capacity: parseInt(formData.capacity),
         status: formData.status
       });
@@ -160,17 +144,12 @@ export default function TablesPage() {
   const handleUpdateTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTable) return;
-    if (!formData.roomId) {
-      showToast("Please select a room", "error");
-      return;
-    }
     setSubmitting(true);
     try {
       const updated = await tableApi.updateTable(selectedTable.id.toString(), {
         number: parseInt(formData.number),
         name: formData.name,
         description: formData.description.trim(),
-        roomId: parseInt(formData.roomId),
         capacity: parseInt(formData.capacity),
         status: formData.status
       });
@@ -206,7 +185,6 @@ export default function TablesPage() {
       number: "",
       name: "",
       description: "",
-      roomId: rooms[0]?.id?.toString() || "",
       capacity: "4",
       status: "active"
     });
@@ -218,7 +196,6 @@ export default function TablesPage() {
       number: table.number.toString(),
       name: table.name || "",
       description: table.description || "",
-      roomId: table.roomId?.toString() || table.room?.id?.toString() || "",
       capacity: table.capacity?.toString() || "4",
       status: table.status
     });
@@ -337,19 +314,14 @@ export default function TablesPage() {
 
   const filteredTables = useMemo(() => {
     return (tables || []).filter(table => {
-      const matchesSearch =
+      return (
         searchQuery === "" ||
         table.number.toString().includes(searchQuery) ||
         table.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        table.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        table.room?.name?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRoom =
-        roomFilter === "all" ||
-        String(table.roomId) === roomFilter ||
-        String(table.room?.id) === roomFilter;
-      return matchesSearch && matchesRoom;
+        table.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     });
-  }, [tables, searchQuery, roomFilter]);
+  }, [tables, searchQuery]);
 
   const totalPages = Math.ceil(filteredTables.length / pageSize);
   const paginatedTables = useMemo(() => {
@@ -359,7 +331,7 @@ export default function TablesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, roomFilter, pageSize]);
+  }, [searchQuery, pageSize]);
 
   const getStatusInfo = (status: TableStatus | string) => ({
     label: getTableStatusLabel(status),
@@ -371,7 +343,6 @@ export default function TablesPage() {
       {/* Page Header: Outside the box */}
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Tables Management</h1>
-        <p className={pageHeaderSubtitleClass}>Manage restaurant floor plans, table statuses, and QR code assignments.</p>
       </div>
 
       {/* Main Container Box */}
@@ -397,16 +368,6 @@ export default function TablesPage() {
           <div className="flex-1"></div>
 
           <div className="flex items-center gap-3">
-            <select
-              value={roomFilter}
-              onChange={e => setRoomFilter(e.target.value)}
-              className="h-[42px] px-3 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary text-sm text-zinc-600 min-w-[140px]"
-            >
-              <option value="all">All Rooms</option>
-              {rooms.map(room => (
-                <option key={room.id} value={room.id}>{room.name}</option>
-              ))}
-            </select>
             <div className="relative w-64 group">
               <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input 
@@ -438,7 +399,6 @@ export default function TablesPage() {
                     <TableRow className={dashboardTableHeadRowClass}>
                       <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Table No</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Name</TableHead>
-                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Room</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Description</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-left")}>QR Code</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Status</TableHead>
@@ -449,7 +409,7 @@ export default function TablesPage() {
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i} className="h-14 animate-pulse">
-                      {[...Array(7)].map((_, j) => (
+                      {[...Array(6)].map((_, j) => (
                         <TableCell key={j} className="px-6 py-4">
                           <div className="h-4 bg-zinc-100 rounded w-full"></div>
                         </TableCell>
@@ -458,7 +418,7 @@ export default function TablesPage() {
                   ))
                 ) : paginatedTables.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="px-6 py-10 text-center text-zinc-500">
+                    <TableCell colSpan={6} className="px-6 py-10 text-center text-zinc-500">
                       No tables found
                     </TableCell>
                   </TableRow>
@@ -473,12 +433,6 @@ export default function TablesPage() {
                         </TableCell>
                         <TableCell className="px-6 py-3">
                           <span className="text-[13px] font-medium text-zinc-700">{table.name || `Table ${table.number}`}</span>
-                        </TableCell>
-                        <TableCell className="px-6 py-3">
-                          <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-zinc-600">
-                            <DoorOpen className="size-3.5 text-primary shrink-0" />
-                            {table.room?.name || "—"}
-                          </span>
                         </TableCell>
                         <TableCell className="px-6 py-3">
                           <span
@@ -604,27 +558,6 @@ export default function TablesPage() {
               />
             </div>
             <div className="col-span-2 space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Room *</label>
-              <select
-                value={formData.roomId}
-                onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
-                required
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
-              >
-                <option value="">Select a room</option>
-                {rooms.filter(r => r.isActive).map(room => (
-                  <option key={room.id} value={room.id}>{room.name}</option>
-                ))}
-              </select>
-              {rooms.length === 0 && (
-                <p className="text-xs text-amber-600">
-                  No rooms found.{" "}
-                  <Link href="/rooms" className="font-bold underline hover:text-primary">Create rooms first</Link>
-                  {" "}before adding tables.
-                </p>
-              )}
-            </div>
-            <div className="col-span-2 space-y-2">
               <label className="text-sm font-bold text-[#1E293B]">Display Name (Optional)</label>
               <input
                 value={formData.name}
@@ -715,20 +648,6 @@ export default function TablesPage() {
               />
             </div>
             <div className="col-span-2 space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Room *</label>
-              <select
-                value={formData.roomId}
-                onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
-                required
-                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 transition-all text-[15px] font-medium appearance-none cursor-pointer"
-              >
-                <option value="">Select a room</option>
-                {rooms.filter(r => r.isActive).map(room => (
-                  <option key={room.id} value={room.id}>{room.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2 space-y-2">
               <label className="text-sm font-bold text-[#1E293B]">Display Name</label>
               <input
                 value={formData.name}
@@ -816,24 +735,13 @@ export default function TablesPage() {
 
               <div className="px-8 py-6 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-8 items-start">
                 <div className="space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
-                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-2">
-                        Room
-                      </label>
-                      <div className="flex items-center gap-2 text-[14px] font-bold text-[#1E293B]">
-                        <DoorOpen className="size-4 text-primary shrink-0" />
-                        <span className="truncate">{selectedTable.room?.name || "Not assigned"}</span>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
-                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-2">
-                        Seats
-                      </label>
-                      <div className="flex items-center gap-2 text-[14px] font-bold text-[#1E293B]">
-                        <Users className="size-4 text-primary shrink-0" />
-                        {selectedTable.capacity || 4}
-                      </div>
+                  <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-2">
+                      Seats
+                    </label>
+                    <div className="flex items-center gap-2 text-[14px] font-bold text-[#1E293B]">
+                      <Users className="size-4 text-primary shrink-0" />
+                      {selectedTable.capacity || 4}
                     </div>
                   </div>
 

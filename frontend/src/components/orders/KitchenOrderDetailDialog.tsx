@@ -40,6 +40,9 @@ type KitchenOrderDetailDialogProps = {
   onOrderUpdated?: (order: Order) => void | Promise<void>;
   onStartedPreparing?: () => void;
   onMarkedReady?: () => void;
+  onMarkedServed?: () => void;
+  allowMarkServed?: boolean;
+  readOnly?: boolean;
 };
 
 export default function KitchenOrderDetailDialog({
@@ -50,10 +53,14 @@ export default function KitchenOrderDetailDialog({
   onOrderUpdated,
   onStartedPreparing,
   onMarkedReady,
+  onMarkedServed,
+  allowMarkServed = false,
+  readOnly = false,
 }: KitchenOrderDetailDialogProps) {
   const { showToast } = useToast();
   const [startingPrep, setStartingPrep] = useState(false);
   const [markingReady, setMarkingReady] = useState(false);
+  const [markingServed, setMarkingServed] = useState(false);
 
   if (!order) {
     return (
@@ -100,6 +107,24 @@ export default function KitchenOrderDetailDialog({
       showToast(message, "error");
     } finally {
       setMarkingReady(false);
+    }
+  };
+
+  const handleMarkServed = async () => {
+    setMarkingServed(true);
+    try {
+      const updated = await orderApi.updateStatus(order.id, "served");
+      await onOrderUpdated?.(updated);
+      showToast(`Order #${order.id} marked as served`, "success");
+      onMarkedServed?.();
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || "Failed to mark order served";
+      showToast(message, "error");
+    } finally {
+      setMarkingServed(false);
     }
   };
 
@@ -219,7 +244,7 @@ export default function KitchenOrderDetailDialog({
           >
             Close
           </Button>
-          {isKitchenPendingStatus(order.status) && (
+          {!readOnly && isKitchenPendingStatus(order.status) && (
             <Button
               type="button"
               disabled={startingPrep}
@@ -234,7 +259,7 @@ export default function KitchenOrderDetailDialog({
               Start preparing
             </Button>
           )}
-          {order.status === "preparing" && (
+          {!readOnly && order.status === "preparing" && (
             <Button
               type="button"
               disabled={markingReady}
@@ -249,7 +274,22 @@ export default function KitchenOrderDetailDialog({
               Mark as ready
             </Button>
           )}
-          {order.status === "ready" && (
+          {!readOnly && order.status === "ready" && allowMarkServed && (
+            <Button
+              type="button"
+              disabled={markingServed}
+              onClick={handleMarkServed}
+              className={cn(btnCreatePage, "h-9 px-5 text-sm gap-2 rounded-lg")}
+            >
+              {markingServed ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="size-4" />
+              )}
+              Mark as served
+            </Button>
+          )}
+          {order.status === "ready" && !allowMarkServed && (
             <span className="h-9 px-5 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 text-sm font-semibold">
               <CheckCircle2 className="size-4" />
               Ready for pickup

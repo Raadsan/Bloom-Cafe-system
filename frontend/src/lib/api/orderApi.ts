@@ -39,7 +39,7 @@ export interface Order {
   customerPhone?: string;
   orderType?: string;
   orderitem: OrderItem[];
-  table?: { id: number; number: number; room?: { id: number; name: string } };
+  table?: { id: number; number: number };
   address?: OrderAddress;
   user?: OrderCreator | null;
   source?: string;
@@ -82,6 +82,9 @@ export type GetAllOrdersParams = {
   readyPickup?: boolean;
   waiterHistory?: boolean;
   posQueue?: boolean;
+  kitchenQueue?: boolean;
+  includeServed?: boolean;
+  limit?: number;
 };
 
 const ORDERS_TTL_MS = 45 * 1000;
@@ -109,6 +112,9 @@ async function fetchOrdersFromNetwork(params?: GetAllOrdersParams): Promise<Orde
   if (params?.readyPickup) query.set('readyPickup', 'true');
   if (params?.waiterHistory) query.set('waiterHistory', 'true');
   if (params?.posQueue) query.set('posQueue', 'true');
+  if (params?.kitchenQueue) query.set('kitchenQueue', 'true');
+  if (params?.includeServed) query.set('includeServed', 'true');
+  if (params?.limit) query.set('limit', String(params.limit));
 
   const request = api
     .get(`/orders/all?${query.toString()}`)
@@ -153,6 +159,11 @@ export const orderApi = {
     }
 
     return fetchOrdersFromNetwork(params);
+  },
+
+  getQueueCounts: async (): Promise<{ kitchenCount: number; readyCount: number }> => {
+    const res = await api.get('/orders/counts');
+    return res.data.data;
   },
 
   getOrdersByTable: async (tableId: number): Promise<Order[]> => {

@@ -61,8 +61,7 @@ import Link from "next/link";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { getLucideIcon, searchLucideIconNames, LUCIDE_ICON_NAMES } from "@/lib/lucide-icons";
-import { useSystemBranding } from "@/hooks/use-system-branding";
-import SystemBrandMark from "@/components/branding/SystemBrandMark";
+import { STATIC_APP_LOGO } from "@/lib/branding";
 
 // Helper to normalize URLs from database
 const normalizeUrl = (url: string) => {
@@ -156,9 +155,9 @@ function NavUser({ user }: { user: AuthUser | null }) {
               </DropdownMenuItem>
               {user.role?.toLowerCase() === "admin" && (
                 <DropdownMenuItem asChild>
-                  <Link href="/settings" className="flex w-full items-center text-xs font-semibold uppercase tracking-widest cursor-pointer hover:bg-muted/50">
+                  <Link href="/receipt-settings" className="flex w-full items-center text-xs font-semibold uppercase tracking-widest cursor-pointer hover:bg-muted/50">
                     <Settings2 className="mr-2 size-4" />
-                    Settings
+                    Receipt Settings
                   </Link>
                 </DropdownMenuItem>
               )}
@@ -171,7 +170,7 @@ function NavUser({ user }: { user: AuthUser | null }) {
             <DropdownMenuItem 
               className="text-xs font-semibold uppercase tracking-widest text-destructive dark:text-white cursor-pointer hover:bg-destructive/5"
               onClick={async () => {
-                await authApi.logout();
+                authApi.logout();
               }}
             >
               <LogOut className="mr-2 size-4 dark:text-white" />
@@ -203,7 +202,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   useEffect(() => {
     const initSidebar = async (forceRefresh = false) => {
       try {
-        const currentUser = await authApi.getMe();
+        const cachedUser = authApi.getCachedUser();
+        if (cachedUser) setUser(cachedUser);
+
+        const currentUser = cachedUser ?? (await authApi.getMe());
         setUser(currentUser);
 
         if (currentUser && currentUser.roleId) {
@@ -273,21 +275,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     });
   }, [menus]);
 
-  const { branding } = useSystemBranding();
-
   return (
     <Sidebar collapsible="icon" {...props} className="border-r border-sidebar-border shadow-none bg-sidebar">
-      <SidebarHeader className="!p-0 h-[112px] flex items-stretch justify-center overflow-visible bg-sidebar border-b border-sidebar-border group-data-[collapsible=icon]:h-[80px]">
+      <SidebarHeader className="!p-0 h-[88px] flex items-stretch justify-center overflow-hidden bg-sidebar border-b border-sidebar-border group-data-[collapsible=icon]:h-[72px]">
         <Link
           href="/dashboard"
-          className="flex flex-1 w-full items-center justify-center px-0.5 py-1 min-h-0 hover:opacity-90 transition-opacity group-data-[collapsible=icon]:px-1"
+          className="flex flex-1 w-full items-center justify-center px-3 py-2 min-h-0 hover:opacity-90 transition-opacity group-data-[collapsible=icon]:px-2"
         >
-          <SystemBrandMark
-            logoUrl={branding.systemLogoUrl}
-            systemName={branding.systemName}
-            variant="plain"
-            fit="width"
-            className="w-full max-w-full h-auto max-h-[100px] scale-[1.15] origin-center group-data-[collapsible=icon]:scale-100 group-data-[collapsible=icon]:h-11 group-data-[collapsible=icon]:w-11 group-data-[collapsible=icon]:max-h-none"
+          <img
+            src={STATIC_APP_LOGO}
+            alt="Restaurant"
+            className="h-12 w-auto max-w-[160px] object-contain group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:max-w-[40px]"
           />
         </Link>
       </SidebarHeader>

@@ -31,18 +31,23 @@ const senderSelect = {
 }
 
 function toSenderDto(user, fallbackName, fallbackAvatar, fallbackId) {
+  const safeAvatar = (url) =>
+    typeof url === 'string' && url.length > 0 && !url.startsWith('data:') && url.length < 512
+      ? url
+      : null
+
   if (user) {
     return {
       id: user.id,
       fullName: user.fullName,
-      avatarUrl: user.avatarUrl || null,
+      avatarUrl: safeAvatar(user.avatarUrl),
     }
   }
   if (fallbackName) {
     return {
       id: fallbackId || 0,
       fullName: fallbackName,
-      avatarUrl: fallbackAvatar || null,
+      avatarUrl: safeAvatar(fallbackAvatar),
     }
   }
   return null

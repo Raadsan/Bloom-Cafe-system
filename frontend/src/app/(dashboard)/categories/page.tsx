@@ -20,7 +20,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   actionBtnEdit,
   actionBtnDelete,
 } from "@/lib/dashboard-ui";
@@ -179,7 +178,6 @@ export default function MenuCategoriesPage() {
       <div className="mb-8 px-4 flex items-start justify-between">
         <div>
           <h1 className={pageHeaderTitleClass}>Categories Management</h1>
-          <p className={pageHeaderSubtitleClass}>Organize your food and beverage items into distinct searchable categories.</p>
         </div>
 
         {canAdd && (

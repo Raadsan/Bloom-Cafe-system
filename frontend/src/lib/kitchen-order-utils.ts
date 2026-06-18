@@ -12,7 +12,6 @@ export function getOrderTitle(order: Order) {
 export function getOrderMeta(order: Order) {
   const parts: string[] = [];
   if (order.table?.number) parts.push(`Table ${order.table.number}`);
-  if (order.table?.room?.name) parts.push(order.table.room.name);
   const type = order.orderType || (order.table ? "dine-in" : "takeaway");
   parts.push(type.replace("-", " "));
   return parts.join(" | ");

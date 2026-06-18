@@ -70,14 +70,6 @@ model receiptSettings {
   updatedAt  DateTime @updatedAt
 }
 
-model systemSettings {
-  id            Int      @id @default(1)
-  systemName    String   @default("Restaurant")
-  systemTagline String?  @default("Management System")
-  systemLogoUrl String?  @db.LongText
-  updatedAt     DateTime @updatedAt
-}
-
 model address {
   id         Int      @id @default(autoincrement())
   customerId Int
@@ -345,16 +337,6 @@ model submenu {
   @@index([menuId], map: "submenu_menuId_fkey")
 }
 
-model room {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  table       table[]
-}
-
 model table {
   id        Int       @id @default(autoincrement())
   number    Int       @unique
@@ -362,13 +344,9 @@ model table {
   createdAt DateTime  @default(now())
   name        String?
   description String?   @db.Text
-  roomId      Int?
   qrCode    String    @unique
   updatedAt DateTime? @updatedAt
   order     order[]
-  room      room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
-
-  @@index([roomId], map: "table_roomId_fkey")
 }
 
 model user {

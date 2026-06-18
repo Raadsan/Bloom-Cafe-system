@@ -4,6 +4,7 @@ import React, { useRef, useState } from "react";
 import { Image as ImageIcon, Upload, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fileToReceiptLogoDataUrl } from "@/lib/receipt-logo";
+import { resolveBrandingImageUrl } from "@/lib/branding";
 
 type LogoUploadFieldProps = {
   value: string;
@@ -35,7 +36,11 @@ export default function LogoUploadField({ value, onChange, onError }: LogoUpload
         {uploading ? (
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         ) : value ? (
-          <img src={value} alt="Restaurant logo" className="w-full h-full object-contain p-1" />
+          <img
+            src={resolveBrandingImageUrl(value) || value}
+            alt="Restaurant logo"
+            className="w-full h-full object-contain p-1"
+          />
         ) : (
           <ImageIcon className="size-7 text-zinc-300 dark:text-zinc-600" />
         )}
@@ -44,7 +49,7 @@ export default function LogoUploadField({ value, onChange, onError }: LogoUpload
       <div className="flex-1 space-y-2 min-w-0">
         <p className="text-[13px] font-semibold text-[#1e293b] dark:text-white">Restaurant logo</p>
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug">
-          PNG or JPG, square works best. Shown on receipts and prints after you save.
+          PNG or JPG, square works best. Saved to server uploads folder for the sidebar.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <input

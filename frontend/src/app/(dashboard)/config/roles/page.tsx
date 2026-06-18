@@ -32,7 +32,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
   actionBtnEdit,
   actionBtnDelete,
@@ -162,7 +161,6 @@ export default function RolesPage() {
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Roles</h1>
-        <p className={pageHeaderSubtitleClass}>Create and manage staff roles and their descriptions.</p>
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">

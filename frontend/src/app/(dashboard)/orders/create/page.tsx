@@ -16,7 +16,6 @@ import {
   Search,
   User,
   Phone,
-  DoorOpen,
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,7 +29,6 @@ import {
 import { categoryApi, Category } from "@/lib/api/categoryApi";
 import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
 import { tableApi, Table as RestaurantTable } from "@/lib/api/tableApi";
-import { roomApi, Room } from "@/lib/api/roomApi";
 import { orderApi, Order } from "@/lib/api/orderApi";
 import { paymentApi, PaymentMethod } from "@/lib/api/paymentApi";
 import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
@@ -41,7 +39,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   btnCreateSubmit,
 } from "@/lib/dashboard-ui";
 
@@ -82,7 +79,6 @@ interface OrderDraft {
   paymentMethod: OrderPaymentMethod;
   paymentPhone: string;
   selectedCategoryId: number | "all" | "";
-  selectedRoomId: number | "";
   formTableId: number | "";
   pendingOrderId: number | null;
 }
@@ -111,11 +107,6 @@ function clearOrderDraft() {
   localStorage.removeItem(ORDER_DRAFT_KEY);
 }
 
-function getTableRoomId(table: RestaurantTable): number | null {
-  const id = table.roomId ?? table.room?.id;
-  return id != null ? Number(id) : null;
-}
-
 function isTableSelectable(table: RestaurantTable) {
   return table.status !== "inactive";
 }
@@ -124,13 +115,11 @@ export default function WaiterCreateOrderPage() {
   const { showToast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | "all">("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [selectedRoomId, setSelectedRoomId] = useState<number | "">("");
   const [formTableId, setFormTableId] = useState<number | "">("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -162,7 +151,6 @@ export default function WaiterCreateOrderPage() {
       ) {
         setSelectedCategoryId(draft.selectedCategoryId);
       }
-      if (draft.selectedRoomId) setSelectedRoomId(draft.selectedRoomId);
       if (draft.formTableId) setFormTableId(draft.formTableId);
       if (draft.pendingOrderId) setPendingOrderId(draft.pendingOrderId);
     }
@@ -179,7 +167,6 @@ export default function WaiterCreateOrderPage() {
       paymentMethod,
       paymentPhone,
       selectedCategoryId,
-      selectedRoomId,
       formTableId,
       pendingOrderId,
     });
@@ -192,7 +179,6 @@ export default function WaiterCreateOrderPage() {
     paymentMethod,
     paymentPhone,
     selectedCategoryId,
-    selectedRoomId,
     formTableId,
     pendingOrderId,
   ]);
@@ -200,18 +186,16 @@ export default function WaiterCreateOrderPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [cats, items, settings, roomsData, tablesData] = await Promise.all([
+        const [cats, items, settings, tablesData] = await Promise.all([
           categoryApi.getAllCategories(),
           menuItemApi.getAllMenuItems(),
           receiptSettingsApi.getSettings(),
-          roomApi.getAllRooms(),
           tableApi.getAllTables(),
         ]);
         const available = (items || []).filter(i => i.isAvailable);
         setCategories(cats || []);
         setMenuItems(available);
         setReceiptSettings(settings);
-        setRooms((roomsData || []).filter(r => r.isActive));
         setTables(tablesData || []);
       } catch {
         showToast("Failed to load menu", "error");
@@ -222,17 +206,12 @@ export default function WaiterCreateOrderPage() {
     load();
   }, [showToast]);
 
-  const roomTables = useMemo(() => {
-    if (!selectedRoomId) return [];
-    const roomId = Number(selectedRoomId);
-    return tables
-      .filter(t => isTableSelectable(t) && getTableRoomId(t) === roomId)
-      .sort((a, b) => a.number - b.number);
-  }, [tables, selectedRoomId]);
-
-  const selectedRoom = useMemo(
-    () => rooms.find(r => r.id === selectedRoomId) ?? null,
-    [rooms, selectedRoomId]
+  const selectableTables = useMemo(
+    () =>
+      tables
+        .filter(t => isTableSelectable(t))
+        .sort((a, b) => a.number - b.number),
+    [tables]
   );
 
   const selectedTable = useMemo(
@@ -295,8 +274,8 @@ export default function WaiterCreateOrderPage() {
 
   const selectedPayment = PAYMENT_METHODS.find(m => m.id === paymentMethod)!;
 
-  const locationLabel = selectedRoom && selectedTable
-    ? `${selectedRoom.name} · Table ${selectedTable.number}`
+  const locationLabel = selectedTable
+    ? `Table ${selectedTable.number}`
     : "";
 
   const clearPendingOrder = () => {
@@ -306,7 +285,6 @@ export default function WaiterCreateOrderPage() {
 
   const resetForm = () => {
     setCart([]);
-    setSelectedRoomId("");
     setFormTableId("");
     setCustomerName("");
     setCustomerPhone("");
@@ -326,10 +304,6 @@ export default function WaiterCreateOrderPage() {
   };
 
   const validateCheckout = (): boolean => {
-    if (!selectedRoomId) {
-      showToast("Please select a room", "error");
-      return false;
-    }
     if (!formTableId) {
       showToast("Please select a table", "error");
       return false;
@@ -452,9 +426,6 @@ export default function WaiterCreateOrderPage() {
             Back to Orders
           </Link>
           <h1 className={pageHeaderTitleClass}>Create Order</h1>
-          <p className={pageHeaderSubtitleClass}>
-            Select menu items, then checkout with room, table, customer &amp; payment.
-          </p>
         </div>
       </div>
 
@@ -631,7 +602,7 @@ export default function WaiterCreateOrderPage() {
         </aside>
       </div>
 
-      {/* Checkout modal: room, table, customer, payment */}
+      {/* Checkout modal: table, customer, payment */}
       <Dialog
         open={isCheckoutOpen}
         onOpenChange={open => {
@@ -643,7 +614,7 @@ export default function WaiterCreateOrderPage() {
           <div className="p-6 border-b border-zinc-100 shrink-0">
             <DialogTitle className="text-xl font-bold text-zinc-800">Checkout</DialogTitle>
             <DialogDescription className="text-sm text-zinc-500 mt-1">
-              Select room &amp; table, add customer details, then pay.
+              Select table, add customer details, then pay.
             </DialogDescription>
           </div>
 
@@ -690,58 +661,31 @@ export default function WaiterCreateOrderPage() {
               </div>
             </div>
 
-            {/* Room & Table */}
+            {/* Table */}
             <section className="space-y-3">
               <p className="text-[11px] font-black uppercase tracking-widest text-zinc-400">
                 Location *
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-zinc-800">Room</label>
-                  <div className="relative">
-                    <DoorOpen className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
-                    <select
-                      value={selectedRoomId}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setSelectedRoomId(val ? Number(val) : "");
-                        setFormTableId("");
-                      }}
-                      className={cn(formSelectClass, "pl-10")}
-                    >
-                      <option value="">Select room</option>
-                      {rooms.map(room => (
-                        <option key={room.id} value={room.id}>
-                          {room.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-zinc-800">Table</label>
-                  <select
-                    value={formTableId}
-                    onChange={e =>
-                      setFormTableId(e.target.value ? Number(e.target.value) : "")
-                    }
-                    className={formSelectClass}
-                    disabled={!selectedRoomId}
-                  >
-                    <option value="">
-                      {selectedRoomId ? "Select table" : "Select room first"}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-zinc-800">Table</label>
+                <select
+                  value={formTableId}
+                  onChange={e =>
+                    setFormTableId(e.target.value ? Number(e.target.value) : "")
+                  }
+                  className={formSelectClass}
+                >
+                  <option value="">Select table</option>
+                  {selectableTables.map(table => (
+                    <option key={table.id} value={table.id}>
+                      {table.name || `Table ${table.number}`}
                     </option>
-                    {roomTables.map(table => (
-                      <option key={table.id} value={table.id}>
-                        {table.name || `Table ${table.number}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  ))}
+                </select>
               </div>
-              {selectedRoom && selectedTable && (
+              {selectedTable && (
                 <p className="text-xs text-primary font-medium px-1">
-                  {selectedRoom.name} · Table {selectedTable.number}
+                  Table {selectedTable.number}
                 </p>
               )}
             </section>

@@ -23,7 +23,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   btnCreatePage,
 } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
@@ -41,10 +40,7 @@ function getPickupLabel(order: Order) {
     return `${order.address.street}, ${order.address.district}`;
   }
   if (order.table?.number) {
-    const room = order.table.room?.name;
-    return room
-      ? `Table ${order.table.number} · ${room}`
-      : `Table ${order.table.number}`;
+    return `Table ${order.table.number}`;
   }
   if (order.orderType === "takeaway") return "Takeaway counter";
   return getOrderMeta(order);
@@ -102,9 +98,6 @@ export default function WaiterReadyOrdersView({
 
   const isPos = audience === "pos";
   const pageTitle = isPos ? "Ready Orders" : "Ready for Service";
-  const pageSubtitle = isPos
-    ? "Takeaway and delivery orders ready to hand to customers."
-    : "Dine-in orders ready to serve at the table.";
   const pickupHeading = isPos ? "Hand to customer" : "Serve at table";
   const servedLabel = isPos ? "Handed to Customer" : "Mark as Served";
   const confirmTitle = isPos ? "Handed to customer?" : "Mark as Served?";
@@ -146,9 +139,6 @@ export default function WaiterReadyOrdersView({
           <h1 className={pageHeaderTitleClass}>
             {pageTitle}
           </h1>
-          <p className={isPos ? "text-sm text-muted-foreground mt-1" : pageHeaderSubtitleClass}>
-            {pageSubtitle}
-          </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-zinc-500">
           <ClipboardList className="size-4 text-primary" />

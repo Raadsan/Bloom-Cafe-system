@@ -48,7 +48,6 @@ import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
-  pageHeaderSubtitleClass,
   pageHeaderWrapperClass,
 } from "@/lib/dashboard-ui";
 import { isToday, format, subDays } from "date-fns";
@@ -119,9 +118,6 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
     <div className={cn(dashboardPageClass, "space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700")} style={dashboardPageStyle}>
       <div className={pageHeaderWrapperClass}>
         <h1 className={pageHeaderTitleClass}>Kitchen Dashboard</h1>
-        <p className={pageHeaderSubtitleClass}>
-          Monitor active orders and kitchen workload.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -11,7 +11,8 @@ import app from './src/app.js'
 import { initSocket } from './src/socket.js'
 import prisma from './src/config/db.js'
 import {
-  ensureRoomsMenuItem,
+  deactivateRoomsMenuItem,
+  deactivateSystemSettingsMenuItem,
   ensureCreateOrderMenuItem,
   ensurePickupOrdersMenuItem,
   ensurePickupHistoryMenuItem,
@@ -28,12 +29,13 @@ const PORT = process.env.PORT || 5000
 server.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`)
   try {
-    await ensureRoomsMenuItem()
+    await deactivateRoomsMenuItem()
+    await deactivateSystemSettingsMenuItem()
     await ensureCreateOrderMenuItem()
     await ensurePickupOrdersMenuItem()
     await ensurePickupHistoryMenuItem()
     await ensureDiscountAdvertisementMenuItem()
-    console.log('✅ Sidebar menus ensured (Rooms, Create Order, Ready Pickup, Pickup History, Promotions)')
+    console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions)')
   } catch (err) {
     console.warn('Sidebar menu ensure skipped:', err?.message)
   }

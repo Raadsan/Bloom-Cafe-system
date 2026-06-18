@@ -2,9 +2,17 @@ import prisma from '../config/db.js'
 import { getCachedUser, invalidateUserCache } from '../middlewares/authMiddleware.js'
 
 function formatAuthUser(user) {
-  const { password, posPin, role, ...rest } = user
+  const { password, posPin, role, avatarUrl, ...rest } = user
+  const safeAvatar =
+    typeof avatarUrl === 'string' &&
+    avatarUrl.length > 0 &&
+    !avatarUrl.startsWith('data:') &&
+    avatarUrl.length < 512
+      ? avatarUrl
+      : null
   return {
     ...rest,
+    avatarUrl: safeAvatar,
     role: role.name,
     roleId: user.roleId,
     roleDescription: role.description
@@ -81,14 +89,16 @@ export const posLogin = async (req, res) => {
 
     const token = generateToken(user)
 
-    await prisma.auditlog.create({
-      data: {
-        userId: user.id,
-        action: 'LOGIN',
-        entity: 'AUTH',
-        description: `Staff ${user.fullName} logged into POS.`,
-      },
-    })
+    prisma.auditlog
+      .create({
+        data: {
+          userId: user.id,
+          action: 'LOGIN',
+          entity: 'AUTH',
+          description: `Staff ${user.fullName} logged into POS.`,
+        },
+      })
+      .catch(err => console.warn('POS login audit skipped:', err?.message))
 
     res.status(200).json({
       success: true,
@@ -150,15 +160,16 @@ export const login = async (req, res) => {
 
     const token = generateToken(user)
 
-    // Log Login Activity
-    await prisma.auditlog.create({
-      data: {
-        userId: user.id,
-        action: 'LOGIN',
-        entity: 'AUTH',
-        description: `Staff ${user.fullName} logged into the system.`
-      }
-    });
+    prisma.auditlog
+      .create({
+        data: {
+          userId: user.id,
+          action: 'LOGIN',
+          entity: 'AUTH',
+          description: `Staff ${user.fullName} logged into the system.`,
+        },
+      })
+      .catch(err => console.warn('Login audit skipped:', err?.message))
 
     res.status(200).json({
       success: true,
