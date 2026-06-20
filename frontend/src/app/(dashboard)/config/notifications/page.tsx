@@ -28,7 +28,7 @@ export default function NotificationsPage() {
 
   const fetchNotifications = async (force = false) => {
     try {
-      const data = await notificationApi.getMyNotifications(force);
+      const data = await notificationApi.getMyNotifications(force, { full: true });
       setNotifications(data);
     } catch (error) {
       console.error("Failed to fetch notifications", error);

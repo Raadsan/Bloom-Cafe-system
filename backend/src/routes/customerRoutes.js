@@ -2,6 +2,7 @@ import express from 'express'
 import {
   createCustomer,
   getAllCustomers,
+  getPosCustomers,
   getCustomerByPhone,
   getCustomerById,
   updateCustomer,
@@ -13,6 +14,7 @@ const router = express.Router()
 
 router.post('/', protect, checkPermission('/clients', 'canAdd'), createCustomer)
 router.get('/all', protect, getAllCustomers)
+router.get('/pos-list', protect, getPosCustomers)
 router.get('/by-phone/:phone', protect, getCustomerByPhone)
 router.get('/:id', protect, checkPermission('/clients', 'canView'), getCustomerById)
 router.put('/:id', protect, checkPermission('/clients', 'canEdit'), updateCustomer)

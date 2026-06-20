@@ -1,30 +1,23 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { authApi, AuthUser } from "@/lib/api/authApi";
-import { 
-  LogOut, 
-  User,
+import {
+  LogOut,
   User as UserIcon,
   ChevronDown,
   FileText,
   Settings2,
-  Calculator,
   Maximize,
-  CircleDollarSign,
-  Wallet,
-  ShoppingCart,
   Printer,
   RotateCw,
-  Bell,
-  ChefHat
 } from "lucide-react";
-import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
+import { dispatchPosSoftRefresh, onDebouncedEvent, ORDERS_CHANGED, POS_SOFT_REFRESH } from "@/lib/live-updates";
 import { orderApi } from "@/lib/api/orderApi";
 import { PermissionProvider } from "@/context/PermissionContext";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { STATIC_APP_LOGO } from "@/lib/branding";
-import { cn } from "@/lib/utils";
+import PosSidebarNav from "@/components/pos/PosSidebarNav";
+import PosHeaderNotifications from "@/components/pos/PosHeaderNotifications";
+import { PosSearchProvider } from "@/context/PosSearchContext";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -37,12 +30,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function PosLayout({ children }: { children: React.ReactNode }) {
+function PosLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [cartCount, setCartCount] = useState(0);
-  const [readyCount, setReadyCount] = useState(0);
   const [kitchenCount, setKitchenCount] = useState(0);
+  const [clock, setClock] = useState("");
+
+  const syncCounts = useCallback(async () => {
+    try {
+      const counts = await orderApi.getQueueCounts();
+      setKitchenCount(counts.kitchenCount);
+    } catch {
+      setKitchenCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    const tick = () => {
+      setClock(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      );
+    };
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const cached = authApi.getCachedUser();
@@ -58,19 +71,21 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     window.addEventListener("profile_updated", handleProfileUpdate);
 
     const updateCountFromStorage = () => {
-      const saved = localStorage.getItem('pos-cart');
+      const saved = localStorage.getItem("pos-cart");
       if (saved) {
         try {
           const cart = JSON.parse(saved);
-          setCartCount(cart.reduce((sum: number, i: any) => sum + i.quantity, 0));
-        } catch (e) { setCartCount(0); }
+          setCartCount(cart.reduce((sum: number, i: { quantity?: number }) => sum + (i.quantity || 0), 0));
+        } catch {
+          setCartCount(0);
+        }
       } else {
         setCartCount(0);
       }
     };
 
     updateCountFromStorage();
-    
+
     const handleCartEvent = (e: Event) => {
       const detail = (e as CustomEvent<number>).detail;
       if (typeof detail === "number") setCartCount(detail);
@@ -79,232 +94,146 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     window.addEventListener("cart-updated", handleCartEvent);
     window.addEventListener("storage", updateCountFromStorage);
 
-    const syncCounts = async () => {
-      try {
-        const counts = await orderApi.getQueueCounts();
-        setKitchenCount(counts.kitchenCount);
-        setReadyCount(counts.readyCount);
-      } catch {
-        setKitchenCount(0);
-        setReadyCount(0);
-      }
-    };
-
     syncCounts();
     const removeOrdersListener = onDebouncedEvent(ORDERS_CHANGED, syncCounts, 700);
+    const removePosRefresh = onDebouncedEvent(POS_SOFT_REFRESH, syncCounts, 400);
 
     return () => {
       window.removeEventListener("cart-updated", handleCartEvent);
       window.removeEventListener("storage", updateCountFromStorage);
       window.removeEventListener("profile_updated", handleProfileUpdate);
       removeOrdersListener();
+      removePosRefresh();
     };
-  }, []);
+  }, [syncCounts]);
 
   return (
     <PermissionProvider>
-      <div className="flex flex-col h-screen bg-zinc-50 dark:bg-[#161616] font-sans overflow-hidden">
-        {/* POS Header */}
-        <header className="h-[56px] shrink-0 bg-white dark:bg-[#161616] border-b border-gray-200 dark:border-[#2a2a2a] flex items-center px-6 gap-6 shadow-sm z-50">
-          {/* Logo */}
-          <Link href="/pos-terminal" className="flex items-center hover:opacity-80 transition-opacity shrink-0">
-            <img
-              src={STATIC_APP_LOGO}
-              alt="Restaurant POS"
-              className="h-10 w-auto max-w-[160px] object-contain"
-            />
-          </Link>
+      <div className="flex h-screen bg-[#eef1f7] dark:bg-[#121212] font-sans overflow-hidden">
+        <PosSidebarNav
+          pathname={pathname}
+          cartCount={cartCount}
+          kitchenCount={kitchenCount}
+          onLogout={() => authApi.logout("/pos/login")}
+        />
 
-          <div className="flex-1" />
-          
-          {/* Utility Icons */}
-          <div className="flex items-center gap-1.5 mr-4 border-r border-gray-100 pr-4 shrink-0">
-            {/* Cart Button (Link to POS Terminal) */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+          <header className="h-14 shrink-0 bg-white dark:bg-[#1a1a1a] border-b border-zinc-200/80 dark:border-zinc-800 flex items-center px-5 gap-4 shadow-sm z-40">
+            <div className="flex items-center gap-3 text-sm">
+              <span className="font-semibold text-zinc-700 dark:text-zinc-200">Bloom POS</span>
+              <span className="text-zinc-300">|</span>
+              <span className="text-zinc-500 tabular-nums">{clock}</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200">
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Online
+              </span>
+            </div>
 
-            <button 
+            <div className="flex-1 min-w-0" />
+
+            <PosHeaderNotifications />
+
+            <button
+              type="button"
               onClick={() => {
-                if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-                else document.exitFullscreen();
+                dispatchPosSoftRefresh();
+                syncCounts();
               }}
-              className="size-8 rounded-xl bg-gray-50 text-gray-500 flex items-center justify-center hover:bg-gray-100 transition-all border border-gray-100"
+              className="size-9 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
+              title="Refresh"
+              aria-label="Refresh"
             >
-              <Maximize className="size-4" />
+              <RotateCw className="size-4" />
             </button>
-            <Link 
-              href="/pos-terminal"
-              className={cn(
-                "size-8 rounded-xl flex items-center justify-center transition-all relative border",
-                pathname === '/pos-terminal' ? "bg-primary text-white border-primary shadow-sm" : 
-                cartCount > 0 ? "bg-primary/10 text-primary border-primary/20" : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
-              )}
-            >
-              <ShoppingCart className="size-4" />
-              {cartCount > 0 && (
-                <span className={cn("absolute -top-1.5 -right-1.5 text-[9px] font-black h-4 w-4 flex items-center justify-center rounded-full shadow-md border",
-                  pathname === '/pos-terminal' ? "bg-white text-primary border-primary" : "bg-primary text-white border-white"
-                )}>
-                  {cartCount}
-                </span>
-              )}
-            </Link>
 
-            <Link 
-              href="/my-sales" 
-              className={cn(
-                "size-8 rounded-xl flex items-center justify-center transition-all border group",
-                pathname === '/my-sales' ? "bg-primary text-white border-primary shadow-sm" : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-primary hover:text-white"
-              )}
-            >
-              <CircleDollarSign className="size-4" />
-            </Link>
-
-            <Link
-              href="/kitchen"
-              className={cn(
-                "size-8 rounded-xl flex items-center justify-center transition-all relative border",
-                pathname === "/kitchen"
-                  ? "bg-primary text-white border-primary shadow-sm"
-                  : kitchenCount > 0
-                    ? "bg-orange-50 text-orange-600 border-orange-200"
-                    : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
-              )}
-              title="Kitchen queue"
-            >
-              <ChefHat className="size-4" />
-              <span
-                className={cn(
-                  "absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center",
-                  kitchenCount > 0
-                    ? "bg-orange-600 text-white"
-                    : "bg-muted text-muted-foreground border border-border"
-                )}
-              >
-                {kitchenCount}
-              </span>
-            </Link>
-
-            <Link
-              href="/ready-orders"
-              className={cn(
-                "size-8 rounded-xl flex items-center justify-center transition-all relative border",
-                pathname === "/ready-orders"
-                  ? "bg-primary text-white border-primary shadow-sm"
-                  : readyCount > 0
-                    ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                    : "bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100"
-              )}
-              title="Table orders"
-            >
-              <Bell className="size-4" />
-              <span
-                className={cn(
-                  "absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center",
-                  readyCount > 0
-                    ? "bg-emerald-600 text-white"
-                    : "bg-muted text-muted-foreground border border-border"
-                )}
-              >
-                {readyCount}
-              </span>
-            </Link>
-
-            <button 
+            <button
+              type="button"
               onClick={() => window.print()}
-              className="size-8 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-gray-100 transition-all border border-gray-100"
+              className="size-9 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
+              title="Print"
+              aria-label="Print"
             >
               <Printer className="size-4" />
             </button>
 
             <button
               type="button"
-              onClick={() => window.location.reload()}
-              className="size-8 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-gray-100 transition-all border border-gray-100"
-              title="Refresh"
+              onClick={() => {
+                if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+                else document.exitFullscreen();
+              }}
+              className="size-9 rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
+              title="Fullscreen"
+              aria-label="Fullscreen"
             >
-              <RotateCw className="size-4" />
+              <Maximize className="size-4" />
             </button>
-          </div>
 
-          <ThemeToggle />
-
-          {/* User Info */}
-          {user && (
-            <div className="flex items-center gap-3">
+            {user && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 pl-1 cursor-pointer group outline-none bg-gray-50 border border-gray-100 hover:border-primary/30 pr-3 py-1.5 rounded-xl transition-all">
-                    <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center text-[13px] font-bold shadow-sm overflow-hidden">
-                      {user?.avatarUrl ? (
-                        <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  <button className="flex items-center gap-2 pl-1 cursor-pointer outline-none bg-zinc-50 border border-zinc-200 hover:border-primary/30 pr-3 py-1.5 rounded-xl transition-all">
+                    <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center text-[13px] font-bold overflow-hidden">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        user?.fullName?.charAt(0) || "U"
+                        user.fullName?.charAt(0) || "U"
                       )}
                     </div>
-                    <div className="hidden lg:flex flex-col items-start gap-0.5 text-left ml-1">
-                      <span className="text-[12px] font-bold uppercase tracking-tight text-[#1E293B] leading-tight">{user?.fullName}</span>
-                      <span className="text-[10px] font-medium uppercase tracking-widest text-gray-500 leading-tight">{user?.role}</span>
+                    <div className="hidden md:flex flex-col items-start text-left">
+                      <span className="text-[11px] font-bold text-zinc-800 leading-tight">{user.fullName}</span>
+                      <span className="text-[10px] text-zinc-400 uppercase">{user.role}</span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 ml-1 text-gray-400 group-hover:text-primary transition-colors" />
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-64 mt-2 rounded-xl shadow-2xl border-gray-100" align="end">
-                  <DropdownMenuLabel className="p-0 font-normal">
-                    <div className="flex items-center gap-3 px-2 py-3 text-left text-sm">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white font-bold text-[15px] overflow-hidden">
-                        {user?.avatarUrl ? (
-                          <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                        ) : (
-                          user?.fullName?.charAt(0) || "U"
-                        )}
-                      </div>
-                      <div className="grid flex-1 text-left text-xs leading-tight">
-                        <span className="truncate font-bold uppercase tracking-tight text-[#1E293B]">{user?.fullName}</span>
-                        <span className="truncate text-[10px] font-black uppercase tracking-widest text-gray-400 mt-0.5">{user?.role}</span>
-                      </div>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator className="bg-gray-100" />
+                <DropdownMenuContent className="w-56 rounded-xl" align="end">
+                  <DropdownMenuLabel className="font-normal text-xs">{user.fullName}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
                   <DropdownMenuGroup>
                     <DropdownMenuItem asChild>
-                      <Link href="/my-profile" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
-                        <UserIcon className="mr-2.5 size-4" />
+                      <Link href="/my-profile" className="cursor-pointer">
+                        <UserIcon className="mr-2 size-4" />
                         My Profile
                       </Link>
                     </DropdownMenuItem>
-                    {user?.role?.toLowerCase() === "admin" && (
+                    {user.role?.toLowerCase() === "admin" && (
                       <DropdownMenuItem asChild>
-                        <Link href="/receipt-settings" className="flex w-full items-center text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
-                          <Settings2 className="mr-2.5 size-4" />
+                        <Link href="/receipt-settings" className="cursor-pointer">
+                          <Settings2 className="mr-2 size-4" />
                           Receipt Settings
                         </Link>
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem className="text-[11px] font-bold uppercase tracking-widest py-3 cursor-pointer text-gray-600 hover:text-primary hover:bg-primary/5 focus:text-primary focus:bg-primary/5">
-                      <FileText className="mr-2.5 size-4" />
-                      Privacy Policy
+                    <DropdownMenuItem>
+                      <FileText className="mr-2 size-4" />
+                      Policy
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
-                  <DropdownMenuSeparator className="bg-gray-100" />
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className="text-[11px] font-bold uppercase tracking-widest text-red-500 dark:text-white py-3 cursor-pointer hover:bg-red-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-white focus:bg-red-50 dark:focus:bg-white/10 focus:text-red-600 dark:focus:text-white"
-                    onClick={async () => {
-                      authApi.logout("/pos/login");
-                    }}
+                    className="text-red-600 cursor-pointer"
+                    onClick={() => authApi.logout("/pos/login")}
                   >
-                    <LogOut className="mr-2.5 size-4 dark:text-white" />
+                    <LogOut className="mr-2 size-4" />
                     Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          )}
-        </header>
+            )}
+          </header>
 
-        {/* POS Content — scrollable area */}
-        <main className="pos-scope flex-1 min-h-0 overflow-hidden">
-          {children}
-        </main>
+          <main className="pos-scope flex-1 min-h-0 overflow-hidden">{children}</main>
+        </div>
       </div>
     </PermissionProvider>
+  );
+}
+
+export default function PosLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <PosSearchProvider>
+      <PosLayoutInner>{children}</PosLayoutInner>
+    </PosSearchProvider>
   );
 }

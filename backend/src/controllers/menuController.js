@@ -6,6 +6,7 @@ let createOrderMenuEnsured = false;
 let pickupOrdersMenuEnsured = false;
 let pickupHistoryMenuEnsured = false;
 let discountAdvertisementMenuEnsured = false;
+let compositesMenuEnsured = false;
 
 const roleMenusCache = new Map();
 const ROLE_MENUS_CACHE_TTL = 5 * 60 * 1000;
@@ -26,6 +27,49 @@ export function clearRoleMenusCache(roleId) {
   } else {
     roleMenusCache.clear();
   }
+  clearAllMenusCache();
+}
+
+let allMenusCache = { data: null, at: 0 };
+let allMenusInflight = null;
+const ALL_MENUS_TTL_MS = 5 * 60 * 1000;
+
+export function clearAllMenusCache() {
+  allMenusCache = { data: null, at: 0 };
+  allMenusInflight = null;
+}
+
+async function loadAllMenusFromDb() {
+  const menus = await prisma.menu.findMany({
+    include: {
+      submenu: {
+        orderBy: { order: 'asc' },
+      },
+    },
+    orderBy: { order: 'asc' },
+  });
+  const formatted = menus.map((m) => ({
+    ...m,
+    items: m.submenu || [],
+  }));
+  allMenusCache = { data: formatted, at: Date.now() };
+  return formatted;
+}
+
+export async function warmAllMenusCache() {
+  if (allMenusCache.data && Date.now() - allMenusCache.at < ALL_MENUS_TTL_MS) {
+    return allMenusCache.data;
+  }
+  if (allMenusInflight) return allMenusInflight;
+  allMenusInflight = loadAllMenusFromDb()
+    .catch((err) => {
+      allMenusInflight = null;
+      throw err;
+    })
+    .finally(() => {
+      allMenusInflight = null;
+    });
+  return allMenusInflight;
 }
 
 async function fetchMenusForRole(roleId) {
@@ -141,24 +185,28 @@ export const seedDefaultMenus = async (req, res) => {
       { 
         title: "Kitchen & Menu", url: "/menu", icon: "UtensilsCrossed", order: 4,
         submenus: [
-          { title: "Categories", url: "/menu/categories", order: 1 },
-          { title: "Menu Items", url: "/menu/items", order: 2 },
+          { title: "Categories", url: "/categories", order: 1 },
+          { title: "Menu Items", url: "/menus", order: 2 },
           { title: "Table Setup", url: "/tables", order: 3 }
         ] 
       },
+      {
+        title: "Menu Combos", url: "/composites", icon: "Layers", order: 5,
+        submenus: []
+      },
       { 
-        title: "Inventory & Stock", url: "/inventory", icon: "PackageOpen", order: 5,
+        title: "Inventory & Stock", url: "/inventory", icon: "PackageOpen", order: 6,
         submenus: [
           { title: "Current Stock", url: "/inventory", order: 1 },
           { title: "Stock Movements", url: "/inventory/movements", order: 2 }
         ] 
       },
       { 
-        title: "Clients", url: "/clients", icon: "Users", order: 6,
+        title: "Clients", url: "/clients", icon: "Users", order: 7,
         submenus: [] 
       },
       { 
-        title: "User Management", url: "/users", icon: "Shield", order: 7,
+        title: "User Management", url: "/users", icon: "Shield", order: 8,
         submenus: [
           { title: "All Staff", url: "/users", order: 1 }
         ] 
@@ -662,25 +710,325 @@ export async function ensureDiscountAdvertisementMenuItem() {
   }
 }
 
-export const getAllMenus = async (req, res) => {
+/** Menu Combos — top-level sidebar item (not a submenu) */
+export async function ensureCompositesMenuItem() {
+  if (compositesMenuEnsured) return;
   try {
-    const menus = await prisma.menu.findMany({
-      include: {
-        submenu: {
-          orderBy: { order: 'asc' }
-        }
+    // Remove old submenu entry under Kitchen & Menu if it exists
+    await prisma.submenu.updateMany({
+      where: {
+        OR: [{ url: "/composites" }, { title: "Menu Combos" }],
       },
-      orderBy: { order: 'asc' }
+      data: { isActive: false },
     });
 
-    const formattedMenus = menus.map(m => ({
-      ...m,
-      items: m.submenu || []
-    }));
+    const kitchenMenu = await prisma.menu.findFirst({
+      where: {
+        OR: [{ title: "Kitchen & Menu" }, { url: "/menu" }, { url: "/menus" }],
+      },
+    });
 
-    res.json({ success: true, data: formattedMenus });
+    if (kitchenMenu) {
+      const urlFixes = [
+        { title: "Categories", url: "/categories", order: 1 },
+        { title: "Menu Items", url: "/menus", order: 2 },
+        { title: "Table Setup", url: "/tables", order: 3 },
+      ];
+      for (const fix of urlFixes) {
+        await prisma.submenu.updateMany({
+          where: { menuId: kitchenMenu.id, title: fix.title },
+          data: { url: fix.url, order: fix.order, isActive: true },
+        });
+      }
+    }
+
+    const roles = await prisma.role.findMany({
+      where: {
+        OR: [
+          { name: { contains: "admin" } },
+          { name: { contains: "Admin" } },
+          { name: { contains: "manager" } },
+          { name: { contains: "Manager" } },
+        ],
+      },
+    });
+
+    if (roles.length === 0) return;
+
+    let comboMenu = await prisma.menu.findFirst({
+      where: {
+        OR: [{ url: "/composites" }, { title: "Menu Combos" }],
+      },
+    });
+
+    if (comboMenu) {
+      comboMenu = await prisma.menu.update({
+        where: { id: comboMenu.id },
+        data: {
+          title: "Menu Combos",
+          url: "/composites",
+          icon: "Layers",
+          isActive: true,
+          order: comboMenu.order > 0 ? comboMenu.order : 5,
+        },
+      });
+    } else {
+      comboMenu = await prisma.menu.create({
+        data: {
+          title: "Menu Combos",
+          url: "/composites",
+          icon: "Layers",
+          order: 5,
+          isActive: true,
+        },
+      });
+    }
+
+    for (const role of roles) {
+      await prisma.roleMenuAccess.upsert({
+        where: {
+          roleId_menuId: { roleId: role.id, menuId: comboMenu.id },
+        },
+        update: {
+          canView: true,
+          canAdd: true,
+          canEdit: true,
+          canDelete: true,
+        },
+        create: {
+          roleId: role.id,
+          menuId: comboMenu.id,
+          canView: true,
+          canAdd: true,
+          canEdit: true,
+          canDelete: true,
+        },
+      });
+    }
+
+    clearRoleMenusCache();
+    compositesMenuEnsured = true;
+  } catch (error) {
+    console.error("ensureCompositesMenuItem error:", error);
+  }
+}
+
+export const getAllMenus = async (req, res) => {
+  try {
+    const now = Date.now();
+    if (allMenusCache.data && now - allMenusCache.at < ALL_MENUS_TTL_MS) {
+      return res.json({ success: true, data: allMenusCache.data });
+    }
+
+    if (allMenusInflight) {
+      const data = await allMenusInflight;
+      return res.json({ success: true, data });
+    }
+
+    allMenusInflight = loadAllMenusFromDb()
+      .catch((err) => {
+        allMenusInflight = null;
+        throw err;
+      })
+      .finally(() => {
+        allMenusInflight = null;
+      });
+
+    const data = await allMenusInflight;
+    res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+function patchAllMenusOrderInCache(items) {
+  if (!allMenusCache.data) return;
+  const orderById = new Map(items.map((i) => [Number(i.id), Number(i.order) || 0]));
+  allMenusCache.data = allMenusCache.data
+    .map((m) => (orderById.has(m.id) ? { ...m, order: orderById.get(m.id) } : m))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  allMenusCache.at = Date.now();
+}
+
+function patchAllMenusEntryInCache(formatted) {
+  if (!allMenusCache.data) return;
+  const idx = allMenusCache.data.findIndex((m) => m.id === formatted.id);
+  if (idx >= 0) {
+    allMenusCache.data[idx] = formatted;
+  } else {
+    allMenusCache.data.push(formatted);
+  }
+  allMenusCache.data.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  allMenusCache.at = Date.now();
+}
+
+function removeAllMenusEntryFromCache(menuId) {
+  if (!allMenusCache.data) return;
+  allMenusCache.data = allMenusCache.data.filter((m) => m.id !== menuId);
+  allMenusCache.at = Date.now();
+}
+
+/** Single round-trip save: menu + all sub-modules in one transaction. */
+export const saveMenuBundle = async (req, res) => {
+  try {
+    const menuId = req.params.id ? Number(req.params.id) : null;
+    const {
+      title,
+      url,
+      icon,
+      order,
+      isActive,
+      hasSubmenus,
+      submenus: submenusInput = [],
+    } = req.body;
+
+    if (!title?.trim() || !url?.trim()) {
+      return res.status(400).json({ success: false, message: 'Title and URL are required' });
+    }
+
+    const submenus = Array.isArray(submenusInput) ? submenusInput : [];
+
+    const result = await prisma.$transaction(async (tx) => {
+      let menu;
+      if (menuId) {
+        const data = {};
+        if (title !== undefined) data.title = title.trim();
+        if (url !== undefined) data.url = url.trim();
+        if (icon !== undefined) data.icon = icon;
+        if (order !== undefined) data.order = Number(order) || 0;
+        if (isActive !== undefined) data.isActive = !!isActive;
+        menu = await tx.menu.update({ where: { id: menuId }, data });
+      } else {
+        menu = await tx.menu.create({
+          data: {
+            title: title.trim(),
+            url: url.trim(),
+            icon: icon || 'LayoutDashboard',
+            order: Number(order) || 0,
+            isActive: isActive !== false,
+          },
+        });
+        const adminRole = await tx.role.findFirst({
+          where: { name: { contains: 'Admin' } },
+        });
+        if (adminRole) {
+          await tx.roleMenuAccess.create({
+            data: {
+              roleId: adminRole.id,
+              menuId: menu.id,
+              canView: true,
+              canAdd: true,
+              canEdit: true,
+              canDelete: true,
+            },
+          });
+        }
+      }
+
+      let savedSubs = [];
+      if (hasSubmenus) {
+        const existing = menuId
+          ? await tx.submenu.findMany({ where: { menuId: menu.id }, select: { id: true } })
+          : [];
+        const keptIds = new Set();
+
+        for (let i = 0; i < submenus.length; i++) {
+          const sm = submenus[i];
+          if (!sm?.title?.trim() || !sm?.url?.trim()) continue;
+          const orderVal = i + 1;
+
+          if (sm.id) {
+            const updated = await tx.submenu.update({
+              where: { id: Number(sm.id) },
+              data: {
+                title: sm.title.trim(),
+                url: sm.url.trim(),
+                order: orderVal,
+                ...(sm.isActive !== undefined ? { isActive: !!sm.isActive } : {}),
+              },
+            });
+            savedSubs.push(updated);
+            keptIds.add(updated.id);
+          } else {
+            const created = await tx.submenu.create({
+              data: {
+                menuId: menu.id,
+                title: sm.title.trim(),
+                url: sm.url.trim(),
+                order: orderVal,
+                isActive: sm.isActive !== false,
+              },
+            });
+            savedSubs.push(created);
+            keptIds.add(created.id);
+
+            const adminRole = await tx.role.findFirst({
+              where: { name: { contains: 'Admin' } },
+            });
+            if (adminRole) {
+              const menuAccess = await tx.roleMenuAccess.findUnique({
+                where: { roleId_menuId: { roleId: adminRole.id, menuId: menu.id } },
+              });
+              if (menuAccess) {
+                await tx.roleSubMenuAccess.create({
+                  data: {
+                    roleMenuAccessId: menuAccess.id,
+                    subMenuId: created.id,
+                    canView: true,
+                    canAdd: true,
+                    canEdit: true,
+                    canDelete: true,
+                  },
+                });
+              }
+            }
+          }
+        }
+
+        if (menuId) {
+          const removeIds = existing.filter((e) => !keptIds.has(e.id)).map((e) => e.id);
+          if (removeIds.length) {
+            await tx.submenu.deleteMany({ where: { id: { in: removeIds } } });
+          }
+        }
+      } else if (menuId) {
+        savedSubs = await tx.submenu.findMany({
+          where: { menuId: menu.id },
+          orderBy: { order: 'asc' },
+        });
+      }
+
+      return { menu, items: savedSubs };
+    }, { timeout: 30000 });
+
+    const formatted = {
+      ...result.menu,
+      items: result.items,
+      permissions: {
+        canView: true,
+        canAdd: true,
+        canEdit: true,
+        canDelete: true,
+      },
+    };
+
+    patchAllMenusEntryInCache(formatted);
+    clearRoleMenusCache();
+
+    if (req.user) {
+      void trackingController.logAction(
+        req.user.id,
+        menuId ? 'UPDATE' : 'CREATE',
+        'MENU',
+        formatted.id,
+        `${menuId ? 'Updated' : 'Created'} menu module: ${formatted.title}`
+      );
+    }
+
+    res.json({ success: true, data: formatted });
+  } catch (error) {
+    console.error('saveMenuBundle error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -723,9 +1071,16 @@ export const updateMenu = async (req, res) => {
   try {
     const { id } = req.params;
     const { title, url, icon, order, isActive } = req.body;
+    const data = {};
+    if (title !== undefined) data.title = title;
+    if (url !== undefined) data.url = url;
+    if (icon !== undefined) data.icon = icon;
+    if (order !== undefined) data.order = Number(order);
+    if (isActive !== undefined) data.isActive = !!isActive;
+
     const menu = await prisma.menu.update({
       where: { id: Number(id) },
-      data: { title, url, icon, order: Number(order), isActive }
+      data,
     });
 
     if (req.user) {
@@ -800,12 +1155,77 @@ export const updateSubMenu = async (req, res) => {
   try {
     const { id } = req.params;
     const { title, url, order, isActive } = req.body;
+    const data = {};
+    if (title !== undefined) data.title = title;
+    if (url !== undefined) data.url = url;
+    if (order !== undefined) data.order = Number(order);
+    if (isActive !== undefined) data.isActive = !!isActive;
+
     const submenu = await prisma.submenu.update({
       where: { id: Number(id) },
-      data: { title, url, order: Number(order), isActive }
+      data,
     });
     clearRoleMenusCache();
     res.json({ success: true, data: submenu });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/** Reorder main menus — updates display order only; role permissions are untouched. */
+export const reorderMenus = async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'items array is required' });
+    }
+
+    await prisma.$transaction(
+      items.map(({ id, order }) =>
+        prisma.menu.update({
+          where: { id: Number(id) },
+          data: { order: Number(order) || 0 },
+        })
+      )
+    );
+
+    patchAllMenusOrderInCache(items);
+    clearRoleMenusCache();
+
+    if (req.user) {
+      trackingController
+        .logAction(req.user.id, 'UPDATE', 'MENU', 0, 'Reordered sidebar menus')
+        .catch(() => {});
+    }
+
+    res.json({ success: true, data: allMenusCache.data || items });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/** Reorder sub-modules under a parent menu — permissions untouched. */
+export const reorderSubMenus = async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'items array is required' });
+    }
+
+    await prisma.$transaction(
+      items.map(({ id, order }) =>
+        prisma.submenu.update({
+          where: { id: Number(id) },
+          data: { order: Number(order) || 0 },
+        })
+      )
+    );
+
+    patchAllMenusOrderInCache(
+      items.map(({ id, order }) => ({ id, order }))
+    );
+    clearRoleMenusCache();
+    res.json({ success: true, message: 'Sub-menu order updated' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

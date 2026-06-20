@@ -1,7 +1,17 @@
 import prisma from "../config/db.js"
 
 const notifCache = new Map()
-const NOTIF_CACHE_TTL = 30 * 1000
+const NOTIF_CACHE_TTL = 60 * 1000
+
+function lightEnrichNotifications(notifications) {
+  return notifications.map((n) => {
+    const { sender: _prismaSender, ...rest } = n
+    return {
+      ...rest,
+      sender: toSenderDto(null, n.senderName, n.senderAvatarUrl, n.senderId),
+    }
+  })
+}
 
 function buildRoleWhere(req) {
   const role = req.user.role?.toLowerCase()
@@ -19,6 +29,10 @@ function buildRoleWhere(req) {
 
   if (role === 'kitchen') {
     return { role: 'kitchen' }
+  }
+
+  if (role === 'pos' || role === 'cashier') {
+    return { role: 'pos' }
   }
 
   return { role }
@@ -168,7 +182,8 @@ async function enrichNotificationsWithSenders(notifications) {
 // GET MY NOTIFICATIONS (role-aware)
 export const getMyNotifications = async (req, res) => {
   try {
-    const cacheKey = `${req.user.id}:${req.user.role?.toLowerCase()}`
+    const light = req.query.light === '1' || req.query.light === 'true'
+    const cacheKey = `${req.user.id}:${req.user.role?.toLowerCase()}:${light ? 'light' : 'full'}`
     const cached = notifCache.get(cacheKey)
     if (cached && Date.now() - cached.at < NOTIF_CACHE_TTL) {
       return res.status(200).json(cached.payload)
@@ -182,7 +197,9 @@ export const getMyNotifications = async (req, res) => {
       take: 50,
     })
 
-    const data = await enrichNotificationsWithSenders(notifications)
+    const data = light
+      ? lightEnrichNotifications(notifications)
+      : await enrichNotificationsWithSenders(notifications)
 
     const payload = {
       success: true,

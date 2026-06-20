@@ -14,6 +14,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { categoryApi, CategoryWithItems } from "@/lib/api/categoryApi";
+import { menuItemApi } from "@/lib/api/menuItemApi";
+import { dispatchMenuChanged } from "@/lib/live-updates";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
 import {
@@ -59,9 +61,9 @@ export default function MenuCategoriesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const fetchCategories = async () => {
+  const fetchCategories = async (forceRefresh = false) => {
     try {
-      const data = await categoryApi.getCategoriesWithItems();
+      const data = await categoryApi.getCategoriesWithItems(forceRefresh);
       setCategories(data || []);
     } catch (err) {
       console.error("Failed to fetch categories", err);
@@ -127,9 +129,15 @@ export default function MenuCategoriesPage() {
 
       if (isEditOpen && selected) {
         await categoryApi.updateCategory(selected.id, payload);
+        menuItemApi.clearPosMenuCache();
+        categoryApi.clearCategoryCache();
+        dispatchMenuChanged({ action: "category_update", id: selected.id });
         showToast("Category updated successfully", "success");
       } else {
-        await categoryApi.createCategory(payload);
+        const created = await categoryApi.createCategory(payload);
+        menuItemApi.clearPosMenuCache();
+        categoryApi.clearCategoryCache();
+        dispatchMenuChanged({ action: "category_create", id: created.id });
         showToast("Category created successfully", "success");
       }
       await fetchCategories();
@@ -162,6 +170,9 @@ export default function MenuCategoriesPage() {
     setDeleting(true);
     try {
       await categoryApi.deleteCategory(selected.id);
+      menuItemApi.clearPosMenuCache();
+      categoryApi.clearCategoryCache();
+      dispatchMenuChanged({ action: "category_delete", id: selected.id });
       showToast("Category deleted successfully", "success");
       await fetchCategories();
       setIsDeleteOpen(false);

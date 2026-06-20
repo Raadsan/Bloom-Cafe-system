@@ -5,7 +5,7 @@ import PosKitchenView from "@/components/orders/PosKitchenView";
 import { orderApi, Order } from "@/lib/api/orderApi";
 import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
 import { useToast } from "@/components/ui/toast";
-import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
+import { onDebouncedEvent, ORDERS_CHANGED, MENU_CHANGED, POS_SOFT_REFRESH } from "@/lib/live-updates";
 
 export default function PosKitchenPage() {
   const { showToast } = useToast();
@@ -30,10 +30,22 @@ export default function PosKitchenPage() {
 
   useEffect(() => {
     fetchData(false);
-    const removeListener = onDebouncedEvent(ORDERS_CHANGED, () => {
-      fetchData(true);
-    }, 700);
-    return () => removeListener();
+    const removeOrders = onDebouncedEvent(ORDERS_CHANGED, () => fetchData(true), 700);
+    const removePos = onDebouncedEvent(POS_SOFT_REFRESH, () => fetchData(true), 400);
+    const removeMenu = onDebouncedEvent(MENU_CHANGED, async () => {
+      menuItemApi.clearPosMenuCache();
+      try {
+        const items = await menuItemApi.getPosMenuCatalog(true);
+        setMenuItems(items || []);
+      } catch {
+        /* keep current menu */
+      }
+    }, 400);
+    return () => {
+      removeOrders();
+      removePos();
+      removeMenu();
+    };
   }, [fetchData]);
 
   return (

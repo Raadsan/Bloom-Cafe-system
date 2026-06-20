@@ -12,6 +12,7 @@
     "db:studio": "npx prisma studio",
     "db:seed": "node prisma/seed.js",
     "db:seed-menu": "node scripts/seed-bloom-menu.mjs",
+    "migrate-menu-images": "node scripts/migrate-menu-images.mjs",
     "create-admin": "node prisma/create-admin.js"
   },
   "keywords": [],

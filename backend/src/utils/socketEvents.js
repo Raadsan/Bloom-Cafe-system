@@ -1,7 +1,7 @@
 import { getIO } from '../socket.js'
 
 function staffRooms() {
-  return ['kitchen', 'waiter', 'admin', 'manager']
+  return ['kitchen', 'waiter', 'pos', 'admin', 'manager']
 }
 
 function emitToStaff(event, payload) {
@@ -34,6 +34,7 @@ export const emitNewOrder = (order) => {
   emitToStaff('new_order', payload)
   emitStaffNotification({ type: 'new_order', orderId: order.id, role: 'kitchen' })
   emitStaffNotification({ type: 'new_order', orderId: order.id, role: 'waiter' })
+  emitStaffNotification({ type: 'new_order', orderId: order.id, role: 'pos' })
 }
 
 // ORDER READY → targeted rooms only

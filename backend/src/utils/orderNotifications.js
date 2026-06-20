@@ -10,8 +10,21 @@ function getTableLabel(order) {
   return 'Walk-in'
 }
 
+function getOrderSourceLabel(order) {
+  const source = (order.source || '').toLowerCase()
+  if (source === 'mobile') return 'Mobile app'
+  if (source === 'table' || source === 'qr') return 'Table QR'
+  if (order.table?.number) return `Table ${order.table.number}`
+  return 'Online'
+}
+
+function isExternalCustomerOrder(order) {
+  const source = (order.source || 'pos').toLowerCase()
+  return source !== 'pos' && source !== 'dashboard'
+}
+
 /**
- * New order entered kitchen queue — notify kitchen + all waiters.
+ * New order entered kitchen queue — notify kitchen, waiters, and POS (mobile/table).
  */
 export async function notifyNewOrder(order, _senderId = null) {
   if (!order?.id) return
@@ -27,21 +40,32 @@ export async function notifyNewOrder(order, _senderId = null) {
     orderId: order.id,
   }
 
-  await prisma.notification.createMany({
-    data: [
-      {
-        ...base,
-        message: `Order #${order.id} — ${label}${itemCount ? ` (${itemCount} items)` : ''} waiting in kitchen`,
-        role: 'kitchen',
-      },
-      {
-        ...base,
-        message: `Order #${order.id} — ${label} received and sent to kitchen`,
-        role: 'waiter',
-        userId: null,
-      },
-    ],
-  })
+  const rows = [
+    {
+      ...base,
+      message: `Order #${order.id} — ${label}${itemCount ? ` (${itemCount} items)` : ''} waiting in kitchen`,
+      role: 'kitchen',
+    },
+    {
+      ...base,
+      message: `Order #${order.id} — ${label} received and sent to kitchen`,
+      role: 'waiter',
+      userId: null,
+    },
+  ]
+
+  if (isExternalCustomerOrder(order)) {
+    const via = getOrderSourceLabel(order)
+    rows.push({
+      ...base,
+      title: `New ${via} Order`,
+      message: `Order #${order.id} from ${via} — ${label}${itemCount ? ` (${itemCount} items)` : ''}`,
+      role: 'pos',
+      userId: null,
+    })
+  }
+
+  await prisma.notification.createMany({ data: rows })
 
   emitNewOrder(order)
 }

@@ -1,15 +1,100 @@
 import prisma from '../config/db.js'
 import { logAudit } from '../utils/auditHelper.js'
+import { emitMenuChanged } from '../utils/emitMenuChanged.js'
 import { enrichMenuItemsWithFlashSale } from '../utils/flashSaleHelper.js'
+import {
+  persistMenuImageUrl,
+  deleteMenuImageFile,
+  getApiPublicOrigin,
+  sanitizeMenuImageUrlForPos,
+  toAbsoluteMenuImageUrl,
+} from '../utils/menuImageStorage.js'
+import {
+  loadCompositeComponents,
+  attachCompositesToMenuItems,
+} from '../utils/compositeMenuHelper.js'
+import { refreshSumPricedCompositesForItem, invalidateComboFormCache } from './compositeController.js'
 
 const posCatalogCache = { data: null, at: 0 }
-const POS_CATALOG_TTL_MS = 60 * 1000
+const POS_CATALOG_TTL_MS = 5 * 60 * 1000
 
-function sanitizeMenuImageUrl(url) {
-  if (!url || typeof url !== 'string') return null
-  if (url.startsWith('data:')) return null
-  if (url.length > 600) return null
-  return url
+const allMenuItemsCache = { data: null, at: 0 }
+let allMenuItemsInflight = null
+const ALL_MENU_ITEMS_TTL_MS = 5 * 60 * 1000
+
+function scheduleBase64MenuImageMigration(items) {
+  void (async () => {
+    for (const item of items) {
+      if (!item.imageUrl?.startsWith('data:')) continue
+      try {
+        const persisted = await persistMenuImageUrl(item.imageUrl, item.id)
+        if (persisted) {
+          await prisma.menuitem.update({
+            where: { id: item.id },
+            data: { imageUrl: persisted },
+          })
+          invalidateAllMenuItemCaches()
+        }
+      } catch (err) {
+        console.error(`Background menu image migrate #${item.id}:`, err.message)
+      }
+    }
+  })()
+}
+
+function mapMenuItemsForApi(items, origin) {
+  return items.map((item) => {
+    const path = sanitizeMenuImageUrlForPos(item.imageUrl)
+    const imageUrl = toAbsoluteMenuImageUrl(path, origin)
+    return { ...item, imageUrl }
+  })
+}
+
+async function loadAllMenuItemsFromDb(origin) {
+  const items = await prisma.menuitem.findMany({
+    include: {
+      category: {
+        select: { id: true, name: true },
+      },
+    },
+    orderBy: { id: 'asc' },
+  })
+
+  scheduleBase64MenuImageMigration(items)
+
+  const withImages = mapMenuItemsForApi(items, origin)
+  return enrichMenuItemsWithFlashSale(withImages)
+}
+
+export function invalidateAllMenuItemCaches() {
+  posCatalogCache.data = null
+  posCatalogCache.at = 0
+  allMenuItemsCache.data = null
+  allMenuItemsCache.at = 0
+  allMenuItemsInflight = null
+  invalidateComboFormCache()
+  void import('./categoryController.js')
+    .then((m) => m.clearCategoryListCache())
+    .catch(() => {})
+}
+
+export async function warmAllMenuItemsCache(origin = 'http://127.0.0.1:5000') {
+  if (allMenuItemsCache.data && Date.now() - allMenuItemsCache.at < ALL_MENU_ITEMS_TTL_MS) {
+    return allMenuItemsCache.data
+  }
+  if (allMenuItemsInflight) return allMenuItemsInflight
+  allMenuItemsInflight = loadAllMenuItemsFromDb(origin)
+    .then((data) => {
+      allMenuItemsCache.data = data
+      allMenuItemsCache.at = Date.now()
+      allMenuItemsInflight = null
+      return data
+    })
+    .catch((err) => {
+      allMenuItemsInflight = null
+      throw err
+    })
+  return allMenuItemsInflight
 }
 
 function normalizeDiscountInput(discountType, discountValue, price) {
@@ -95,7 +180,7 @@ export const createMenuItem = async (req, res) => {
         tax: tax !== undefined ? Number(tax) : 0,
         discountType: discount.discountType,
         discountValue: discount.discountValue,
-        imageUrl: imageUrl || null,
+        imageUrl: null,
         categoryId: Number(categoryId),
         isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
         isRecommended: typeof isRecommended === 'boolean' ? isRecommended : false,
@@ -106,13 +191,29 @@ export const createMenuItem = async (req, res) => {
       }
     })
 
-    logAudit({ userId: req.user?.id, action: 'Created', entity: 'MenuItem', entityId: item.id, description: `Created menu item "${item.name}"` })
+    let savedItem = item
+    if (imageUrl) {
+      const persisted = await persistMenuImageUrl(imageUrl, item.id)
+      const nextUrl =
+        persisted ||
+        (typeof imageUrl === 'string' && !imageUrl.startsWith('data:') ? imageUrl : null)
+      if (nextUrl) {
+        savedItem = await prisma.menuitem.update({
+          where: { id: item.id },
+          data: { imageUrl: nextUrl },
+          include: { category: true },
+        })
+      }
+    }
+
+    logAudit({ userId: req.user?.id, action: 'Created', entity: 'MenuItem', entityId: savedItem.id, description: `Created menu item "${savedItem.name}"` })
     invalidatePosMenuCatalogCache()
+    emitMenuChanged({ action: 'create', id: savedItem.id })
 
     return res.status(201).json({
       success: true,
       message: 'Menu item created successfully',
-      data: item
+      data: savedItem
     })
   } catch (error) {
     console.error('Create MenuItem Error:', error)
@@ -132,17 +233,20 @@ export const createMenuItem = async (req, res) => {
   }
 }
 
-// GET POS MENU CATALOG (lightweight — no descriptions / base64 images)
+// GET POS MENU CATALOG — absolute image URLs on every fresh load
 export const getPosMenuCatalog = async (req, res) => {
   try {
+    const fresh = req.query.fresh === '1' || req.query.fresh === 'true'
     const now = Date.now()
-    if (posCatalogCache.data && now - posCatalogCache.at < POS_CATALOG_TTL_MS) {
+    if (!fresh && posCatalogCache.data && now - posCatalogCache.at < POS_CATALOG_TTL_MS) {
       return res.status(200).json({
         success: true,
         count: posCatalogCache.data.length,
         data: posCatalogCache.data,
       })
     }
+
+    const origin = getApiPublicOrigin(req)
 
     const items = await prisma.menuitem.findMany({
       select: {
@@ -157,23 +261,31 @@ export const getPosMenuCatalog = async (req, res) => {
         categoryId: true,
         options: true,
         imageUrl: true,
+        isComposite: true,
+        compositePricing: true,
       },
       orderBy: { id: 'asc' },
     })
 
-    const slim = items.map((item) => ({
-      ...item,
-      imageUrl: sanitizeMenuImageUrl(item.imageUrl),
-    }))
+    const slim = items.map((item) => {
+      const path = sanitizeMenuImageUrlForPos(item.imageUrl)
+      const imageUrl = toAbsoluteMenuImageUrl(path, origin)
+      return { ...item, imageUrl }
+    })
+
+    scheduleBase64MenuImageMigration(items)
 
     const enriched = await enrichMenuItemsWithFlashSale(slim)
-    posCatalogCache.data = enriched
+    const compositeIds = enriched.filter((i) => i.isComposite).map((i) => i.id)
+    const componentMap = await loadCompositeComponents(compositeIds, prisma)
+    const withComposites = attachCompositesToMenuItems(enriched, componentMap)
+    posCatalogCache.data = withComposites
     posCatalogCache.at = now
 
     res.status(200).json({
       success: true,
-      count: enriched.length,
-      data: enriched,
+      count: withComposites.length,
+      data: withComposites,
     })
   } catch (error) {
     console.error('Get POS Menu Catalog Error:', error)
@@ -185,36 +297,61 @@ export const getPosMenuCatalog = async (req, res) => {
   }
 }
 
-export const invalidatePosMenuCatalogCache = () => {
-  posCatalogCache.data = null
-  posCatalogCache.at = 0
-}
+export const invalidatePosMenuCatalogCache = invalidateAllMenuItemCaches
 
 // GET ALL MENU ITEMS
 export const getAllMenuItems = async (req, res) => {
   try {
-    const items = await prisma.menuitem.findMany({
-      include: {
-        category: {
-          select: { id: true, name: true }
-        }
-      },
-      orderBy: { id: 'asc' }
-    })
+    const origin = getApiPublicOrigin(req)
+    const fresh = req.query.fresh === '1' || req.query.fresh === 'true'
+    const now = Date.now()
 
-    const enriched = await enrichMenuItemsWithFlashSale(items)
+    if (
+      !fresh &&
+      allMenuItemsCache.data &&
+      now - allMenuItemsCache.at < ALL_MENU_ITEMS_TTL_MS
+    ) {
+      return res.status(200).json({
+        success: true,
+        count: allMenuItemsCache.data.length,
+        data: allMenuItemsCache.data,
+      })
+    }
+
+    if (allMenuItemsInflight) {
+      const data = await allMenuItemsInflight
+      return res.status(200).json({
+        success: true,
+        count: data.length,
+        data,
+      })
+    }
+
+    allMenuItemsInflight = loadAllMenuItemsFromDb(origin)
+      .then((data) => {
+        allMenuItemsCache.data = data
+        allMenuItemsCache.at = Date.now()
+        allMenuItemsInflight = null
+        return data
+      })
+      .catch((err) => {
+        allMenuItemsInflight = null
+        throw err
+      })
+
+    const data = await allMenuItemsInflight
 
     res.status(200).json({
       success: true,
-      count: enriched.length,
-      data: enriched
+      count: data.length,
+      data,
     })
   } catch (error) {
     console.error('Get MenuItems Error:', error)
     res.status(500).json({
       success: false,
       message: 'Failed to fetch menu items',
-      error: error.message
+      error: error.message,
     })
   }
 }
@@ -283,6 +420,33 @@ export const updateMenuItem = async (req, res) => {
       nextPrice
     )
 
+    let nextImageUrl = existing.imageUrl
+    if (imageUrl !== undefined) {
+      if (!imageUrl) {
+        await deleteMenuImageFile(existing.imageUrl)
+        nextImageUrl = null
+      } else if (imageUrl.startsWith('data:')) {
+        const persisted = await persistMenuImageUrl(imageUrl, itemId)
+        if (persisted) {
+          if (
+            existing.imageUrl?.startsWith('/uploads/menu/') &&
+            existing.imageUrl !== persisted
+          ) {
+            await deleteMenuImageFile(existing.imageUrl)
+          }
+          nextImageUrl = persisted
+        }
+      } else {
+        if (
+          existing.imageUrl?.startsWith('/uploads/menu/') &&
+          existing.imageUrl !== imageUrl
+        ) {
+          await deleteMenuImageFile(existing.imageUrl)
+        }
+        nextImageUrl = imageUrl
+      }
+    }
+
     const updated = await prisma.menuitem.update({
       where: { id: itemId },
       data: {
@@ -298,7 +462,7 @@ export const updateMenuItem = async (req, res) => {
         tax: tax !== undefined ? Number(tax) : existing.tax,
         discountType: discount.discountType,
         discountValue: discount.discountValue,
-        imageUrl: imageUrl !== undefined ? imageUrl : existing.imageUrl,
+        imageUrl: nextImageUrl,
         categoryId: categoryId ? Number(categoryId) : existing.categoryId,
         isAvailable: typeof isAvailable === 'boolean' ? isAvailable : existing.isAvailable,
         isRecommended: typeof isRecommended === 'boolean' ? isRecommended : (existing.isRecommended ?? false),
@@ -311,6 +475,10 @@ export const updateMenuItem = async (req, res) => {
 
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'MenuItem', entityId: updated.id, description: `Updated menu item "${updated.name}"` })
     invalidatePosMenuCatalogCache()
+    emitMenuChanged({ action: 'update', id: updated.id })
+    if (!updated.isComposite) {
+      void refreshSumPricedCompositesForItem(updated.id)
+    }
 
     return res.status(200).json({
       success: true,
@@ -350,10 +518,12 @@ export const deleteMenuItem = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Menu item not found' })
     }
 
+    await deleteMenuImageFile(existing.imageUrl)
     await prisma.menuitem.delete({ where: { id: itemId } })
 
     logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'MenuItem', entityId: itemId, description: `Deleted menu item "${existing.name}"` })
     invalidatePosMenuCatalogCache()
+    emitMenuChanged({ action: 'delete', id: itemId })
 
     return res.status(200).json({
       success: true,
@@ -385,6 +555,8 @@ export const getPublicMenuByQrCode = async (req, res) => {
       })
     }
 
+    const origin = getApiPublicOrigin(req)
+
     const categories = await prisma.category.findMany({
       where: { isActive: true },
       include: {
@@ -396,11 +568,33 @@ export const getPublicMenuByQrCode = async (req, res) => {
       orderBy: { id: 'asc' },
     })
 
+    const categoriesWithImages = await Promise.all(
+      categories.map(async (cat) => {
+        const menuitem = await Promise.all(
+          cat.menuitem.map(async (item) => {
+            const path = sanitizeMenuImageUrlForPos(item.imageUrl)
+            const imageUrl = toAbsoluteMenuImageUrl(path, origin)
+            return { ...item, imageUrl }
+          })
+        )
+        return { ...cat, menuitem }
+      })
+    )
+
+    const allItems = categoriesWithImages.flatMap((c) => c.menuitem)
+    const compositeIds = allItems.filter((i) => i.isComposite).map((i) => i.id)
+    const componentMap = await loadCompositeComponents(compositeIds, prisma)
+
+    const categoriesWithComposites = categoriesWithImages.map((cat) => ({
+      ...cat,
+      menuitem: attachCompositesToMenuItems(cat.menuitem, componentMap),
+    }))
+
     res.status(200).json({
       success: true,
       data: {
         table,
-        categories
+        categories: categoriesWithComposites,
       }
     })
   } catch (error) {

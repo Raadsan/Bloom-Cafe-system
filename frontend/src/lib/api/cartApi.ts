@@ -6,7 +6,13 @@ export interface CartItem {
   menuItemId: string;
   quantity: number;
   unitPrice: number;
-  menuItem?: { id: string; name: string; price: number; imageUrl?: string };
+  menuItem?: {
+    id: string;
+    name: string;
+    price: number;
+    imageUrl?: string;
+    isComposite?: boolean;
+  };
 }
 
 export interface Cart {
@@ -60,8 +66,10 @@ export const cartApi = {
   },
 
   /** Checkout: converts cart into an order (PUBLIC). */
-  checkoutCart: async (payload: CheckoutPayload): Promise<{ orderId: string }> => {
+  checkoutCart: async (payload: CheckoutPayload): Promise<{ orderId: number }> => {
     const res = await api.post('/cart/checkout', payload);
-    return res.data;
+    return {
+      orderId: res.data.data?.orderId ?? res.data.data?.order?.id,
+    };
   },
 };

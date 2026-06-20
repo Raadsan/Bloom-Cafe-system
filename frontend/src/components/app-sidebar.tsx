@@ -230,13 +230,45 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   useEffect(() => {
     const handleMenuUpdate = (e: Event) => {
-      const detail = (e as CustomEvent<{ roleId?: number }>).detail;
+      const detail = (e as CustomEvent<{ roleId?: number; allMenus?: Menu[] }>).detail;
       const roleId = userRoleIdRef.current;
       if (!roleId) return;
       if (detail?.roleId && detail.roleId !== roleId) return;
 
-      clearSidebarCache();
-      menuApi.getMenusByRole(roleId, true).then((fetchedMenus) => {
+      if (detail?.allMenus?.length && _sidebarCache?.roleId === roleId) {
+        const byId = new Map(detail.allMenus.map((m) => [m.id, m]));
+        const patched = _sidebarCache.menus
+          .map((rm) => {
+            const src = byId.get(rm.id);
+            if (!src) return rm;
+            const srcSubs = new Map((src.items || []).map((s) => [s.id, s]));
+            return {
+              ...rm,
+              title: src.title,
+              url: src.url,
+              icon: src.icon,
+              order: src.order,
+              items: (rm.items || [])
+                .map((sub) => {
+                  const srcSub = srcSubs.get(sub.id);
+                  if (!srcSub) return sub;
+                  return {
+                    ...sub,
+                    title: srcSub.title,
+                    url: srcSub.url,
+                    order: srcSub.order,
+                  };
+                })
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+            };
+          })
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        _sidebarCache = { menus: patched, roleId };
+        setMenus(patched);
+        return;
+      }
+
+      menuApi.getMenusByRole(roleId, false).then((fetchedMenus) => {
         _sidebarCache = { menus: fetchedMenus, roleId };
         setMenus(fetchedMenus);
       }).catch(() => {});

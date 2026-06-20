@@ -26,6 +26,7 @@ import expenseRoutes from './routes/expenseRoutes.js';
 import receiptSettingsRoutes from './routes/receiptSettingsRoutes.js'
 import addressRoutes from './routes/addressRoutes.js'
 import discountAdvertisementRoutes from './routes/discountAdvertisementRoutes.js'
+import compositeRoutes from './routes/compositeRoutes.js'
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -59,6 +60,7 @@ app.use('/api/expenses', expenseRoutes)
 app.use('/api/addresses', addressRoutes)
 app.use('/api/receipt-settings', receiptSettingsRoutes)
 app.use('/api/discount-advertisements', discountAdvertisementRoutes)
+app.use('/api/composites', compositeRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');

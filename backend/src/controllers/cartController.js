@@ -1,79 +1,146 @@
 import prisma from '../config/db.js'
+import { notifyNewOrder } from '../utils/orderNotifications.js'
+import { clearOrderListCache } from '../controllers/orderController.js'
+import {
+  assertMenuItemSellable,
+  buildOrderItemsPayload,
+  getItemUnitPrice,
+  loadMenuItemsForOrderSale,
+} from '../utils/compositeMenuHelper.js'
 
-// CREATE OR GET CART
-export const getOrCreateCart = async (req, res) => { 
+const cartInclude = {
+  items: {
+    include: {
+      menuItem: true,
+    },
+    orderBy: { id: 'asc' },
+  },
+  table: {
+    select: { id: true, number: true, name: true },
+  },
+}
+
+function formatCart(cart) {
+  if (!cart) return null
+  let totalAmount = 0
+  const items = (cart.items || []).map((row) => {
+    const unitPrice = getItemUnitPrice(row.menuItem)
+    const lineTotal = unitPrice * row.quantity
+    totalAmount += lineTotal
+    return {
+      id: String(row.id),
+      menuItemId: String(row.menuItemId),
+      quantity: row.quantity,
+      unitPrice,
+      menuItem: row.menuItem
+        ? {
+            id: String(row.menuItem.id),
+            name: row.menuItem.name,
+            price: row.menuItem.price,
+            imageUrl: row.menuItem.imageUrl,
+            isComposite: row.menuItem.isComposite,
+          }
+        : undefined,
+    }
+  })
+
+  return {
+    id: String(cart.id),
+    tableId: String(cart.tableId),
+    items,
+    totalAmount: Math.round(totalAmount * 100) / 100,
+    createdAt: cart.createdAt,
+  }
+}
+
+async function getActiveCartByTable(tableId) {
+  return prisma.cart.findFirst({
+    where: {
+      tableId: Number(tableId),
+      status: 'active',
+    },
+    include: cartInclude,
+  })
+}
+
+// GET OR CREATE CART BY TABLE (PUBLIC)
+export const getOrCreateCartByTable = async (req, res) => {
   try {
-    const { tableId } = req.body
+    const tableId = Number(req.params.tableId)
+    if (!tableId) {
+      return res.status(400).json({ success: false, message: 'tableId is required' })
+    }
 
-    let cart = await prisma.cart.findFirst({
-      where: {
-        tableId: Number(tableId),
-        status: 'active'
-      },
-      include: {
-        items: {
-          include: { menuItem: true }
-        }
-      }
-    })
+    const table = await prisma.table.findUnique({ where: { id: tableId } })
+    if (!table) {
+      return res.status(404).json({ success: false, message: 'Table not found' })
+    }
 
+    let cart = await getActiveCartByTable(tableId)
     if (!cart) {
       cart = await prisma.cart.create({
-        data: {
-          tableId: Number(tableId)
-        },
-        include: {
-          items: true
-        }
+        data: { tableId },
+        include: cartInclude,
       })
     }
 
-    res.status(200).json({
-      success: true,
-      data: cart
-    })
-
+    res.status(200).json({ success: true, data: formatCart(cart) })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
 }
 
-// ADD ITEM TO CART
+// CREATE OR GET CART (legacy POST)
+export const getOrCreateCart = async (req, res) => {
+  req.params = { tableId: String(req.body.tableId) }
+  return getOrCreateCartByTable(req, res)
+}
+
+// ADD ITEM TO CART (PUBLIC)
 export const addToCart = async (req, res) => {
   try {
     const { cartId, menuItemId, quantity } = req.body
+    const parsedCartId = Number(cartId)
+    const parsedMenuItemId = Number(menuItemId)
+    const qty = Math.max(1, Number(quantity) || 1)
 
-    const existing = await prisma.cartItem.findFirst({
-      where: {
-        cartId: Number(cartId),
-        menuItemId: Number(menuItemId)
-      }
+    const cart = await prisma.cart.findUnique({
+      where: { id: parsedCartId },
+      include: { items: true },
     })
+    if (!cart || cart.status !== 'active') {
+      return res.status(404).json({ success: false, message: 'Cart not found' })
+    }
 
-    let item
+    const { itemMap, componentMap } = await loadMenuItemsForOrderSale([parsedMenuItemId], prisma)
+    const menuItem = itemMap.get(parsedMenuItemId)
+    const sellError = assertMenuItemSellable(menuItem, componentMap)
+    if (sellError) {
+      return res.status(400).json({ success: false, message: sellError })
+    }
 
+    const existing = cart.items.find((row) => row.menuItemId === parsedMenuItemId)
     if (existing) {
-      item = await prisma.cartItem.update({
+      await prisma.cartitem.update({
         where: { id: existing.id },
-        data: {
-          quantity: existing.quantity + (quantity || 1)
-        }
+        data: { quantity: existing.quantity + qty },
       })
     } else {
-      item = await prisma.cartItem.create({
+      await prisma.cartitem.create({
         data: {
-          cartId: Number(cartId),
-          menuItemId: Number(menuItemId),
-          quantity: quantity || 1
-        }
+          cartId: parsedCartId,
+          menuItemId: parsedMenuItemId,
+          quantity: qty,
+        },
       })
     }
 
-    res.status(200).json({
-      success: true,
-      data: item
+    const updated = await prisma.cart.findUnique({
+      where: { id: parsedCartId },
+      include: cartInclude,
     })
 
+    res.status(200).json({ success: true, data: formatCart(updated) })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
@@ -82,22 +149,14 @@ export const addToCart = async (req, res) => {
 // GET CART
 export const getCart = async (req, res) => {
   try {
-    const { id } = req.params
-
     const cart = await prisma.cart.findUnique({
-      where: { id: Number(id) },
-      include: {
-        items: {
-          include: { menuItem: true }
-        }
-      }
+      where: { id: Number(req.params.id) },
+      include: cartInclude,
     })
-
-    res.status(200).json({
-      success: true,
-      data: cart
-    })
-
+    if (!cart) {
+      return res.status(404).json({ success: false, message: 'Cart not found' })
+    }
+    res.status(200).json({ success: true, data: formatCart(cart) })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
@@ -106,17 +165,21 @@ export const getCart = async (req, res) => {
 // REMOVE ITEM
 export const removeCartItem = async (req, res) => {
   try {
-    const { id } = req.params
+    const item = await prisma.cartitem.findUnique({
+      where: { id: Number(req.params.id) },
+    })
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Cart item not found' })
+    }
 
-    await prisma.cartItem.delete({
-      where: { id: Number(id) }
+    await prisma.cartitem.delete({ where: { id: item.id } })
+
+    const cart = await prisma.cart.findUnique({
+      where: { id: item.cartId },
+      include: cartInclude,
     })
 
-    res.status(200).json({
-      success: true,
-      message: 'Item removed'
-    })
-
+    res.status(200).json({ success: true, data: formatCart(cart) })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
@@ -125,83 +188,79 @@ export const removeCartItem = async (req, res) => {
 // CLEAR CART
 export const clearCart = async (req, res) => {
   try {
-    const { cartId } = req.params
-
-    await prisma.cartItem.deleteMany({
-      where: { cartId: Number(cartId) }
+    const cartId = Number(req.params.cartId)
+    await prisma.cartitem.deleteMany({ where: { cartId } })
+    const cart = await prisma.cart.findUnique({
+      where: { id: cartId },
+      include: cartInclude,
     })
-
-    res.status(200).json({
-      success: true,
-      message: 'Cart cleared'
-    })
-
+    res.status(200).json({ success: true, data: formatCart(cart) })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
 }
 
-// CHECKOUT → CREATE ORDER
+// CHECKOUT → CREATE ORDER (PUBLIC)
 export const checkoutCart = async (req, res) => {
   try {
-    const { cartId } = req.body
+    const { cartId, notes, orderType } = req.body
+    const parsedCartId = Number(cartId)
 
     const cart = await prisma.cart.findUnique({
-      where: { id: Number(cartId) },
-      include: {
-        items: {
-          include: { menuItem: true }
-        }
-      }
+      where: { id: parsedCartId },
+      include: cartInclude,
     })
 
     if (!cart || cart.items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cart is empty'
-      })
+      return res.status(400).json({ success: false, message: 'Cart is empty' })
     }
 
-    let total = 0
+    const items = cart.items.map((row) => ({
+      menuItemId: row.menuItemId,
+      quantity: row.quantity,
+    }))
 
-    const orderItems = cart.items.map(item => {
-      total += item.quantity * item.menuItem.price
+    const priced = await buildOrderItemsPayload(items, prisma)
+    if (priced.error) {
+      return res.status(400).json({ success: false, message: priced.error })
+    }
 
-      return {
-        menuItemId: item.menuItemId,
-        quantity: item.quantity,
-        unitPrice: item.menuItem.price
-      }
-    })
+    const orderTotal = priced.subTotal + priced.taxAmount
 
     const order = await prisma.order.create({
       data: {
         tableId: cart.tableId,
-        total,
+        subTotal: priced.subTotal,
+        taxAmount: priced.taxAmount,
+        total: orderTotal,
         status: 'pending',
-        source: req.body.source || 'mobile',
-        orderType: req.body.orderType || 'dine-in',
+        source: 'table',
+        orderType: orderType || 'dine-in',
+        notes: notes?.trim() || null,
         orderitem: {
-          create: orderItems
-        }
-      }
+          create: priced.orderItemsData,
+        },
+      },
+      include: {
+        table: true,
+        orderitem: { include: { menuitem: true } },
+      },
     })
 
-    await prisma.cartItem.deleteMany({
-      where: { cartId: cart.id }
-    })
-
+    await prisma.cartitem.deleteMany({ where: { cartId: cart.id } })
     await prisma.cart.update({
       where: { id: cart.id },
-      data: { status: 'completed' }
+      data: { status: 'completed' },
     })
+
+    await notifyNewOrder(order, null)
+    clearOrderListCache()
 
     res.status(200).json({
       success: true,
-      message: 'Order created',
-      data: order
+      message: 'Order placed',
+      data: { orderId: order.id, order },
     })
-
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }

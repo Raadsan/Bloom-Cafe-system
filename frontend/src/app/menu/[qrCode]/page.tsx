@@ -10,6 +10,11 @@ import {
   Star,
   Loader2,
   Sparkles,
+  Plus,
+  ShoppingBag,
+  X,
+  Minus,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -18,6 +23,7 @@ import {
   PublicMenuCategory,
   PublicMenuData,
 } from "@/lib/api/menuItemApi";
+import { cartApi, Cart } from "@/lib/api/cartApi";
 import {
   getMenuItemEffectivePrice,
   getMenuItemDiscountPercent,
@@ -38,6 +44,73 @@ export default function PublicTableMenuPage() {
   const [menuData, setMenuData] = useState<PublicMenuData | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<number | "all">("all");
   const [search, setSearch] = useState("");
+  const [cart, setCart] = useState<Cart | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartLoading, setCartLoading] = useState(false);
+  const [ordering, setOrdering] = useState(false);
+  const [orderDoneId, setOrderDoneId] = useState<number | null>(null);
+  const [cartError, setCartError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!menuData?.table?.id) return;
+    setCartLoading(true);
+    cartApi
+      .getOrCreateCart(String(menuData.table.id))
+      .then(setCart)
+      .catch(() => setCartError("Could not load cart"))
+      .finally(() => setCartLoading(false));
+  }, [menuData?.table?.id]);
+
+  const handleAddToCart = async (item: MenuItem) => {
+    if (!cart || !item.isAvailable) return;
+    if (item.isComposite && item.components?.some((c) => c.isAvailable === false)) {
+      setCartError("This combo has unavailable items");
+      return;
+    }
+    setCartError(null);
+    try {
+      const updated = await cartApi.addToCart({
+        cartId: cart.id,
+        menuItemId: String(item.id),
+        quantity: 1,
+      });
+      setCart(updated);
+      setCartOpen(true);
+    } catch {
+      setCartError("Could not add item");
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!cart || cart.items.length === 0) return;
+    setOrdering(true);
+    setCartError(null);
+    try {
+      const result = await cartApi.checkoutCart({ cartId: cart.id });
+      setOrderDoneId(Number(result.orderId));
+      setCartOpen(false);
+      if (menuData?.table?.id) {
+        const fresh = await cartApi.getOrCreateCart(String(menuData.table.id));
+        setCart(fresh);
+      }
+    } catch {
+      setCartError("Order failed — please try again");
+    } finally {
+      setOrdering(false);
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    if (!cart) return;
+    try {
+      const updated = await cartApi.removeCartItem(itemId);
+      setCart(updated);
+    } catch {
+      setCartError("Could not remove item");
+    }
+  };
+
+  const cartCount = cart?.items.reduce((s, i) => s + i.quantity, 0) ?? 0;
 
   useEffect(() => {
     if (!qrCode) {
@@ -202,7 +275,17 @@ export default function PublicTableMenuPage() {
       </div>
 
       {/* Menu */}
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 pb-12 space-y-10">
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 pb-28 space-y-10">
+        {orderDoneId && (
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 flex items-start gap-3">
+            <CheckCircle2 className="size-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-emerald-800">Order sent to kitchen!</p>
+              <p className="text-xs text-emerald-700 mt-0.5">Order #{orderDoneId}</p>
+            </div>
+          </div>
+        )}
+
         {filteredItems.length === 0 ? (
           <div className="text-center py-20">
             <div className="size-16 rounded-2xl bg-white shadow-md flex items-center justify-center mx-auto mb-4">
@@ -218,13 +301,82 @@ export default function PublicTableMenuPage() {
 
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {items.map((item) => (
-                  <MenuItemCard key={item.id} item={item} />
+                  <MenuItemCard key={item.id} item={item} onAdd={() => handleAddToCart(item)} />
                 ))}
               </div>
             </section>
           ))
         )}
       </main>
+
+      {/* Floating cart */}
+      {cart && cartCount > 0 && (
+        <div className="fixed bottom-0 inset-x-0 z-30 p-4 pointer-events-none">
+          <div className="max-w-2xl mx-auto pointer-events-auto">
+            {!cartOpen ? (
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className="w-full flex items-center justify-between gap-3 bg-primary text-white rounded-2xl px-5 py-4 shadow-2xl shadow-primary/30 font-bold"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <ShoppingBag className="size-5" />
+                  View order ({cartCount})
+                </span>
+                <span className="tabular-nums">${cart.totalAmount.toFixed(2)}</span>
+              </button>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-2xl border border-zinc-100 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
+                  <h3 className="font-bold text-zinc-900">Your order</h3>
+                  <button type="button" onClick={() => setCartOpen(false)} className="text-zinc-400 hover:text-zinc-700">
+                    <X className="size-5" />
+                  </button>
+                </div>
+                <div className="max-h-52 overflow-y-auto divide-y divide-zinc-50">
+                  {cart.items.map((row) => (
+                    <div key={row.id} className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-zinc-800 truncate">
+                          {row.menuItem?.name || "Item"}
+                          {row.menuItem?.isComposite && (
+                            <span className="ml-1.5 text-[10px] font-bold uppercase text-violet-600">Combo</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-zinc-400">${row.unitPrice.toFixed(2)} each</p>
+                      </div>
+                      <span className="text-sm font-bold tabular-nums">×{row.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(row.id)}
+                        className="size-8 rounded-lg border border-zinc-200 flex items-center justify-center text-zinc-400 hover:text-red-500"
+                      >
+                        <Minus className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {cartError && (
+                  <p className="px-4 py-2 text-xs text-red-600 bg-red-50">{cartError}</p>
+                )}
+                <div className="px-4 py-3 border-t border-zinc-100 flex items-center justify-between gap-3">
+                  <span className="text-lg font-black text-primary tabular-nums">
+                    ${cart.totalAmount.toFixed(2)}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={ordering || cartLoading}
+                    onClick={handleCheckout}
+                    className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold text-sm disabled:opacity-60"
+                  >
+                    {ordering ? "Sending…" : "Place order"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <footer className="py-5 text-center border-t border-zinc-200/80 bg-white/60 backdrop-blur-sm">
         <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-zinc-400">
@@ -308,10 +460,14 @@ function CategoryBanner({
   );
 }
 
-function MenuItemCard({ item }: { item: MenuItem }) {
+function MenuItemCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
   const hasDiscount = menuItemHasDiscount(item);
   const effectivePrice = getMenuItemEffectivePrice(item);
   const discountPct = getMenuItemDiscountPercent(item);
+  const comboParts =
+    item.isComposite && item.components?.length
+      ? item.components.map((c) => `${c.quantity}× ${c.name}`).join(" · ")
+      : null;
 
   return (
     <article className="group bg-white rounded-2xl overflow-hidden border border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col">
@@ -336,6 +492,12 @@ function MenuItemCard({ item }: { item: MenuItem }) {
           </span>
         )}
 
+        {item.isComposite && (
+          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-600 text-white text-[9px] font-black uppercase tracking-wider shadow-md">
+            Combo
+          </span>
+        )}
+
         {hasDiscount && discountPct > 0 && (
           <span className="absolute top-2.5 right-2.5 px-2 py-1 rounded-lg bg-emerald-500 text-white text-[10px] font-black shadow-md">
             -{discountPct}%
@@ -349,6 +511,10 @@ function MenuItemCard({ item }: { item: MenuItem }) {
           {item.name}
         </h3>
 
+        {comboParts && (
+          <p className="text-[10px] text-violet-600 font-medium mt-1 line-clamp-2">{comboParts}</p>
+        )}
+
         {item.description && (
           <p className="text-[11px] text-zinc-500 line-clamp-2 mt-1.5 leading-relaxed flex-1">
             {item.description}
@@ -356,20 +522,31 @@ function MenuItemCard({ item }: { item: MenuItem }) {
         )}
 
         <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center justify-between gap-2">
-          {hasDiscount ? (
+          {hasDiscount || (item.savings != null && item.savings > 0) ? (
             <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
               <span className="text-base font-black text-primary tabular-nums">
                 ${effectivePrice.toFixed(2)}
               </span>
-              <span className="text-[11px] text-zinc-400 line-through tabular-nums">
-                ${Number(item.price).toFixed(2)}
-              </span>
+              {(hasDiscount || item.componentsTotal) && (
+                <span className="text-[11px] text-zinc-400 line-through tabular-nums">
+                  ${Number(item.componentsTotal ?? item.price).toFixed(2)}
+                </span>
+              )}
             </div>
           ) : (
             <span className="text-base font-black text-primary tabular-nums">
-              ${Number(item.price).toFixed(2)}
+              ${effectivePrice.toFixed(2)}
             </span>
           )}
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={!item.isAvailable}
+            className="size-9 rounded-xl bg-primary text-white flex items-center justify-center shadow-md disabled:opacity-40 shrink-0"
+            aria-label={`Add ${item.name}`}
+          >
+            <Plus className="size-4" />
+          </button>
         </div>
       </div>
     </article>

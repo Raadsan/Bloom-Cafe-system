@@ -1,9 +1,24 @@
 import prisma from '../config/db.js'
 import { logAudit } from '../utils/auditHelper.js'
 
+let receiptSettingsCache = { data: null, at: 0 }
+const RECEIPT_SETTINGS_TTL_MS = 10 * 60 * 1000
+
+export const clearReceiptSettingsCache = () => {
+  receiptSettingsCache = { data: null, at: 0 }
+}
+
 // GET RECEIPT SETTINGS
 export const getReceiptSettings = async (req, res) => {
   try {
+    const now = Date.now()
+    if (receiptSettingsCache.data && now - receiptSettingsCache.at < RECEIPT_SETTINGS_TTL_MS) {
+      return res.status(200).json({
+        success: true,
+        data: receiptSettingsCache.data,
+      })
+    }
+
     let settings = await prisma.receiptSettings.findFirst()
     
     if (!settings) {
@@ -17,6 +32,8 @@ export const getReceiptSettings = async (req, res) => {
         }
       })
     }
+
+    receiptSettingsCache = { data: settings, at: now }
 
     res.status(200).json({
       success: true,
@@ -67,6 +84,8 @@ export const updateReceiptSettings = async (req, res) => {
       entityId: settings.id, 
       description: 'Updated restaurant receipt settings' 
     })
+
+    clearReceiptSettingsCache()
 
     res.status(200).json({
       success: true,

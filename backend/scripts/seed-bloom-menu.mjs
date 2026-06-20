@@ -128,7 +128,11 @@ async function clearMenuData() {
   await prisma.menuitem.deleteMany();
   await prisma.category.deleteMany();
 
-  console.log('Cleared categories, menu items, and related order lines.');
+  // Reset MySQL auto-increment so IDs start from 1 again
+  await prisma.$executeRawUnsafe('ALTER TABLE menuitem AUTO_INCREMENT = 1');
+  await prisma.$executeRawUnsafe('ALTER TABLE category AUTO_INCREMENT = 1');
+
+  console.log('Cleared categories, menu items, and reset IDs to start at 1.');
 }
 
 async function seedMenu() {

@@ -45,6 +45,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (pathname.startsWith("/users")) return "Users";
     if (pathname.startsWith("/clients")) return "Clients";
     if (pathname.startsWith("/tables")) return "Tables";
+    if (pathname.startsWith("/composites")) return "Menu Combos";
+    if (pathname.startsWith("/menus")) return "Menu Items";
+    if (pathname.startsWith("/categories")) return "Categories";
     if (pathname.startsWith("/pos")) return "POS Terminal";
     if (pathname.startsWith("/profile")) return "Profile";
     return "Dashboard";

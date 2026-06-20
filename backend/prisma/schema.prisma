@@ -125,6 +125,8 @@ model menuitem {
   imageUrl       String?       @db.LongText
   isAvailable    Boolean       @default(true)
   isRecommended  Boolean       @default(false)
+  isComposite    Boolean       @default(false)
+  compositePricing String      @default("fixed") // sum | fixed
   options        Json?
   categoryId     Int
   createdAt   DateTime      @default(now())
@@ -133,8 +135,25 @@ model menuitem {
   menuitembom menuitembom[]
   orderitem   orderitem[]
   discountAdvertisementProduct discountAdvertisementProduct[]
+  compositeComponents menuitemcomponent[] @relation("CompositeParent")
+  usedInComposites      menuitemcomponent[] @relation("CompositeChild")
+  cartitem              cartitem[]
 
   @@index([categoryId], map: "MenuItem_categoryId_fkey")
+}
+
+model menuitemcomponent {
+  id              Int      @id @default(autoincrement())
+  compositeItemId Int
+  componentItemId Int
+  quantity        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  compositeItem   menuitem @relation("CompositeParent", fields: [compositeItemId], references: [id], onDelete: Cascade)
+  componentItem   menuitem @relation("CompositeChild", fields: [componentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([compositeItemId, componentItemId])
+  @@index([componentItemId])
 }
 
 model discountAdvertisement {
@@ -347,6 +366,33 @@ model table {
   qrCode    String    @unique
   updatedAt DateTime? @updatedAt
   order     order[]
+  cart      cart[]
+}
+
+model cart {
+  id        Int        @id @default(autoincrement())
+  tableId   Int
+  status    String     @default("active")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  table     table      @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  items     cartitem[]
+
+  @@index([tableId, status])
+}
+
+model cartitem {
+  id         Int      @id @default(autoincrement())
+  cartId     Int
+  menuItemId Int
+  quantity   Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  cart       cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  menuItem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, menuItemId])
+  @@index([menuItemId])
 }
 
 model user {

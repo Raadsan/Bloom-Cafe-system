@@ -26,8 +26,10 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchAllData = async () => {
       try {
-        // 1. Use cached user when available for faster first paint
-        const currentUser = authApi.getCachedUser() ?? (await authApi.getMe());
+        const cachedUser = authApi.getCachedUser();
+        if (cachedUser) setUser(cachedUser);
+
+        const currentUser = cachedUser ?? (await authApi.getMe());
         setUser(currentUser);
         
         const role = currentUser?.role?.toLowerCase() || 'admin';

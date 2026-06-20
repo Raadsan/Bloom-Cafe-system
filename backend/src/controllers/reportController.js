@@ -1,4 +1,125 @@
 import prisma from '../config/db.js'
+import { createResponseCache } from '../utils/responseCache.js'
+
+const reportCache = createResponseCache(90 * 1000)
+const WEEKLY_TTL_MS = 2 * 60 * 1000
+
+function reportCacheKey(prefix, query = {}) {
+  const parts = [prefix]
+  for (const key of Object.keys(query).sort()) {
+    if (query[key] != null && query[key] !== '') parts.push(`${key}=${query[key]}`)
+  }
+  return parts.join(':')
+}
+
+export const clearReportCache = () => {
+  reportCache.clear()
+}
+
+async function fetchDashboardSummaryData(query) {
+  const dateRange = parseDateRange(query)
+
+  const orderWhere = dateRange ? { createdAt: dateRange } : {}
+
+  const paidPaymentWhere = {
+    status: 'paid',
+    ...(dateRange ? { paidAt: dateRange } : {}),
+  }
+
+  const [totalOrders, totalCustomers, totalTables, totalRevenueResult, paidPayments, pendingPayments] =
+    await Promise.all([
+      prisma.order.count({ where: orderWhere }),
+      prisma.customer.count(),
+      prisma.table.count(),
+      prisma.payment.aggregate({
+        where: paidPaymentWhere,
+        _sum: { amount: true },
+      }),
+      prisma.payment.count({
+        where: {
+          status: 'paid',
+          ...(dateRange ? { paidAt: dateRange } : {}),
+        },
+      }),
+      prisma.payment.count({
+        where: {
+          status: 'pending',
+          ...(dateRange ? { createdAt: dateRange } : {}),
+        },
+      }),
+    ])
+
+  return {
+    totalOrders,
+    totalCustomers,
+    totalTables,
+    totalPaidPayments: paidPayments,
+    totalPendingPayments: pendingPayments,
+    totalRevenue: totalRevenueResult._sum.amount || 0,
+  }
+}
+
+async function fetchWeeklyAnalyticsData() {
+  const end = new Date()
+  end.setHours(23, 59, 59, 999)
+
+  const start = new Date()
+  start.setDate(start.getDate() - 6)
+  start.setHours(0, 0, 0, 0)
+
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const buckets = []
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    const key = d.toISOString().split('T')[0]
+    buckets.push({
+      key,
+      name: dayLabels[d.getDay()],
+      revenue: 0,
+      orders: 0,
+    })
+  }
+
+  const payments = await prisma.payment.findMany({
+    where: {
+      status: 'paid',
+      paidAt: { gte: start, lte: end },
+    },
+    select: {
+      amount: true,
+      paidAt: true,
+      orderId: true,
+    },
+  })
+
+  const ordersPerDay = {}
+
+  for (const payment of payments) {
+    const key = new Date(payment.paidAt).toISOString().split('T')[0]
+    const bucket = buckets.find((b) => b.key === key)
+    if (!bucket) continue
+
+    bucket.revenue += payment.amount
+    if (!ordersPerDay[key]) ordersPerDay[key] = new Set()
+    ordersPerDay[key].add(payment.orderId)
+  }
+
+  buckets.forEach((bucket) => {
+    bucket.orders = ordersPerDay[bucket.key]?.size || 0
+    delete bucket.key
+  })
+
+  return buckets
+}
+
+export async function warmReportCaches() {
+  await Promise.all([
+    reportCache.get(reportCacheKey('summary', {}), () => fetchDashboardSummaryData({}), 90 * 1000),
+    reportCache.get('weekly', () => fetchWeeklyAnalyticsData(), WEEKLY_TTL_MS),
+  ]).catch(() => {})
+}
 
 // 🔹 DATE RANGE
 const parseDateRange = (query) => {
@@ -49,52 +170,12 @@ const getEndOfMonth = () => {
 // DASHBOARD SUMMARY
 export const getDashboardSummary = async (req, res) => {
   try {
-    const dateRange = parseDateRange(req.query)
-
-    const orderWhere = dateRange
-      ? { createdAt: dateRange }
-      : {}
-
-    const paidPaymentWhere = {
-      status: 'paid',
-      ...(dateRange ? { paidAt: dateRange } : {})
-    }
-
-    const [totalOrders, totalCustomers, totalTables, totalRevenueResult, paidPayments, pendingPayments] =
-      await Promise.all([
-        prisma.order.count({ where: orderWhere }),
-        prisma.customer.count(),
-        prisma.table.count(),
-        prisma.payment.aggregate({
-          where: paidPaymentWhere,
-          _sum: {
-            amount: true
-          }
-        }),
-        prisma.payment.count({
-          where: {
-            status: 'paid',
-            ...(dateRange ? { paidAt: dateRange } : {})
-          }
-        }),
-        prisma.payment.count({
-          where: {
-            status: 'pending',
-            ...(dateRange ? { createdAt: dateRange } : {})
-          }
-        })
-      ])
+    const key = reportCacheKey('summary', req.query)
+    const data = await reportCache.get(key, () => fetchDashboardSummaryData(req.query), 90 * 1000)
 
     return res.status(200).json({
       success: true,
-      data: {
-        totalOrders,
-        totalCustomers,
-        totalTables,
-        totalPaidPayments: paidPayments,
-        totalPendingPayments: pendingPayments,
-        totalRevenue: totalRevenueResult._sum.amount || 0
-      }
+      data,
     })
   } catch (error) {
     console.error('Get Dashboard Summary Error:', error)
@@ -618,60 +699,11 @@ export const getFinanceReport = async (req, res) => {
 // WEEKLY REVENUE CHART (last 7 days)
 export const getWeeklyAnalytics = async (req, res) => {
   try {
-    const end = new Date()
-    end.setHours(23, 59, 59, 999)
-
-    const start = new Date()
-    start.setDate(start.getDate() - 6)
-    start.setHours(0, 0, 0, 0)
-
-    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const buckets = []
-
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(start)
-      d.setDate(start.getDate() + i)
-      const key = d.toISOString().split('T')[0]
-      buckets.push({
-        key,
-        name: dayLabels[d.getDay()],
-        revenue: 0,
-        orders: 0,
-      })
-    }
-
-    const payments = await prisma.payment.findMany({
-      where: {
-        status: 'paid',
-        paidAt: { gte: start, lte: end },
-      },
-      select: {
-        amount: true,
-        paidAt: true,
-        orderId: true,
-      },
-    })
-
-    const ordersPerDay = {}
-
-    for (const payment of payments) {
-      const key = new Date(payment.paidAt).toISOString().split('T')[0]
-      const bucket = buckets.find((b) => b.key === key)
-      if (!bucket) continue
-
-      bucket.revenue += payment.amount
-      if (!ordersPerDay[key]) ordersPerDay[key] = new Set()
-      ordersPerDay[key].add(payment.orderId)
-    }
-
-    buckets.forEach((bucket) => {
-      bucket.orders = ordersPerDay[bucket.key]?.size || 0
-      delete bucket.key
-    })
+    const data = await reportCache.get('weekly', () => fetchWeeklyAnalyticsData(), WEEKLY_TTL_MS)
 
     return res.status(200).json({
       success: true,
-      data: buckets,
+      data,
     })
   } catch (error) {
     console.error('Weekly Analytics Error:', error)
