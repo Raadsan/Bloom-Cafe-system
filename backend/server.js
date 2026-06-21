@@ -6,6 +6,7 @@
 //     console.log(`✅ Server running on port ${PORT}`);
 // });
 
+import 'dotenv/config'
 import http from 'http'
 import app from './src/app.js'
 import { initSocket } from './src/socket.js'

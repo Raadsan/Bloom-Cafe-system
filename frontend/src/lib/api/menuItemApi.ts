@@ -57,11 +57,14 @@ export interface MenuItem {
   isComposite?: boolean;
   compositePricing?: 'sum' | 'fixed';
   components?: Array<{
+    id?: number;
     menuItemId: number;
     name: string;
     quantity: number;
     unitPrice: number;
     lineTotal: number;
+    imageUrl?: string | null;
+    isAvailable?: boolean;
   }>;
   componentsTotal?: number;
   savings?: number;
