@@ -11,7 +11,6 @@
     "db:generate": "npx prisma generate",
     "db:studio": "npx prisma studio",
     "db:seed": "node prisma/seed.js",
-    "db:seed-menu": "node scripts/seed-bloom-menu.mjs",
     "create-admin": "node prisma/create-admin.js"
   },
   "keywords": [],

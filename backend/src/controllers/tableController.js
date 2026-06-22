@@ -8,6 +8,13 @@ function normalizeTableStatus(status) {
 
 let legacyTableStatusesFixed = false;
 
+let tablesCache = { data: null, at: 0 }
+const TABLES_CACHE_TTL_MS = 5 * 60 * 1000
+
+export const clearTablesCache = () => {
+  tablesCache = { data: null, at: 0 }
+}
+
 async function fixLegacyTableStatuses() {
   if (legacyTableStatusesFixed) return;
   await prisma.table.updateMany({
@@ -62,6 +69,8 @@ export const createTable = async (req, res) => {
       entityId: table.id,
       description: `Created table #${table.number}`,
     });
+
+    clearTablesCache();
 
     return res.status(201).json({
       success: true,
@@ -138,6 +147,8 @@ export const updateTable = async (req, res) => {
       description: `Updated table #${updatedTable.number}`,
     });
 
+    clearTablesCache();
+
     return res.status(200).json({
       success: true,
       message: 'Table updated successfully',
@@ -199,6 +210,8 @@ export const deleteTable = async (req, res) => {
       description: `Deleted table #${existingTable.number}`,
     });
 
+    clearTablesCache();
+
     return res.status(200).json({
       success: true,
       message: 'Table deleted successfully',
@@ -216,6 +229,15 @@ export const deleteTable = async (req, res) => {
 // GET ALL TABLES
 export const getAllTables = async (req, res) => {
   try {
+    const now = Date.now()
+    if (tablesCache.data && now - tablesCache.at < TABLES_CACHE_TTL_MS) {
+      return res.status(200).json({
+        success: true,
+        count: tablesCache.data.length,
+        data: tablesCache.data,
+      })
+    }
+
     await fixLegacyTableStatuses();
 
     const tables = await prisma.table.findMany({
@@ -228,6 +250,8 @@ export const getAllTables = async (req, res) => {
       ...t,
       status: normalizeTableStatus(t.status),
     }));
+
+    tablesCache = { data: normalized, at: now }
 
     res.status(200).json({
       success: true,

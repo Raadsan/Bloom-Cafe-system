@@ -1,5 +1,39 @@
 import prisma from '../config/db.js'
 import { logAudit } from '../utils/auditHelper.js'
+import { emitMenuChanged } from '../utils/emitMenuChanged.js'
+import { invalidatePosMenuCatalogCache } from './menuItemController.js'
+import { createResponseCache } from '../utils/responseCache.js'
+
+const categoryCache = createResponseCache(5 * 60 * 1000)
+
+export const clearCategoryListCache = () => {
+  categoryCache.clear()
+}
+
+async function fetchAllCategoriesData() {
+  return prisma.category.findMany({
+    orderBy: { id: 'asc' },
+  })
+}
+
+async function fetchCategoriesWithItemsData() {
+  return prisma.category.findMany({
+    include: { menuitem: true },
+    orderBy: { id: 'asc' },
+  })
+}
+
+export async function warmCategoryCaches() {
+  await Promise.all([
+    categoryCache.get('all', fetchAllCategoriesData),
+    categoryCache.get('with-items', fetchCategoriesWithItemsData),
+  ]).catch(() => {})
+}
+
+function invalidateCategoryCaches() {
+  clearCategoryListCache()
+  invalidatePosMenuCatalogCache()
+}
 
 // CREATE CATEGORY
 export const createCategory = async (req, res) => {
@@ -34,6 +68,8 @@ export const createCategory = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Created', entity: 'Category', entityId: category.id, description: `Created category "${category.name}"` })
+    invalidateCategoryCaches()
+    emitMenuChanged({ action: 'category_create', id: category.id })
 
     return res.status(201).json({
       success: true,
@@ -61,11 +97,7 @@ export const createCategory = async (req, res) => {
 // GET ALL CATEGORIES
 export const getAllCategories = async (req, res) => {
   try {
-    const categories = await prisma.category.findMany({
-      orderBy: {
-        id: 'asc'
-      }
-    })
+    const categories = await categoryCache.get('all', fetchAllCategoriesData)
 
     res.status(200).json({
       success: true,
@@ -113,6 +145,8 @@ export const updateCategory = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Category', entityId: updatedCategory.id, description: `Updated category "${updatedCategory.name}"` })
+    invalidateCategoryCaches()
+    emitMenuChanged({ action: 'category_update', id: updatedCategory.id })
 
     return res.status(200).json({
       success: true,
@@ -176,6 +210,8 @@ export const deleteCategory = async (req, res) => {
     })
 
     logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Category', entityId: categoryId, description: `Deleted category "${existingCategory.name}"` })
+    invalidateCategoryCaches()
+    emitMenuChanged({ action: 'category_delete', id: categoryId })
 
     return res.status(200).json({
       success: true,
@@ -194,15 +230,7 @@ export const deleteCategory = async (req, res) => {
 // GET CATEGORIES WITH ITEMS
 export const getCategoriesWithItems = async (req, res) => {
   try {
-
-    const categories = await prisma.category.findMany({
-      include: {
-        menuitem: true
-      },
-      orderBy: {
-        id: 'asc'
-      }
-    })
+    const categories = await categoryCache.get('with-items', fetchCategoriesWithItemsData)
 
     res.status(200).json({
       success: true,

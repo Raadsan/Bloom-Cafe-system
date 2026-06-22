@@ -1,4 +1,5 @@
 import api from './axios';
+import { clearReportApiCache } from './reportApi';
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled' | 'held' | 'completed';
 
@@ -87,10 +88,29 @@ export type GetAllOrdersParams = {
   limit?: number;
 };
 
-const ORDERS_TTL_MS = 45 * 1000;
+const ORDERS_TTL_MS = 90 * 1000;
+const ORDERS_LS_PREFIX = 'orders_list_';
 
 const memoryCache = new Map<string, { data: Order[]; at: number }>();
 const inflight = new Map<string, Promise<Order[]>>();
+
+function readOrdersLocal(key: string): Order[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(ORDERS_LS_PREFIX + key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: Order[]; at: number };
+    if (Date.now() - parsed.at < ORDERS_TTL_MS) return parsed.data;
+  } catch { /* ignore */ }
+  return null;
+}
+
+function writeOrdersLocal(key: string, data: Order[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ORDERS_LS_PREFIX + key, JSON.stringify({ data, at: Date.now() }));
+  } catch { /* ignore */ }
+}
 
 function cacheKey(params?: GetAllOrdersParams): string {
   return JSON.stringify(params || {});
@@ -99,6 +119,13 @@ function cacheKey(params?: GetAllOrdersParams): string {
 export function clearOrdersListCache(): void {
   memoryCache.clear();
   inflight.clear();
+  clearReportApiCache();
+  if (typeof window !== 'undefined') {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(ORDERS_LS_PREFIX)) localStorage.removeItem(k);
+    }
+  }
 }
 
 async function fetchOrdersFromNetwork(params?: GetAllOrdersParams): Promise<Order[]> {
@@ -121,6 +148,7 @@ async function fetchOrdersFromNetwork(params?: GetAllOrdersParams): Promise<Orde
     .then((res) => {
       const data: Order[] = res.data.data || [];
       memoryCache.set(key, { data, at: Date.now() });
+      writeOrdersLocal(key, data);
       inflight.delete(key);
       return data;
     })
@@ -156,6 +184,17 @@ export const orderApi = {
 
     if (!forceRefresh && cached && now - cached.at < ORDERS_TTL_MS) {
       return cached.data;
+    }
+
+    if (!forceRefresh) {
+      const local = readOrdersLocal(key);
+      if (local?.length) {
+        memoryCache.set(key, { data: local, at: now });
+        if (!inflight.has(key)) {
+          void fetchOrdersFromNetwork(params).catch(() => local);
+        }
+        return local;
+      }
     }
 
     return fetchOrdersFromNetwork(params);

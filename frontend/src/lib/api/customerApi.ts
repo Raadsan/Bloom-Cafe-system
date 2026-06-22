@@ -1,5 +1,9 @@
 import api from './axios';
 
+const POS_CUSTOMER_TTL_MS = 5 * 60 * 1000;
+let posCustomerCache: { data: Customer[]; at: number } | null = null;
+let posCustomerInflight: Promise<Customer[]> | null = null;
+
 export interface Customer {
   id: number;
   fullName: string;
@@ -18,6 +22,35 @@ export interface CreateCustomerPayload {
 }
 
 export const customerApi = {
+  /** Lightweight list for POS — id, name, phone only (cached). */
+  getPosCustomers: async (forceRefresh = false): Promise<Customer[]> => {
+    const now = Date.now();
+    if (!forceRefresh && posCustomerCache && now - posCustomerCache.at < POS_CUSTOMER_TTL_MS) {
+      return posCustomerCache.data;
+    }
+    if (posCustomerInflight && !forceRefresh) return posCustomerInflight;
+
+    posCustomerInflight = api
+      .get('/customers/pos-list')
+      .then((res) => {
+        const data: Customer[] = res.data.data || [];
+        posCustomerCache = { data, at: Date.now() };
+        posCustomerInflight = null;
+        return data;
+      })
+      .catch((err) => {
+        posCustomerInflight = null;
+        throw err;
+      });
+
+    return posCustomerInflight;
+  },
+
+  clearPosCustomerCache: () => {
+    posCustomerCache = null;
+    posCustomerInflight = null;
+  },
+
   getAllCustomers: async (): Promise<Customer[]> => {
     const res = await api.get('/customers/all');
     return res.data.data || [];
@@ -41,6 +74,7 @@ export const customerApi = {
 
   createCustomer: async (payload: CreateCustomerPayload): Promise<Customer> => {
     const res = await api.post('/customers', payload);
+    posCustomerCache = null;
     return res.data.data;
   },
 

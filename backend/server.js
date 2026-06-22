@@ -6,6 +6,7 @@
 //     console.log(`✅ Server running on port ${PORT}`);
 // });
 
+import 'dotenv/config'
 import http from 'http'
 import app from './src/app.js'
 import { initSocket } from './src/socket.js'
@@ -17,8 +18,13 @@ import {
   ensurePickupOrdersMenuItem,
   ensurePickupHistoryMenuItem,
   ensureDiscountAdvertisementMenuItem,
+  ensureCompositesMenuItem,
+  warmAllMenusCache,
 } from './src/controllers/menuController.js'
-import { initFirebase } from './src/utils/fcmService.js'
+import { warmAllMenuItemsCache } from './src/controllers/menuItemController.js'
+import { warmCompositesCache, warmComboFormCache } from './src/controllers/compositeController.js'
+import { warmReportCaches } from './src/controllers/reportController.js'
+import { warmCategoryCaches } from './src/controllers/categoryController.js'
 
 const server = http.createServer(app)
 
@@ -27,20 +33,31 @@ initSocket(server)
 
 const PORT = process.env.PORT || 5000
 
-server.listen(PORT, async () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
-  initFirebase()
-  try {
-    await deactivateRoomsMenuItem()
-    await deactivateSystemSettingsMenuItem()
-    await ensureCreateOrderMenuItem()
-    await ensurePickupOrdersMenuItem()
-    await ensurePickupHistoryMenuItem()
-    await ensureDiscountAdvertisementMenuItem()
-    console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions)')
-  } catch (err) {
-    console.warn('Sidebar menu ensure skipped:', err?.message)
-  }
+
+  prisma.$queryRaw`SELECT 1`.catch(() => {})
+
+  setImmediate(async () => {
+    try {
+      await deactivateRoomsMenuItem()
+      await deactivateSystemSettingsMenuItem()
+      await ensureCreateOrderMenuItem()
+      await ensurePickupOrdersMenuItem()
+      await ensurePickupHistoryMenuItem()
+      await ensureDiscountAdvertisementMenuItem()
+      await ensureCompositesMenuItem()
+      await warmAllMenusCache()
+      await warmAllMenuItemsCache()
+      await warmCompositesCache()
+      await warmComboFormCache()
+      await warmCategoryCaches()
+      await warmReportCaches()
+      console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions, Menu Combos)')
+    } catch (err) {
+      console.warn('Sidebar menu ensure skipped:', err?.message)
+    }
+  })
 })
 
 async function shutdown(signal) {

@@ -14,3 +14,6 @@ export function resolveBrandingImageUrl(url?: string | null): string | null {
   }
   return url;
 }
+
+/** Menu item images from /uploads/menu/ or external URLs. */
+export const resolveMenuImageUrl = resolveBrandingImageUrl;

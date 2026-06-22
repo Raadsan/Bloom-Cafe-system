@@ -744,6 +744,9 @@ import { emitOrderUpdate, emitPaymentSuccess } from '../utils/socketEvents.js'
 import { notifyNewOrder, notifyOrderReady, notifyCustomerOrderStatus } from '../utils/orderNotifications.js'
 import { logAudit } from '../utils/auditHelper.js'
 import { sendWaafiPayment } from '../utils/waafiPayment.js'
+import { clearTablesCache } from './tableController.js'
+import { clearReportCache } from './reportController.js'
+import { buildOrderItemsPayload } from '../utils/compositeMenuHelper.js'
 
 const MOBILE_WALLET_METHODS = ['evc_plus', 'edahab', 'premier_wallet', 'waafi']
 
@@ -754,7 +757,7 @@ const generateInternalRef = () => {
 
 const orderListCache = new Map()
 const orderListInflight = new Map()
-const ORDER_LIST_TTL_MS = 45 * 1000
+const ORDER_LIST_TTL_MS = 90 * 1000
 
 function orderListCacheKey(req) {
   const { status, onlyMine, readyPickup, waiterHistory, posQueue, kitchenQueue, includeServed, limit } = req.query
@@ -770,6 +773,7 @@ function parseOrderLimit(req, fallback = 80) {
 export const clearOrderListCache = () => {
   orderListCache.clear()
   orderListInflight.clear()
+  clearReportCache()
 }
 
 /**
@@ -819,41 +823,13 @@ export const createOrder = async (req, res) => {
 
     let subTotal = 0
     let taxAmount = 0
-    const orderItemsData = []
-
-    const menuItemIds = [...new Set(items.map((item) => Number(item.menuItemId)))]
-    const menuItems = await prisma.menuitem.findMany({
-      where: { id: { in: menuItemIds } }
-    })
-    const menuItemMap = new Map(menuItems.map((menuItem) => [menuItem.id, menuItem]))
-
-    for (const item of items) {
-      const menuItem = menuItemMap.get(Number(item.menuItemId))
-
-      if (!menuItem || !menuItem.isAvailable) {
-        return res.status(400).json({
-          success: false,
-          message: 'Menu item not available'
-        })
-      }
-
-      const quantity = Number(item.quantity) || 1
-      const unitPrice = menuItem.price
-      const itemTaxRate = menuItem.tax || 0
-
-      const itemSubtotal = quantity * unitPrice
-      const itemTaxAmount = itemSubtotal * (itemTaxRate / 100)
-
-      subTotal += itemSubtotal
-      taxAmount += itemTaxAmount
-
-      orderItemsData.push({
-        menuItemId: menuItem.id,
-        quantity,
-        unitPrice,
-        tax: itemTaxRate
-      })
+    const priced = await buildOrderItemsPayload(items, prisma)
+    if (priced.error) {
+      return res.status(400).json({ success: false, message: priced.error })
     }
+    subTotal = priced.subTotal
+    taxAmount = priced.taxAmount
+    const orderItemsData = priced.orderItemsData
 
     let customer = null
 
@@ -985,38 +961,11 @@ export const createPosCheckout = async (req, res) => {
       }
     }
 
-    let subTotal = 0
-    let taxAmount = 0
-    const orderItemsData = []
-
-    const menuItemIds = [...new Set(items.map((item) => Number(item.menuItemId)))]
-    const menuItems = await prisma.menuitem.findMany({
-      where: { id: { in: menuItemIds } },
-    })
-    const menuItemMap = new Map(menuItems.map((menuItem) => [menuItem.id, menuItem]))
-
-    for (const item of items) {
-      const menuItem = menuItemMap.get(Number(item.menuItemId))
-      if (!menuItem || !menuItem.isAvailable) {
-        return res.status(400).json({ success: false, message: 'Menu item not available' })
-      }
-
-      const quantity = Number(item.quantity) || 1
-      const unitPrice = menuItem.price
-      const itemTaxRate = menuItem.tax || 0
-      const itemSubtotal = quantity * unitPrice
-      const itemTaxAmount = itemSubtotal * (itemTaxRate / 100)
-
-      subTotal += itemSubtotal
-      taxAmount += itemTaxAmount
-
-      orderItemsData.push({
-        menuItemId: menuItem.id,
-        quantity,
-        unitPrice,
-        tax: itemTaxRate,
-      })
+    const priced = await buildOrderItemsPayload(items, prisma)
+    if (priced.error) {
+      return res.status(400).json({ success: false, message: priced.error })
     }
+    const { subTotal, taxAmount, orderItemsData } = priced
 
     let customer = null
     if (customerName && customerPhone) {
@@ -1091,9 +1040,13 @@ export const createPosCheckout = async (req, res) => {
           },
         },
       },
-      include: {
-        table: true,
-        orderitem: true,
+      select: {
+        id: true,
+        total: true,
+        subTotal: true,
+        taxAmount: true,
+        status: true,
+        tableId: true,
       },
     })
 
@@ -1116,9 +1069,16 @@ export const createPosCheckout = async (req, res) => {
         ? prisma.table.update({
             where: { id: order.tableId },
             data: { status: 'active' },
-          })
+          }).then(() => clearTablesCache())
         : Promise.resolve(),
-      notifyNewOrder(order, req.user?.id),
+      prisma.order
+        .findUnique({
+          where: { id: order.id },
+          include: { table: true, orderitem: true },
+        })
+        .then((fullOrder) =>
+          fullOrder ? notifyNewOrder(fullOrder, req.user?.id) : Promise.resolve()
+        ),
       logAudit({
         userId: req.user?.id,
         action: 'Created',
@@ -1215,6 +1175,7 @@ export const updateOrderStatus = async (req, res) => {
         where: { id: order.tableId },
         data: { status: 'active' }
       })
+      clearTablesCache()
     }
 
     // 🔥 SOCKET → WAITER/KITCHEN
@@ -1258,29 +1219,12 @@ export const updateOrder = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' })
     }
 
-    let total = 0
-    const orderItemsData = []
-
-    for (const item of items) {
-      const menuItem = await prisma.menuitem.findUnique({
-        where: { id: Number(item.menuItemId) }
-      })
-
-      if (!menuItem || !menuItem.isAvailable) {
-        return res.status(400).json({ success: false, message: 'Menu item not available' })
-      }
-
-      const quantity = Number(item.quantity) || 1
-      const unitPrice = menuItem.price
-
-      total += quantity * unitPrice
-
-      orderItemsData.push({
-        menuItemId: menuItem.id,
-        quantity,
-        unitPrice
-      })
+    const priced = await buildOrderItemsPayload(items, prisma)
+    if (priced.error) {
+      return res.status(400).json({ success: false, message: priced.error })
     }
+    const total = priced.subTotal + priced.taxAmount
+    const orderItemsData = priced.orderItemsData
 
     // Delete old items
     await prisma.orderitem.deleteMany({
@@ -1465,7 +1409,7 @@ export const getAllOrders = async (req, res) => {
     } else if (userRole === 'pos' && req.query.kitchenQueue === 'true') {
       const includeServed = req.query.includeServed === 'true'
       where.status = includeServed
-        ? { in: ['pending', 'paid', 'preparing', 'ready', 'served'] }
+        ? { in: ['pending', 'paid', 'preparing', 'ready', 'served', 'cancelled', 'completed'] }
         : { in: ['pending', 'paid', 'preparing', 'ready'] }
       useLightInclude = true
       takeLimit = includeServed ? 200 : 150

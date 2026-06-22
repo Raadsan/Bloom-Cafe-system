@@ -22,10 +22,12 @@ import {
   Copy,
   History,
   Printer,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
 import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/menuItemApi";
+import { compositeApi, CompositeMenuItem } from "@/lib/api/compositeApi";
 import {
   getMenuItemEffectivePrice,
   menuItemHasDiscount,
@@ -41,8 +43,11 @@ import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { btnCreatePage } from "@/lib/dashboard-ui";
+import { onDebouncedEvent, MENU_CHANGED } from "@/lib/live-updates";
 import PosCustomerProfileCard from "@/components/pos/PosCustomerProfileCard";
 import PosMenuItemImage from "@/components/pos/PosMenuItemImage";
+import PosProductCard from "@/components/pos/PosProductCard";
+import { usePosSearch } from "@/context/PosSearchContext";
 import {
   Dialog,
   DialogContent,
@@ -115,6 +120,27 @@ const formInputClass =
 const priceAmountClass = "text-primary dark:text-white";
 const summaryAmountClass = "font-semibold text-foreground dark:text-white";
 
+/** Virtual POS category — shows composite / combo menu items */
+const POS_COMBOS_CATEGORY = "combos" as const;
+type PosCategoryFilter = string | number | typeof POS_COMBOS_CATEGORY;
+
+function mergeCatalogWithComposites(
+  catalog: MenuItem[],
+  composites: CompositeMenuItem[]
+): MenuItem[] {
+  const byId = new Map<number, MenuItem>();
+  for (const item of catalog) byId.set(item.id, item);
+  for (const combo of composites) {
+    const existing = byId.get(combo.id);
+    byId.set(combo.id, {
+      ...(existing || {}),
+      ...combo,
+      isComposite: true,
+    });
+  }
+  return Array.from(byId.values());
+}
+
 interface ProductOpts {
   variant?: string;
 }
@@ -130,6 +156,7 @@ interface CartLine {
   categoryName?: string;
   variant?: string;
   lineNote?: string;
+  isComposite?: boolean;
 }
 
 function cartLineKey(id: number, variant?: string): string {
@@ -153,6 +180,7 @@ function normalizeCartLine(raw: unknown): CartLine | null {
     categoryName: item.categoryName as string | undefined,
     variant,
     lineNote: item.lineNote as string | undefined,
+    isComposite: Boolean(item.isComposite),
   };
 }
 
@@ -172,8 +200,8 @@ export default function PosTerminalPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings | null>(null);
 
-  const [selectedCategory, setSelectedCategory] = useState<string | number>("All");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<PosCategoryFilter>("All");
+  const { query: searchQuery, setQuery: setSearchQuery } = usePosSearch();
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [loading, setLoading] = useState(true);
 
@@ -313,50 +341,92 @@ export default function PosTerminalPage() {
     window.dispatchEvent(new CustomEvent("cart-updated", { detail: count }));
   }, [cart]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (options?: { silent?: boolean; menuOnly?: boolean; forceMenu?: boolean }) => {
+    const silent = options?.silent ?? false;
+    const menuOnly = options?.menuOnly ?? false;
+    const forceMenu = options?.forceMenu ?? false;
+
+    if (!silent) setLoading(true);
     try {
-      const [cats, items] = await Promise.all([
-        categoryApi.getAllCategories(),
-        menuItemApi.getPosMenuCatalog(),
+      if (forceMenu) {
+        menuItemApi.clearPosMenuCache();
+        categoryApi.clearCategoryCache();
+        compositeApi.clearCompositeCache();
+      }
+      const [cats, items, composites] = await Promise.all([
+        categoryApi.getAllCategories(forceMenu),
+        menuItemApi.getPosMenuCatalog(forceMenu),
+        compositeApi.getAll(forceMenu),
       ]);
-      setCategories(cats);
-      setProducts(items);
+      setCategories((cats || []).filter(c => c.isActive !== false));
+      setProducts(mergeCatalogWithComposites(items || [], composites || []));
     } catch {
-      showToast("Failed to load POS menu", "error");
+      if (!silent) showToast("Failed to load POS menu", "error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
 
-    void Promise.all([
-      tableApi.getAllTables(),
-      receiptSettingsApi.getSettings(),
-    ])
-      .then(([tbls, sett]) => {
-        setTables(tbls);
-        setReceiptSettings(sett);
-      })
-      .catch(() => {});
+    if (menuOnly) return;
+  }, [showToast]);
 
-    void customerApi
-      .getAllCustomers()
-      .then(setCustomers)
-      .catch(() => {});
-  };
+  const ensureOrderDialogData = useCallback(async () => {
+    try {
+      const [tbls, custs] = await Promise.all([
+        tableApi.getAllTables(),
+        customerApi.getPosCustomers(),
+      ]);
+      setTables(tbls);
+      setCustomers(custs);
+    } catch {
+      // non-blocking — dialog can still open
+    }
+  }, []);
+
+  const ensureReceiptSettings = useCallback(async () => {
+    if (receiptSettings) return;
+    try {
+      const sett = await receiptSettingsApi.getSettings();
+      setReceiptSettings(sett);
+    } catch {
+      // receipt can still render with defaults
+    }
+  }, [receiptSettings]);
+
+  const openOrderDialog = useCallback(() => {
+    void ensureOrderDialogData();
+    setIsTableDialogOpen(true);
+  }, [ensureOrderDialogData]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData({ silent: false });
+    const removeMenuListener = onDebouncedEvent(
+      MENU_CHANGED,
+      () => fetchData({ silent: true, menuOnly: true, forceMenu: true }),
+      400
+    );
+    return () => {
+      removeMenuListener();
+    };
+  }, [fetchData]);
 
   const categoryName = useCallback(
     (id: number) => categories.find(c => c.id === id)?.name || "Menu",
     [categories]
   );
 
+  const comboCount = useMemo(
+    () => products.filter(p => p.isComposite).length,
+    [products]
+  );
+
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchesCategory =
-        selectedCategory === "All" || Number(p.categoryId) === Number(selectedCategory);
+        selectedCategory === "All"
+          ? true
+          : selectedCategory === POS_COMBOS_CATEGORY
+            ? Boolean(p.isComposite)
+            : Number(p.categoryId) === Number(selectedCategory);
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
@@ -517,14 +587,22 @@ export default function PosTerminalPage() {
 
   const addToCart = (product: MenuItem) => {
     if (!product.isAvailable) return;
+    if (product.isComposite && product.components?.some(c => c.isAvailable === false)) {
+      showToast("This combo has unavailable items", "error");
+      return;
+    }
     const itemOptions = parseMenuItemOptions(product);
     const variant = productOptions[product.id]?.variant;
-    if (itemOptions.length > 0 && !variant) {
+    if (!product.isComposite && itemOptions.length > 0 && !variant) {
       showToast("Select an option first", "error");
       return;
     }
     setActiveProductId(product.id);
     const key = cartLineKey(product.id, variant);
+    const comboNote =
+      product.isComposite && product.components?.length
+        ? product.components.map(c => `${c.quantity}× ${c.name}`).join(", ")
+        : undefined;
 
     setCart(prev => {
       const existing = prev.find(item => item.key === key);
@@ -545,6 +623,8 @@ export default function PosTerminalPage() {
           imageUrl: product.imageUrl,
           categoryName: categoryName(product.categoryId),
           variant,
+          isComposite: product.isComposite,
+          lineNote: comboNote,
         },
       ];
     });
@@ -640,22 +720,22 @@ export default function PosTerminalPage() {
   const validateOrderDetails = (): boolean => {
     if (orderType === "dine-in" && !selectedTable) {
       showToast("Select a table for dine-in", "error");
-      setIsTableDialogOpen(true);
+      openOrderDialog();
       return false;
     }
     if (orderType === "takeaway" && takeawayTiming === "later" && (!pickupDate || !pickupTime)) {
       showToast("Select pickup date and time", "error");
-      setIsTableDialogOpen(true);
+      openOrderDialog();
       return false;
     }
     if (orderType === "delivery" && !deliveryStreet.trim()) {
       showToast("Enter delivery address", "error");
-      setIsTableDialogOpen(true);
+      openOrderDialog();
       return false;
     }
     if (orderType === "delivery" && !selectedCustomer && !customerPhone.trim()) {
       showToast("Enter customer phone for delivery", "error");
-      setIsTableDialogOpen(true);
+      openOrderDialog();
       return false;
     }
     return true;
@@ -850,7 +930,7 @@ export default function PosTerminalPage() {
       showToast("Your cart is empty", "error");
       return;
     }
-    setIsTableDialogOpen(true);
+    openOrderDialog();
   };
 
   const handleContinueToCheckout = () => {
@@ -859,6 +939,7 @@ export default function PosTerminalPage() {
     setPaymentPhone(cust?.phone || customerPhone || "");
     setPaymentMethod("evc_plus");
     setIsTableDialogOpen(false);
+    void ensureReceiptSettings();
     setIsCheckoutOpen(true);
   };
 
@@ -977,7 +1058,7 @@ export default function PosTerminalPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 bg-zinc-50">
+    <div className="flex h-full min-h-0 bg-[#eef1f7]">
       {/* ── CATALOG ── */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden p-4 md:p-5">
         <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide shrink-0">
@@ -993,37 +1074,46 @@ export default function PosTerminalPage() {
           >
             All Menus
           </button>
+          {comboCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedCategory(POS_COMBOS_CATEGORY)}
+              className={cn(
+                "shrink-0 flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold border whitespace-nowrap transition-all",
+                selectedCategory === POS_COMBOS_CATEGORY
+                  ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
+                  : "bg-white/90 text-muted-foreground border-border hover:border-primary/30 hover:text-primary"
+              )}
+            >
+              <Layers className="size-4 shrink-0" />
+              Combos
+              <span className="text-[10px] font-bold opacity-80">({comboCount})</span>
+            </button>
+          )}
           {categories.map(cat => (
             <button
               key={cat.id}
               type="button"
               onClick={() => setSelectedCategory(cat.id)}
               className={cn(
-                "shrink-0 px-5 py-2 rounded-full text-sm font-semibold border whitespace-nowrap transition-all",
+                "shrink-0 flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold border whitespace-nowrap transition-all",
                 selectedCategory === cat.id
                   ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
                   : "bg-white/90 text-muted-foreground border-border hover:border-primary/30 hover:text-primary"
               )}
             >
+              {cat.imageUrl ? (
+                <img src={cat.imageUrl} alt="" className="size-5 rounded-full object-cover shrink-0" />
+              ) : null}
               {cat.name}
             </button>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 mb-4 shrink-0">
           <p className="text-sm font-semibold text-muted-foreground shrink-0">
             {filteredProducts.length} Products
           </p>
-          <div className="relative flex-1 min-w-[200px] max-w-xl group">
-            <Search className="size-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-4 bg-white border border-border rounded-xl text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
-            />
-          </div>
           <div className="flex items-center gap-1 ml-auto">
             {(["grid", "list"] as ViewMode[]).map(mode => (
               <button
@@ -1033,21 +1123,31 @@ export default function PosTerminalPage() {
                 className={cn(
                   "size-9 rounded-lg border flex items-center justify-center transition-all",
                   viewMode === mode
-                    ? "bg-white border-primary/40 text-primary shadow-sm"
-                    : "bg-white/80 border-border text-muted-foreground"
+                    ? "bg-primary text-white border-primary shadow-sm"
+                    : "bg-white border-zinc-200 text-zinc-400 hover:border-primary/30"
                 )}
               >
                 {mode === "grid" ? <LayoutGrid className="size-4" /> : <List className="size-4" />}
               </button>
             ))}
           </div>
+          <div className="relative w-[200px] max-w-[42vw] shrink-0">
+            <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full h-8 pl-8 pr-3 bg-white border border-zinc-200 rounded-lg text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto pr-1 pb-2 min-h-0">
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="h-44 bg-white/70 rounded-2xl animate-pulse border border-border/50" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="h-[148px] bg-white/70 rounded-xl animate-pulse border border-zinc-100" />
               ))}
             </div>
           ) : filteredProducts.length === 0 ? (
@@ -1056,7 +1156,7 @@ export default function PosTerminalPage() {
               <p className="text-sm font-medium">No products found</p>
             </div>
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
               {filteredProducts.map(product => {
                 const opts = productOptions[product.id] || {};
                 const itemOptions = parseMenuItemOptions(product);
@@ -1065,61 +1165,32 @@ export default function PosTerminalPage() {
                 const hasDiscount = menuItemHasDiscount(product);
                 const effectivePrice = getMenuItemEffectivePrice(product);
                 const discountPct = getMenuItemDiscountPercent(product);
+                const comboLabel = product.isComposite && product.components?.length
+                  ? product.components.map(c => `${c.quantity}× ${c.name}`).join(" + ")
+                  : undefined;
 
                 return (
-                  <div
+                  <PosProductCard
                     key={product.id}
+                    name={product.name}
+                    categoryLabel={
+                      product.isComposite
+                        ? "Combo"
+                        : categoryName(product.categoryId)
+                    }
+                    imageUrl={product.imageUrl}
+                    price={effectivePrice}
+                    originalPrice={hasDiscount ? product.price : product.savings ? product.componentsTotal : undefined}
+                    discountPercent={discountPct}
+                    hasDiscount={hasDiscount || (product.savings != null && product.savings > 0)}
+                    outOfStock={outOfStock}
+                    selected={selected}
+                    isComposite={product.isComposite}
+                    comboLabel={comboLabel}
                     onClick={() => !outOfStock && addToCart(product)}
-                    className={cn(
-                      "bg-white rounded-2xl border p-4 cursor-pointer transition-all shadow-sm hover:shadow-md",
-                      selected
-                        ? "border-zinc-300 bg-zinc-100 ring-1 ring-zinc-200"
-                        : "border-border/80 hover:border-primary/20",
-                      outOfStock && "opacity-55 cursor-not-allowed"
-                    )}
                   >
-                    <div className="flex gap-3">
-                      <div className="size-14 rounded-full overflow-hidden bg-muted shrink-0 border border-border">
-                        <PosMenuItemImage src={product.imageUrl} className="rounded-full" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] text-muted-foreground font-medium">
-                          {categoryName(product.categoryId)}
-                        </p>
-                        <h3 className="text-sm font-bold text-foreground truncate">{product.name}</h3>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className={cn("text-sm font-bold", priceAmountClass)}>
-                            ${effectivePrice.toFixed(2)}
-                          </span>
-                          {hasDiscount && (
-                            <>
-                              <span className="text-xs text-muted-foreground line-through">
-                                ${product.price.toFixed(2)}
-                              </span>
-                              <span
-                                className={cn(
-                                  "text-[10px] font-bold px-1.5 py-0.5 rounded bg-secondary/35",
-                                  priceAmountClass
-                                )}
-                              >
-                                -{discountPct}%
-                              </span>
-                            </>
-                          )}
-                        </div>
-                        <p
-                          className={cn(
-                            "text-[11px] font-semibold mt-1",
-                            outOfStock ? "text-destructive" : "text-emerald-600"
-                          )}
-                        >
-                          {outOfStock ? "Out of Stock" : "Ready Stock"}
-                        </p>
-                      </div>
-                    </div>
-
-                    {!outOfStock && itemOptions.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
+                    {!outOfStock && !product.isComposite && itemOptions.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
                         {itemOptions.map(opt => (
                           <button
                             key={opt}
@@ -1132,7 +1203,7 @@ export default function PosTerminalPage() {
                         ))}
                       </div>
                     )}
-                  </div>
+                  </PosProductCard>
                 );
               })}
             </div>
@@ -1144,21 +1215,23 @@ export default function PosTerminalPage() {
                   type="button"
                   disabled={!product.isAvailable}
                   onClick={() => addToCart(product)}
-                  className="flex items-center gap-4 bg-white rounded-xl border border-border p-3 text-left hover:border-primary/30 disabled:opacity-50"
+                  className="flex items-center gap-4 bg-white rounded-xl border border-zinc-100 p-3 text-left hover:border-primary/30 hover:shadow-sm disabled:opacity-50"
                 >
-                  <div className="size-12 rounded-full overflow-hidden bg-muted shrink-0">
-                    <PosMenuItemImage src={product.imageUrl} iconClassName="m-3.5" />
+                  <div className="size-14 rounded-xl overflow-hidden bg-zinc-100 shrink-0">
+                    <PosMenuItemImage src={product.imageUrl} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold truncate">{product.name}</p>
-                    <p className="text-xs text-muted-foreground">{categoryName(product.categoryId)}</p>
+                    <p className="text-xs text-zinc-400">
+                      {product.isComposite ? "Combo" : categoryName(product.categoryId)}
+                    </p>
                   </div>
                   <div className="text-right shrink-0">
                     <span className={cn("text-sm font-bold block", priceAmountClass)}>
                       ${getMenuItemEffectivePrice(product).toFixed(2)}
                     </span>
                     {menuItemHasDiscount(product) && (
-                      <span className="text-[10px] text-muted-foreground line-through">
+                      <span className="text-[10px] text-zinc-400 line-through">
                         ${product.price.toFixed(2)}
                       </span>
                     )}
@@ -1660,7 +1733,7 @@ export default function PosTerminalPage() {
               variant="outline"
               onClick={() => {
                 closeCheckout();
-                setIsTableDialogOpen(true);
+                openOrderDialog();
               }}
               className="rounded-lg font-medium px-5 h-10 text-sm"
               disabled={isProcessing}

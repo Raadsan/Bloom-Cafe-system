@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Utensils } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { resolveMenuImageUrl } from "@/lib/branding";
 
 type PosMenuItemImageProps = {
   src?: string | null;
@@ -19,8 +20,13 @@ export default function PosMenuItemImage({
   iconClassName,
 }: PosMenuItemImageProps) {
   const [failed, setFailed] = useState(false);
+  const resolvedSrc = useMemo(() => resolveMenuImageUrl(src), [src]);
 
-  if (!src || failed) {
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!resolvedSrc || failed) {
     return (
       <div className={cn("flex h-full w-full items-center justify-center bg-muted", className)}>
         <Utensils className={cn("size-5 text-muted-foreground/40", iconClassName)} />
@@ -30,7 +36,7 @@ export default function PosMenuItemImage({
 
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       loading="lazy"
       decoding="async"

@@ -1,36 +1,24 @@
 import express from 'express'
 import {
   getOrCreateCart,
+  getOrCreateCartByTable,
   addToCart,
   getCart,
   removeCartItem,
   clearCart,
-  checkoutCart
+  checkoutCart,
 } from '../controllers/cartController.js'
 
 const router = express.Router()
 
-/**
- * PUBLIC CART ROUTES (QR CUSTOMER FLOW)
- * No authentication required
- */
+/** PUBLIC — QR table customer flow (no auth) */
 
-// 1. Create or get active cart (by tableId)
+router.get('/table/:tableId', getOrCreateCartByTable)
 router.post('/create', getOrCreateCart)
-
-// 2. Add item to cart
 router.post('/add', addToCart)
-
-// 3. Get cart by ID
 router.get('/:id', getCart)
-
-// 4. Remove single item from cart
 router.delete('/item/:id', removeCartItem)
-
-// 5. Clear entire cart
-router.delete('/clear/:cartId', clearCart)
-
-// 6. Checkout cart → create order
+router.delete('/:cartId/clear', clearCart)
 router.post('/checkout', checkoutCart)
 
 export default router

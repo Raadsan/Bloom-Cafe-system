@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import {
   Plus,
   Search,
@@ -20,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { dispatchMenuChanged } from "@/lib/live-updates";
 import {
   Dialog,
   DialogContent,
@@ -92,21 +94,27 @@ export default function MenuPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) setLoading(true);
     try {
       const [itemsData, catsData] = await Promise.all([
         menuItemApi.getAllMenuItems(),
         categoryApi.getAllCategories()
       ]);
-      setItems(itemsData || []);
+      setItems((itemsData || []).filter((i) => !i.isComposite));
       setCategories(catsData || []);
     } catch (err) {
       console.error("Failed to fetch menu data", err);
       showToast("Failed to load menu items", "error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  };
+
+  const withCategory = (item: MenuItem, cats: Category[] = categories): MenuItem => {
+    const cat = cats.find(c => c.id === item.categoryId);
+    return cat ? { ...item, category: { id: cat.id, name: cat.name } } : item;
   };
 
   useEffect(() => {
@@ -233,16 +241,25 @@ export default function MenuPage() {
       };
 
       if (isEditOpen && selectedItem) {
-        await menuItemApi.updateMenuItem(selectedItem.id, payload);
+        const updated = await menuItemApi.updateMenuItem(selectedItem.id, payload);
+        const merged = withCategory(updated);
+        setItems(prev => prev.map(i => (i.id === merged.id ? merged : i)));
+        menuItemApi.clearPosMenuCache();
+        categoryApi.clearCategoryCache();
+        dispatchMenuChanged({ action: "update", id: merged.id });
         showToast("Menu item updated successfully", "success");
+        setIsEditOpen(false);
+        setSelectedItem(null);
       } else {
-        await menuItemApi.createMenuItem(payload);
+        const created = await menuItemApi.createMenuItem(payload);
+        const merged = withCategory(created);
+        setItems(prev => [...prev, merged]);
+        menuItemApi.clearPosMenuCache();
+        categoryApi.clearCategoryCache();
+        dispatchMenuChanged({ action: "create", id: merged.id });
         showToast("Menu item created successfully", "success");
+        setIsAddOpen(false);
       }
-
-      await fetchData();
-      setIsAddOpen(false);
-      setIsEditOpen(false);
     } catch (err: any) {
       const msg = err.response?.data?.message || "Failed to save menu item";
       showToast(msg, "error");
@@ -255,8 +272,11 @@ export default function MenuPage() {
     if (!selectedItem) return;
     try {
       await menuItemApi.deleteMenuItem(selectedItem.id);
+      setItems(prev => prev.filter(i => i.id !== selectedItem.id));
+      menuItemApi.clearPosMenuCache();
+      categoryApi.clearCategoryCache();
+      dispatchMenuChanged({ action: "delete", id: selectedItem.id });
       showToast("Menu item deleted", "success");
-      await fetchData();
       setIsDeleteOpen(false);
     } catch (err: any) {
       showToast("Failed to delete item", "error");
@@ -317,6 +337,14 @@ export default function MenuPage() {
                 className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
               />
             </div>
+
+            <Button
+              variant="outline"
+              asChild
+              className="h-[42px] px-4 rounded-md font-medium text-sm"
+            >
+              <Link href="/composites">Menu Combos</Link>
+            </Button>
 
             <Button
               onClick={openAddModal}

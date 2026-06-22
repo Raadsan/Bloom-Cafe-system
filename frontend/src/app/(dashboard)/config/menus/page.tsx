@@ -9,6 +9,9 @@ import {
   PlusCircle,
   LayoutGrid,
   Search,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -69,7 +72,7 @@ export default function MenuManagementPage() {
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [reorderingId, setReorderingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [pageSize, setPageSize] = useState(10);
@@ -77,10 +80,10 @@ export default function MenuManagementPage() {
   const [iconSearch, setIconSearch] = useState("");
   const { showToast } = useToast();
 
-  const fetchMenus = async () => {
+  const fetchMenus = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const data = await menuApi.getAllMenus();
+      const data = await menuApi.getAllMenus(forceRefresh);
       setMenus(data);
     } catch (error) {
       console.error("Failed to fetch menus:", error);
@@ -93,58 +96,164 @@ export default function MenuManagementPage() {
     fetchMenus();
   }, []);
 
+  const notifySidebarRefresh = () => {
+    const allMenus = menuApi.peekAllMenus();
+    window.dispatchEvent(
+      new CustomEvent("sidebar-menu-updated", { detail: { allMenus } })
+    );
+  };
+
+  const buildOptimisticMenu = (
+    menuId: number | undefined,
+    payload: {
+      title: string;
+      url: string;
+      icon?: string;
+      order?: number;
+      isActive?: boolean;
+    },
+    subs: typeof menuSubmenus
+  ): Menu => ({
+    id: menuId ?? -Date.now(),
+    title: payload.title!,
+    url: payload.url!,
+    icon: payload.icon || "LayoutDashboard",
+    order: payload.order ?? menus.length + 1,
+    isActive: payload.isActive !== false,
+    permissions: {
+      canView: true,
+      canAdd: true,
+      canEdit: true,
+      canDelete: true,
+    },
+    items: hasSubmenus
+      ? subs
+          .filter((sm) => sm.title && sm.url)
+          .map((sm, i) => ({
+            id: sm.id ?? -(i + 1),
+            title: sm.title,
+            url: sm.url,
+            order: i + 1,
+            isActive: sm.isActive !== false,
+            permissions: {
+              canView: true,
+              canAdd: true,
+              canEdit: true,
+              canDelete: true,
+            },
+          }))
+      : [],
+  });
+
   const handleSaveMenu = async () => {
     if (!editingMenu?.title || !editingMenu?.url) {
       showToast("Title and URL are required", "error");
       return;
     }
-    setIsSaving(true);
+
+    const snapshot = [...menus];
+    const menuId = editingMenu.id;
+    const bundlePayload = {
+      title: editingMenu.title,
+      url: editingMenu.url,
+      icon: editingMenu.icon,
+      order: editingMenu.order,
+      isActive: editingMenu.isActive,
+      hasSubmenus,
+      submenus: menuSubmenus,
+    };
+
+    const optimistic = buildOptimisticMenu(menuId, bundlePayload, menuSubmenus);
+    const nextMenus = menuId
+      ? menus.map((m) => (m.id === menuId ? optimistic : m))
+      : [...menus, optimistic];
+    setMenus(nextMenus.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    menuApi.setAllMenusCache(nextMenus);
+
+    setIsMenuDialogOpen(false);
+    setEditingMenu(null);
+    showToast(
+      `Menu ${menuId ? "updated" : "created"} successfully`,
+      "success"
+    );
+    notifySidebarRefresh();
+
     try {
-      let menuId = editingMenu.id;
-      if (menuId) {
-        await menuApi.updateMenu(menuId, editingMenu);
-      } else {
-        const res = await menuApi.createMenu(editingMenu);
-        menuId = res.data.id;
-      }
-
-      if (hasSubmenus) {
-        for (const sm of menuSubmenus) {
-          if (sm.title && sm.url) {
-            if (sm.id) {
-              await menuApi.updateSubMenu(sm.id, sm);
-            } else {
-              await menuApi.createSubMenu({
-                menuId: menuId!,
-                title: sm.title,
-                url: sm.url,
-                order: sm.order,
-              });
-            }
-          }
-        }
-      }
-
-      showToast(
-        `Menu ${editingMenu.id ? "updated" : "created"} successfully`,
-        "success"
-      );
-      setIsMenuDialogOpen(false);
-      setEditingMenu(null);
-      fetchMenus();
-      menuApi.clearMenuCache(); // bust all role caches — menu structure changed
-      window.dispatchEvent(new CustomEvent("sidebar-menu-updated"));
+      await menuApi.saveMenuBundle(menuId, bundlePayload);
+      const fresh = menuApi.peekAllMenus();
+      if (fresh) setMenus(fresh);
+      notifySidebarRefresh();
     } catch (error) {
       console.error("Failed to save menu:", error);
-      showToast("Failed to save menu", "error");
-    } finally {
-      setIsSaving(false);
+      setMenus(snapshot);
+      menuApi.setAllMenusCache(snapshot);
+      notifySidebarRefresh();
+      showToast("Failed to save menu — changes reverted", "error");
     }
+  };
+
+  const sortedMenus = useMemo(
+    () => [...menus].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [menus]
+  );
+
+  const handleMoveMenu = async (menuId: number, direction: "up" | "down") => {
+    const sorted = [...sortedMenus];
+    const idx = sorted.findIndex((m) => m.id === menuId);
+    if (idx < 0) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+
+    const current = sorted[idx];
+    const target = sorted[swapIdx];
+    const reordered = sorted.map((m) => {
+      if (m.id === current.id) return { ...m, order: target.order };
+      if (m.id === target.id) return { ...m, order: current.order };
+      return m;
+    });
+
+    setMenus(reordered);
+    menuApi.patchAllMenusCache(() => reordered);
+    notifySidebarRefresh();
+    setReorderingId(menuId);
+    try {
+      await menuApi.reorderMenus(
+        reordered.map((m) => ({ id: m.id, order: m.order }))
+      );
+    } catch (error) {
+      console.error("Failed to reorder menus:", error);
+      showToast("Failed to update menu order", "error");
+      fetchMenus(true);
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
+  const moveSubmenu = (idx: number, direction: "up" | "down") => {
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= menuSubmenus.length) return;
+    const next = [...menuSubmenus];
+    [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+    setMenuSubmenus(
+      next.map((sm, i) => ({ ...sm, order: i + 1 }))
+    );
   };
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
+    const snapshot = [...menus];
     setIsDeleting(true);
+
+    if (itemToDelete.type === "menu") {
+      setMenus((prev) => prev.filter((m) => m.id !== itemToDelete.id));
+      menuApi.patchAllMenusCache((prev) =>
+        prev.filter((m) => m.id !== itemToDelete.id)
+      );
+    }
+    notifySidebarRefresh();
+    setIsDeleteDialogOpen(false);
+    setItemToDelete(null);
+
     try {
       if (itemToDelete.type === "menu") {
         await menuApi.deleteMenu(itemToDelete.id);
@@ -152,14 +261,14 @@ export default function MenuManagementPage() {
       } else {
         await menuApi.deleteSubMenu(itemToDelete.id);
         showToast("Submenu deleted successfully", "success");
+        fetchMenus(false);
       }
-      fetchMenus();
-      menuApi.clearMenuCache(); // bust all role caches — menu structure changed
-      window.dispatchEvent(new CustomEvent("sidebar-menu-updated"));
-      setIsDeleteDialogOpen(false);
-      setItemToDelete(null);
+      notifySidebarRefresh();
     } catch (error) {
       console.error("Failed to delete:", error);
+      setMenus(snapshot);
+      menuApi.setAllMenusCache(snapshot);
+      notifySidebarRefresh();
       showToast("Failed to delete item", "error");
     } finally {
       setIsDeleting(false);
@@ -168,7 +277,7 @@ export default function MenuManagementPage() {
 
   const filteredMenus = useMemo(
     () =>
-      menus.filter((m) => {
+      sortedMenus.filter((m) => {
         const matchesSearch =
           m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           m.url.toLowerCase().includes(searchQuery.toLowerCase());
@@ -178,7 +287,7 @@ export default function MenuManagementPage() {
           (statusFilter === "inactive" && m.isActive === false);
         return matchesSearch && matchesStatus;
       }),
-    [menus, searchQuery, statusFilter]
+    [sortedMenus, searchQuery, statusFilter]
   );
 
   const totalPages = Math.ceil(filteredMenus.length / pageSize) || 1;
@@ -235,7 +344,12 @@ export default function MenuManagementPage() {
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       <div className={pageHeaderWrapperClass}>
-        <h1 className={pageHeaderTitleClass}>Menu Configuration</h1>
+        <div>
+          <h1 className={pageHeaderTitleClass}>Menu Configuration</h1>
+          <p className="text-[13px] text-zinc-500 mt-1">
+            Set sidebar order with the arrows. Saving here does not change role permissions.
+          </p>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
@@ -295,6 +409,7 @@ export default function MenuManagementPage() {
               <TableHeader className={dashboardTableHeaderClass}>
                 <TableRow className={dashboardTableHeadRowClass}>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left w-16")}>No</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left w-20")}>Order</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Menu</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>URL</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Sub-Modules</TableHead>
@@ -310,7 +425,11 @@ export default function MenuManagementPage() {
                     </TableRow>
                   ))
                 ) : paginatedMenus.length > 0 ? (
-                  paginatedMenus.map((menu, index) => (
+                  paginatedMenus.map((menu, index) => {
+                    const globalIdx = sortedMenus.findIndex((m) => m.id === menu.id);
+                    const canMoveUp = globalIdx > 0;
+                    const canMoveDown = globalIdx >= 0 && globalIdx < sortedMenus.length - 1;
+                    return (
                       <TableRow
                         key={menu.id}
                         className={dashboardTableBodyRowClass}
@@ -319,6 +438,35 @@ export default function MenuManagementPage() {
                           <span className="text-[13px] font-bold text-primary">
                             {(currentPage - 1) * pageSize + index + 1}
                           </span>
+                        </TableCell>
+
+                        <TableCell className={dashboardTableCellClass}>
+                          <div className="flex items-center gap-1">
+                            <GripVertical className="size-3.5 text-zinc-300 shrink-0" />
+                            <span className="text-[12px] font-bold text-zinc-600 min-w-[1.25rem]">
+                              {menu.order ?? globalIdx + 1}
+                            </span>
+                            <div className="flex flex-col">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={!canMoveUp || reorderingId === menu.id}
+                                onClick={() => handleMoveMenu(menu.id, "up")}
+                                className="h-6 w-6 text-zinc-400 hover:text-primary"
+                              >
+                                <ChevronUp className="size-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={!canMoveDown || reorderingId === menu.id}
+                                onClick={() => handleMoveMenu(menu.id, "down")}
+                                className="h-6 w-6 text-zinc-400 hover:text-primary"
+                              >
+                                <ChevronDown className="size-3.5" />
+                              </Button>
+                            </div>
+                          </div>
                         </TableCell>
 
                         <TableCell className={dashboardTableCellClass}>
@@ -387,10 +535,11 @@ export default function MenuManagementPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                  ))
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="px-6 py-20 text-center">
+                    <TableCell colSpan={7} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <LayoutGrid className="size-10 text-zinc-100" />
                         <p className="text-zinc-400 font-black uppercase text-[11px] tracking-widest">
@@ -679,9 +828,31 @@ export default function MenuManagementPage() {
                   <div className="space-y-2">
                     {menuSubmenus.map((sm, idx) => (
                       <div
-                        key={idx}
+                        key={sm.id ?? `new-${idx}`}
                         className="flex items-center gap-2 bg-zinc-50/60 p-3 rounded-xl border border-zinc-100 group hover:border-primary/20 transition-all"
                       >
+                        <div className="flex flex-col shrink-0">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={idx === 0}
+                            onClick={() => moveSubmenu(idx, "up")}
+                            className="h-6 w-6 text-zinc-400 hover:text-primary"
+                          >
+                            <ChevronUp className="size-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={idx === menuSubmenus.length - 1}
+                            onClick={() => moveSubmenu(idx, "down")}
+                            className="h-6 w-6 text-zinc-400 hover:text-primary"
+                          >
+                            <ChevronDown className="size-3" />
+                          </Button>
+                        </div>
                         <div className="w-5 h-5 rounded bg-zinc-200 flex items-center justify-center shrink-0">
                           <span className="text-[9px] font-black text-zinc-500">{idx + 1}</span>
                         </div>
@@ -739,16 +910,9 @@ export default function MenuManagementPage() {
             </Button>
             <Button
               onClick={handleSaveMenu}
-              disabled={isSaving}
               className="px-8 h-10 rounded-lg font-bold bg-primary !text-white hover:bg-primary/90 hover:!text-white shadow-lg shadow-primary/20 border-none text-[12px]"
             >
-              {isSaving
-                ? editingMenu?.id
-                  ? "Updating..."
-                  : "Creating..."
-                : editingMenu?.id
-                ? "Update Module"
-                : "Create Module"}
+              {editingMenu?.id ? "Update Module" : "Create Module"}
             </Button>
           </DialogFooter>
         </DialogContent>

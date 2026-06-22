@@ -48,12 +48,18 @@ export default function PermissionsPage() {
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [pageSize, setPageSize] = useState(25);
+  const [permissionsDirty, setPermissionsDirty] = useState(false);
   const { showToast } = useToast();
+
+  const sortedAllMenus = useMemo(
+    () => [...allMenus].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [allMenus]
+  );
 
   const filteredMenus = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return allMenus;
-    return allMenus.filter((menu) => {
+    if (!q) return sortedAllMenus;
+    return sortedAllMenus.filter((menu) => {
       const menuMatch =
         menu.title.toLowerCase().includes(q) ||
         menu.url?.toLowerCase().includes(q);
@@ -64,7 +70,7 @@ export default function PermissionsPage() {
       );
       return menuMatch || subMatch;
     });
-  }, [allMenus, searchQuery]);
+  }, [sortedAllMenus, searchQuery]);
 
   useEffect(() => {
     const init = async () => {
@@ -100,19 +106,54 @@ export default function PermissionsPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedRoleId) {
+    if (selectedRoleId && sortedAllMenus.length > 0) {
       fetchRolePermissions(selectedRoleId);
     }
-  }, [selectedRoleId, allMenus]);
+  }, [selectedRoleId, sortedAllMenus.length]);
+
+  // When menus are added/removed, extend permission state without wiping existing toggles.
+  useEffect(() => {
+    if (!sortedAllMenus.length || permissionsDirty) return;
+
+    setPermissions((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      sortedAllMenus.forEach((m) => {
+        if (!next[m.id]) {
+          changed = true;
+          next[m.id] = {
+            menu: { canView: false, canAdd: false, canEdit: false, canDelete: false },
+            submenus: {},
+          };
+        }
+        (m.items || []).forEach((sm) => {
+          if (!next[m.id].submenus[sm.id]) {
+            changed = true;
+            next[m.id] = {
+              ...next[m.id],
+              submenus: {
+                ...next[m.id].submenus,
+                [sm.id]: { canView: false, canAdd: false, canEdit: false, canDelete: false },
+              },
+            };
+          }
+        });
+      });
+
+      return changed ? next : prev;
+    });
+  }, [sortedAllMenus, permissionsDirty]);
 
   const fetchRolePermissions = async (roleId: number) => {
-    if (!allMenus.length) return;
+    if (!sortedAllMenus.length) return;
     try {
       setPermsLoading(true);
+      setPermissionsDirty(false);
       const roleMenus = await menuApi.getMenusByRole(roleId);
       const newPerms: typeof permissions = {};
       
-      allMenus.forEach(m => {
+      sortedAllMenus.forEach(m => {
         const roleMenu = roleMenus?.find(rm => rm.id === m.id);
         const subMap: Record<number, PermissionState> = {};
         
@@ -147,6 +188,7 @@ export default function PermissionsPage() {
   };
 
   const handleMenuViewToggle = (menuId: number, hasSubmenus: boolean) => {
+    setPermissionsDirty(true);
     setPermissions(prev => {
       const next = { ...prev };
       const current = next[menuId] || { menu: { canView: false, canAdd: false, canEdit: false, canDelete: false }, submenus: {} };
@@ -172,6 +214,7 @@ export default function PermissionsPage() {
   };
 
   const handleLeafMenuToggle = (menuId: number, type: keyof PermissionState) => {
+    setPermissionsDirty(true);
     setPermissions(prev => {
       const next = { ...prev };
       const current = next[menuId] || { menu: { canView: false, canAdd: false, canEdit: false, canDelete: false }, submenus: {} };
@@ -193,6 +236,7 @@ export default function PermissionsPage() {
   };
 
   const handleSubMenuToggle = (menuId: number, submenuId: number, type: keyof PermissionState) => {
+    setPermissionsDirty(true);
     setPermissions(prev => {
       const next = { ...prev };
       const current = next[menuId] || { menu: { canView: false, canAdd: false, canEdit: false, canDelete: false }, submenus: {} };
@@ -253,6 +297,7 @@ export default function PermissionsPage() {
 
       await menuApi.updatePermissions(selectedRoleId, payload);
       menuApi.clearMenuCache(selectedRoleId);
+      setPermissionsDirty(false);
       showToast("Permissions updated successfully", "success");
 
       const currentUser = authApi.getCachedUser();

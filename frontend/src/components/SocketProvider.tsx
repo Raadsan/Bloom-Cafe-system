@@ -6,9 +6,12 @@ import { authApi } from '@/lib/api/authApi';
 import {
   dispatchOrdersChanged,
   dispatchRefreshNotifications,
+  dispatchMenuChanged,
   OrderSocketPayload,
 } from '@/lib/live-updates';
 import { clearOrdersListCache } from '@/lib/api/orderApi';
+import { menuItemApi } from '@/lib/api/menuItemApi';
+import { categoryApi } from '@/lib/api/categoryApi';
 import { playOrderReadyChime } from '@/lib/order-ready-sound';
 
 interface SocketContextType {
@@ -64,6 +67,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       clearOrdersListCache();
       dispatchOrdersChanged({ ...payload, action: 'new' });
       dispatchRefreshNotifications();
+      const role = userRoleRef.current;
+      if (role === 'pos' || role === 'cashier') {
+        playOrderReadyChime();
+      }
     });
 
     socketInstance.on('order_update', (payload: OrderSocketPayload) => {
@@ -88,6 +95,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     socketInstance.on('notification', () => {
       dispatchRefreshNotifications();
+    });
+
+    socketInstance.on('menu_changed', () => {
+      menuItemApi.clearPosMenuCache();
+      categoryApi.clearCategoryCache();
+      dispatchMenuChanged();
     });
 
     setSocket(socketInstance);

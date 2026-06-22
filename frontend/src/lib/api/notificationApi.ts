@@ -26,9 +26,41 @@ export interface Notification {
   createdAt?: string;
 }
 
-const NOTIF_TTL_MS = 30 * 1000;
+const NOTIF_TTL_MS = 60 * 1000;
+const NOTIF_CACHE_KEY = 'header_notifications';
 let notifCache: { data: Notification[]; at: number } | null = null;
 let notifInflight: Promise<Notification[]> | null = null;
+
+function readNotifLocal(): Notification[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(NOTIF_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: Notification[]; at: number };
+    if (Date.now() - parsed.at < NOTIF_TTL_MS) return parsed.data;
+  } catch { /* ignore */ }
+  return null;
+}
+
+function writeNotifLocal(data: Notification[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(
+      NOTIF_CACHE_KEY,
+      JSON.stringify({ data, at: Date.now() })
+    );
+  } catch { /* ignore */ }
+}
+
+async function fetchMyNotifications(full: boolean): Promise<Notification[]> {
+  const res = await api.get('/notifications/me', {
+    params: full ? undefined : { light: '1' },
+  });
+  const data: Notification[] = res.data.data || [];
+  notifCache = { data, at: Date.now() };
+  writeNotifLocal(data);
+  return data;
+}
 
 export const notificationApi = {
   getAllNotifications: async (): Promise<Notification[]> => {
@@ -36,25 +68,40 @@ export const notificationApi = {
     return res.data.data || [];
   },
 
-  getMyNotifications: async (forceRefresh = false): Promise<Notification[]> => {
+  getMyNotifications: async (
+    forceRefresh = false,
+    options?: { full?: boolean }
+  ): Promise<Notification[]> => {
+    const full = options?.full ?? false;
     const now = Date.now();
     if (!forceRefresh && notifCache && now - notifCache.at < NOTIF_TTL_MS) {
       return notifCache.data;
     }
 
+    if (!forceRefresh && !full) {
+      const local = readNotifLocal();
+      if (local) {
+        notifCache = { data: local, at: now };
+        if (!notifInflight) {
+          notifInflight = fetchMyNotifications(false)
+            .catch(() => local)
+            .finally(() => {
+              notifInflight = null;
+            });
+        }
+        return local;
+      }
+    }
+
     if (notifInflight && !forceRefresh) return notifInflight;
 
-    notifInflight = api
-      .get('/notifications/me')
-      .then((res) => {
-        const data: Notification[] = res.data.data || [];
-        notifCache = { data, at: Date.now() };
-        notifInflight = null;
-        return data;
-      })
+    notifInflight = fetchMyNotifications(full)
       .catch((err) => {
         notifInflight = null;
         throw err;
+      })
+      .finally(() => {
+        notifInflight = null;
       });
 
     return notifInflight;
@@ -62,6 +109,9 @@ export const notificationApi = {
 
   clearNotificationCache: () => {
     notifCache = null;
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(NOTIF_CACHE_KEY);
+    }
   },
 
   patchNotificationReadLocal: (id: number) => {

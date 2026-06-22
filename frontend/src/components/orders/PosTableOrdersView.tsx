@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Clock, Edit, Eye, PackageCheck, Search, Trash2 } from "lucide-react";
+import { Clock, Edit, Eye, History, Search, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -24,9 +24,9 @@ import { authApi } from "@/lib/api/authApi";
 import { usePermissions } from "@/context/PermissionContext";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import { isKitchenPendingStatus } from "@/lib/kitchen-order-utils";
+import { isKitchenPendingStatus, getOrderSourceLabel } from "@/lib/kitchen-order-utils";
 import { resolveOrderChannel } from "@/lib/order-type-utils";
-import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
+import { onDebouncedEvent, ORDERS_CHANGED, MENU_CHANGED, POS_SOFT_REFRESH } from "@/lib/live-updates";
 import KitchenOrderDetailDialog from "@/components/orders/KitchenOrderDetailDialog";
 import PosOrderEditDialog from "@/components/orders/PosOrderEditDialog";
 import {
@@ -57,15 +57,48 @@ import {
   dashboardTableIdClass,
 } from "@/lib/dashboard-ui";
 
-type QueueTab = "pending" | "served";
+type QueueTab = "pending" | "history";
+
+const HISTORY_STATUSES = new Set(["served", "cancelled", "completed"]);
 
 function isDineInOrder(order: Order) {
   return resolveOrderChannel(order) === "dine-in" && !!order.tableId;
 }
 
+/** Orders for POS order history: table dine-in, mobile, QR, pickup (takeaway/delivery). */
+function shouldShowOnOrderHistory(order: Order) {
+  if (order.status === "held") return false;
+
+  // Table dine-in — same as original ready-orders / pickup queue
+  if (isDineInOrder(order)) return true;
+
+  const source = (order.source || "pos").toLowerCase();
+  if (["mobile", "table", "qr", "client"].includes(source)) return true;
+
+  // Mobile / app pickup (takeaway & delivery)
+  const channel = resolveOrderChannel(order);
+  if (channel === "takeaway" || channel === "delivery") {
+    return source !== "dashboard";
+  }
+
+  return false;
+}
+
 function isActiveOrder(order: Order) {
   const s = order.status;
   return isKitchenPendingStatus(s) || s === "preparing" || s === "ready";
+}
+
+function isHistoryOrder(order: Order) {
+  return HISTORY_STATUSES.has(order.status);
+}
+
+function getExternalSourceLabel(order: Order) {
+  const source = (order.source || "").toLowerCase();
+  if (source === "mobile") return "Mobile";
+  if (source === "table" || source === "qr") return "Table QR";
+  if (order.tableId) return "Table QR";
+  return getOrderSourceLabel(order);
 }
 
 function formatTimeAgo(dateStr?: string) {
@@ -119,11 +152,18 @@ export default function PosTableOrdersView() {
 
   const fetchData = useCallback(async (force = false) => {
     try {
-      const [orderData, items] = await Promise.all([
+      const [kitchenOrders, pickupOrders, items] = await Promise.all([
         orderApi.getAllOrders({ kitchenQueue: true, includeServed: true }, force),
+        orderApi.getAllOrders({ posQueue: true }, force),
         menuItemApi.getAllMenuItems(),
       ]);
-      setOrders((orderData || []).filter(isDineInOrder));
+
+      const merged = new Map<number, Order>();
+      for (const o of [...(kitchenOrders || []), ...(pickupOrders || [])]) {
+        merged.set(o.id, o);
+      }
+
+      setOrders(Array.from(merged.values()).filter(shouldShowOnOrderHistory));
       setMenuItems(items || []);
     } catch {
       showToast("Failed to load orders", "error");
@@ -134,8 +174,22 @@ export default function PosTableOrdersView() {
 
   useEffect(() => {
     fetchData(false);
-    const remove = onDebouncedEvent(ORDERS_CHANGED, () => fetchData(true), 700);
-    return () => remove();
+    const removeOrders = onDebouncedEvent(ORDERS_CHANGED, () => fetchData(true), 700);
+    const removePos = onDebouncedEvent(POS_SOFT_REFRESH, () => fetchData(true), 400);
+    const removeMenu = onDebouncedEvent(MENU_CHANGED, async () => {
+      menuItemApi.clearPosMenuCache();
+      try {
+        const items = await menuItemApi.getPosMenuCatalog(true);
+        setMenuItems(items || []);
+      } catch {
+        /* keep current menu */
+      }
+    }, 400);
+    return () => {
+      removeOrders();
+      removePos();
+      removeMenu();
+    };
   }, [fetchData]);
 
   useEffect(() => {
@@ -146,11 +200,12 @@ export default function PosTableOrdersView() {
     const base =
       activeTab === "pending"
         ? orders.filter(isActiveOrder)
-        : orders.filter(o => o.status === "served");
-    return base.sort(
-      (a, b) =>
-        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
-    );
+        : orders.filter(isHistoryOrder);
+    return base.sort((a, b) => {
+      const ta = new Date(a.createdAt || 0).getTime();
+      const tb = new Date(b.createdAt || 0).getTime();
+      return activeTab === "pending" ? ta - tb : tb - ta;
+    });
   }, [orders, activeTab]);
 
   const filteredOrders = useMemo(() => {
@@ -160,11 +215,13 @@ export default function PosTableOrdersView() {
       const type = getOrderTypeLabel(order).toLowerCase();
       const table = order.table?.number ? `table ${order.table.number}` : "";
       const customer = (order.customerName || "").toLowerCase();
+      const source = getExternalSourceLabel(order).toLowerCase();
       const id = String(order.id);
       return (
         type.includes(q) ||
         table.includes(q) ||
         customer.includes(q) ||
+        source.includes(q) ||
         id.includes(q)
       );
     });
@@ -176,11 +233,8 @@ export default function PosTableOrdersView() {
     return filteredOrders.slice(start, start + pageSize);
   }, [filteredOrders, currentPage, pageSize]);
 
-  const activeCount = useMemo(() => orders.filter(isActiveOrder).length, [orders]);
-  const servedCount = useMemo(
-    () => orders.filter(o => o.status === "served").length,
-    [orders]
-  );
+  const pendingCount = useMemo(() => orders.filter(isActiveOrder).length, [orders]);
+  const historyCount = useMemo(() => orders.filter(isHistoryOrder).length, [orders]);
 
   const viewOrder = useMemo(
     () => (viewOrderId ? orders.find(o => o.id === viewOrderId) ?? null : null),
@@ -208,7 +262,7 @@ export default function PosTableOrdersView() {
   return (
     <div className={cn(dashboardPageClass, "h-full min-h-0 flex flex-col overflow-hidden")} style={dashboardPageStyle}>
       <div className={cn(pageHeaderWrapperClass, "shrink-0 px-4 pt-4")}>
-        <h1 className={pageHeaderTitleClass}>Order Queue</h1>
+        <h1 className={pageHeaderTitleClass}>Order History</h1>
       </div>
 
       <div className={cn(dashboardCardClass, "mx-4 mb-4 flex-1 min-h-0 flex flex-col overflow-hidden")}>
@@ -232,28 +286,28 @@ export default function PosTableOrdersView() {
                   activeTab === "pending" ? "bg-white/20 text-white" : "bg-orange-100 text-orange-700"
                 )}
               >
-                {activeCount}
+                {pendingCount}
               </span>
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("served")}
+              onClick={() => setActiveTab("history")}
               className={cn(
                 "inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold border transition-all",
-                activeTab === "served"
+                activeTab === "history"
                   ? "bg-primary text-white border-primary"
                   : "bg-white text-zinc-500 border-zinc-200 hover:border-primary/30"
               )}
             >
-              <PackageCheck className="size-3.5" />
-              Served
+              <History className="size-3.5" />
+              History
               <span
                 className={cn(
                   "min-w-5 h-5 px-1 rounded-full text-[10px] font-bold inline-flex items-center justify-center",
-                  activeTab === "served" ? "bg-white/20 text-white" : "bg-zinc-100 text-zinc-600"
+                  activeTab === "history" ? "bg-white/20 text-white" : "bg-zinc-100 text-zinc-600"
                 )}
               >
-                {servedCount}
+                {historyCount}
               </span>
             </button>
           </div>
@@ -292,6 +346,7 @@ export default function PosTableOrdersView() {
                 <TableRow className={dashboardTableHeadRowClass}>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Order</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Source</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Type</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Table</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Customer</TableHead>
@@ -306,7 +361,7 @@ export default function PosTableOrdersView() {
                 {loading ? (
                   [...Array(5)].map((_, i) => (
                     <TableRow key={i} className="h-14 animate-pulse">
-                      {[...Array(10)].map((_, j) => (
+                      {[...Array(11)].map((_, j) => (
                         <TableCell key={j} className="px-6 py-4">
                           <div className="h-4 bg-zinc-100 rounded w-full" />
                         </TableCell>
@@ -315,10 +370,10 @@ export default function PosTableOrdersView() {
                   ))
                 ) : paginatedOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="px-6 py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="px-6 py-10 text-center text-muted-foreground">
                       {activeTab === "pending"
-                        ? "No pending, preparing, or ready orders"
-                        : "No served orders yet"}
+                        ? "No pending orders — table, mobile, and pickup orders will show here"
+                        : "No completed orders yet — served and cancelled orders appear in History"}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -334,6 +389,11 @@ export default function PosTableOrdersView() {
                         </TableCell>
                         <TableCell className={dashboardTableCellClass}>
                           <span className={dashboardTextPrimary}>#{order.id}</span>
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className={cn(dashboardTextSecondary, "text-xs font-medium")}>
+                            {getExternalSourceLabel(order)}
+                          </span>
                         </TableCell>
                         <TableCell className={dashboardTableCellClass}>
                           <span className={cn(dashboardTextSecondary, "capitalize")}>

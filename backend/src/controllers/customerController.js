@@ -33,6 +33,8 @@ export const createCustomer = async (req, res) => {
 
     await logAudit({ userId: req.user?.id, action: 'Created', entity: 'Customer', entityId: customer.id, description: `Created customer "${customer.fullName}"` })
 
+    clearPosCustomersCache()
+
     return res.status(201).json({
       success: true,
       message: 'Customer created successfully',
@@ -44,6 +46,55 @@ export const createCustomer = async (req, res) => {
       success: false,
       message: 'Failed to create customer',
       error: error.message
+    })
+  }
+}
+
+let posCustomersCache = { data: null, at: 0 }
+const POS_CUSTOMERS_TTL_MS = 5 * 60 * 1000
+
+export const clearPosCustomersCache = () => {
+  posCustomersCache = { data: null, at: 0 }
+}
+
+// GET POS CUSTOMERS — lightweight list (no order counts)
+export const getPosCustomers = async (req, res) => {
+  try {
+    const now = Date.now()
+    if (posCustomersCache.data && now - posCustomersCache.at < POS_CUSTOMERS_TTL_MS) {
+      return res.status(200).json({
+        success: true,
+        count: posCustomersCache.data.length,
+        data: posCustomersCache.data,
+      })
+    }
+
+    const customers = await prisma.customer.findMany({
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        email: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { fullName: 'asc' },
+      take: 1000,
+    })
+
+    posCustomersCache = { data: customers, at: now }
+
+    return res.status(200).json({
+      success: true,
+      count: customers.length,
+      data: customers,
+    })
+  } catch (error) {
+    console.error('Get POS Customers Error:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch customers',
+      error: error.message,
     })
   }
 }
@@ -212,6 +263,8 @@ export const updateCustomer = async (req, res) => {
 
     await logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Customer', entityId: updatedCustomer.id, description: `Updated customer "${updatedCustomer.fullName}"` })
 
+    clearPosCustomersCache()
+
     return res.status(200).json({
       success: true,
       message: 'Customer updated successfully',
@@ -264,6 +317,8 @@ export const deleteCustomer = async (req, res) => {
     })
 
     await logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'Customer', entityId: customerId, description: `Deleted customer "${existingCustomer.fullName}"` })
+
+    clearPosCustomersCache()
 
     return res.status(200).json({
       success: true,
