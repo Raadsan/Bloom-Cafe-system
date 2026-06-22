@@ -18,6 +18,7 @@ import {
   ensurePickupHistoryMenuItem,
   ensureDiscountAdvertisementMenuItem,
 } from './src/controllers/menuController.js'
+import { initFirebase } from './src/utils/fcmService.js'
 
 const server = http.createServer(app)
 
@@ -28,6 +29,7 @@ const PORT = process.env.PORT || 5000
 
 server.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`)
+  initFirebase()
   try {
     await deactivateRoomsMenuItem()
     await deactivateSystemSettingsMenuItem()

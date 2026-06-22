@@ -98,12 +98,17 @@ export async function notifyOrderReady(order, _senderId = null) {
  * Push notification to delivery app user when order status changes.
  */
 export async function notifyCustomerOrderStatus(order, oldStatus = null) {
-  if (!order?.id || !order?.userId) return
+  if (!order?.id) return
+  if (!order?.userId) {
+    console.warn(`FCM skipped order #${order.id}: no userId on order`)
+    return
+  }
 
   const next = String(order.status || '').toLowerCase().trim()
   const prev = oldStatus ? String(oldStatus).toLowerCase().trim() : null
   if (prev === next) return
 
+  console.log(`FCM push: order #${order.id} user ${order.userId} ${prev || '?'} -> ${next}`)
   await sendOrderStatusPush(order.userId, {
     orderId: order.id,
     status: next,
