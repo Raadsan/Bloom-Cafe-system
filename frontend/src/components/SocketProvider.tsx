@@ -29,7 +29,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const userRoleRef = React.useRef<string | null>(null);
 
   useEffect(() => {
-    const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:2000';
+    const getSocketUrl = () => {
+      if (process.env.NEXT_PUBLIC_API_URL) {
+        return process.env.NEXT_PUBLIC_API_URL.replace('/api', '');
+      }
+      if (typeof window !== 'undefined') {
+        const host = window.location.hostname;
+        return `http://${host}:2000`;
+      }
+      return 'http://localhost:2000';
+    };
+    const socketUrl = getSocketUrl();
     const socketInstance = io(socketUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,

@@ -44,6 +44,9 @@ async function verifyDatabase() {
       )
     } else if (isDbUnreachableError(error)) {
       console.error('❌ Cannot reach MySQL — check IP, port 3306, firewall, MySQL service.')
+      console.error(
+        '   👉 TIP: If this server is running on the VPS itself, change the database host in DATABASE_URL from the public IP (e.g. 167.86.104.132) to \'127.0.0.1\' or \'localhost\' in your backend/.env file.'
+      )
     } else {
       console.error('❌ Database error:', error?.message)
     }

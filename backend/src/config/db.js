@@ -12,8 +12,8 @@ function getDatabaseUrl() {
 
   const params = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
   if (!params.has('connection_limit')) params.set('connection_limit', defaultLimit);
-  if (!params.has('pool_timeout')) params.set('pool_timeout', '60');
-  if (!params.has('connect_timeout')) params.set('connect_timeout', '30');
+  if (!params.has('pool_timeout')) params.set('pool_timeout', '5');
+  if (!params.has('connect_timeout')) params.set('connect_timeout', '5');
 
   const base = url.split('?')[0];
   const query = params.toString();

@@ -8,9 +8,17 @@ export function resolveBrandingImageUrl(url?: string | null): string | null {
     return url;
   }
   if (url.startsWith("/uploads/")) {
-    const apiBase =
-      process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, "") || "http://127.0.0.1:2000";
-    return `${apiBase}${url}`;
+    const getApiBase = () => {
+      if (process.env.NEXT_PUBLIC_API_URL) {
+        return process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, "");
+      }
+      if (typeof window !== 'undefined') {
+        const host = window.location.hostname;
+        return `http://${host}:2000`;
+      }
+      return "http://127.0.0.1:2000";
+    };
+    return `${getApiBase()}${url}`;
   }
   return url;
 }
