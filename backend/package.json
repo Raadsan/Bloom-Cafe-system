@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:prod": "node server.js",
+    "start:prod": "concurrently -n backend,frontend -c blue,magenta \"node server.js\" \"npm run start --prefix ../frontend\"",
     "dev": "concurrently -n backend,frontend -c blue,magenta \"nodemon server.js\" \"npm run dev --prefix ../frontend\"",
     "dev:api": "nodemon server.js",
     "postinstall": "prisma generate",
@@ -22,6 +22,7 @@
   "type": "module",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "concurrently": "^10.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -33,7 +34,6 @@
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
-    "concurrently": "^10.0.3",
     "nodemon": "^3.1.14",
     "prisma": "^5.22.0"
   }
