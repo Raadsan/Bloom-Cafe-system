@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:prod": "node server.js",
     "dev": "concurrently -n backend,frontend -c blue,magenta \"nodemon server.js\" \"npm run dev --prefix ../frontend\"",
     "dev:api": "nodemon server.js",
     "postinstall": "prisma generate",
