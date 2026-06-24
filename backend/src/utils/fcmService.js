@@ -1,23 +1,47 @@
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import admin from 'firebase-admin'
 import prisma from '../config/db.js'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 let initialized = false
 
-function initFirebase() {
-  if (initialized) return true
-
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
-  if (!json) {
-    console.warn('FCM: set FIREBASE_SERVICE_ACCOUNT_JSON in .env to enable push notifications')
-    return false
+function loadServiceAccount() {
+  const inline = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+  if (inline) {
+    return JSON.parse(inline)
   }
 
+  const filePath =
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+    path.resolve(__dirname, '../../serviceAccountKey.json')
+
+  if (!fs.existsSync(filePath)) {
+    return null
+  }
+
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+}
+
+export function initFirebase() {
+  if (initialized) return true
+
   try {
-    const serviceAccount = JSON.parse(json)
+    const serviceAccount = loadServiceAccount()
+    if (!serviceAccount) {
+      console.warn(
+        'FCM: add serviceAccountKey.json in backend/ or set FIREBASE_SERVICE_ACCOUNT_JSON in .env',
+      )
+      return false
+    }
+
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     })
     initialized = true
+    console.log('✅ FCM push notifications enabled')
     return true
   } catch (error) {
     console.error('FCM init failed:', error.message)
@@ -53,7 +77,10 @@ export async function sendOrderStatusPush(userId, { orderId, status }) {
     select: { fcmToken: true },
   })
 
-  if (!user?.fcmToken) return
+  if (!user?.fcmToken) {
+    console.warn(`FCM: user ${userId} has no fcmToken saved — app must login while online`)
+    return
+  }
 
   const normalized = String(status).toLowerCase().trim()
   const title = `Order #${orderId} Update`
@@ -83,6 +110,7 @@ export async function sendOrderStatusPush(userId, { orderId, status }) {
         },
       },
     })
+    console.log(`FCM sent: user ${userId} order #${orderId} -> ${normalized}`)
   } catch (error) {
     const code = error?.code || ''
     if (
