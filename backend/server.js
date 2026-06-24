@@ -8,9 +8,12 @@
 
 import 'dotenv/config'
 import http from 'http'
+import cors from 'cors'
 import app from './src/app.js'
 import { initSocket } from './src/socket.js'
 import prisma from './src/config/db.js'
+
+app.use(cors())
 import {
   deactivateRoomsMenuItem,
   deactivateSystemSettingsMenuItem,
