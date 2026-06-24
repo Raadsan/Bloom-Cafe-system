@@ -24,7 +24,7 @@ import {
 } from "@/lib/dashboard-ui";
 import { getOrderTitle } from "@/lib/kitchen-order-utils";
 import { cn } from "@/lib/utils";
-import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
+import { onDebouncedEvent, ORDERS_CHANGED, OrderSocketPayload } from "@/lib/live-updates";
 
 function getPickupLabel(order: Order) {
   if (order.orderType === "delivery" && order.address) {
@@ -66,7 +66,7 @@ export default function WaiterPickupHistoryView() {
 
   useEffect(() => {
     fetchHistory(false);
-    const removeListener = onDebouncedEvent(ORDERS_CHANGED, (detail) => {
+    const removeListener = onDebouncedEvent<OrderSocketPayload>(ORDERS_CHANGED, (detail) => {
       if (detail?.status === "served" || detail?.action === "update") {
         fetchHistory(true);
       }

@@ -78,6 +78,8 @@ const EMPTY_WEEKLY_DATA = [
   { name: "Sun", revenue: 0, orders: 0 },
 ];
 
+type WeeklyPoint = { name: string; revenue: number; orders: number };
+
 const MOCK_CATEGORY_DATA = [
   { name: 'Main Course', value: 450 },
   { name: 'Appetizers', value: 200 },
@@ -86,10 +88,25 @@ const MOCK_CATEGORY_DATA = [
 ];
 const COLORS = [...chartPrimaryVariants];
 
-export default function AdminDashboard({ data, recentOrders }: { data: DashboardData | null, recentOrders: Order[] }) {
-  const [weeklyData, setWeeklyData] = useState(EMPTY_WEEKLY_DATA);
+export default function AdminDashboard({
+  data,
+  recentOrders,
+  weeklyData: weeklyDataProp,
+}: {
+  data: DashboardData | null;
+  recentOrders: Order[];
+  weeklyData?: WeeklyPoint[] | null;
+}) {
+  const [weeklyData, setWeeklyData] = useState<WeeklyPoint[]>(
+    weeklyDataProp?.length ? weeklyDataProp : EMPTY_WEEKLY_DATA
+  );
 
   useEffect(() => {
+    if (weeklyDataProp?.length) {
+      setWeeklyData(weeklyDataProp);
+      return;
+    }
+
     reportApi
       .getWeeklyAnalytics()
       .then((res) => {
@@ -100,7 +117,7 @@ export default function AdminDashboard({ data, recentOrders }: { data: Dashboard
       .catch(() => {
         setWeeklyData(EMPTY_WEEKLY_DATA);
       });
-  }, []);
+  }, [weeklyDataProp]);
 
   const statCards = [
     {

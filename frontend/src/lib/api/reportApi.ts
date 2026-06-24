@@ -2,13 +2,30 @@ import api from './axios';
 
 const SUMMARY_TTL_MS = 90 * 1000;
 const WEEKLY_TTL_MS = 2 * 60 * 1000;
+const INIT_TTL_MS = 90 * 1000;
 const SUMMARY_KEY = 'report_dashboard_summary';
 const WEEKLY_KEY = 'report_weekly_analytics';
+const INIT_KEY = 'report_dashboard_init';
+
+export interface DashboardInitPayload {
+  summary: {
+    totalOrders: number;
+    totalCustomers: number;
+    totalTables: number;
+    totalPaidPayments: number;
+    totalPendingPayments: number;
+    totalRevenue: number;
+  };
+  weekly: Array<{ name: string; revenue: number; orders: number }>;
+  recentOrders: unknown[];
+}
 
 let summaryMem: { data: unknown; at: number; queryKey: string } | null = null;
 let summaryInflight: Promise<unknown> | null = null;
 let weeklyMem: { data: unknown; at: number } | null = null;
 let weeklyInflight: Promise<unknown> | null = null;
+let initMem: { data: DashboardInitPayload; at: number } | null = null;
+let initInflight: Promise<DashboardInitPayload> | null = null;
 
 function summaryQueryKey(params?: Record<string, string | undefined>): string {
   const parts: string[] = [];
@@ -53,6 +70,24 @@ async function fetchSummaryFromNetwork(params?: Record<string, string | undefine
   return payload;
 }
 
+async function fetchInitFromNetwork(): Promise<{ success: boolean; data: DashboardInitPayload }> {
+  const res = await api.get('/reports/dashboard-init');
+  const payload = res.data as { success: boolean; data: DashboardInitPayload };
+  if (payload?.data) {
+    initMem = { data: payload.data, at: Date.now() };
+    writeLocal(INIT_KEY, payload.data);
+    if (payload.data.summary) {
+      summaryMem = { data: { success: true, data: payload.data.summary }, at: Date.now(), queryKey: 'default' };
+      writeLocal(SUMMARY_KEY, { success: true, data: payload.data.summary });
+    }
+    if (payload.data.weekly) {
+      weeklyMem = { data: { success: true, data: payload.data.weekly }, at: Date.now() };
+      writeLocal(WEEKLY_KEY, { success: true, data: payload.data.weekly });
+    }
+  }
+  return payload;
+}
+
 async function fetchWeeklyFromNetwork() {
   const res = await api.get('/reports/weekly');
   const payload = res.data;
@@ -66,13 +101,54 @@ export function clearReportApiCache() {
   summaryInflight = null;
   weeklyMem = null;
   weeklyInflight = null;
+  initMem = null;
+  initInflight = null;
   if (typeof window !== 'undefined') {
     localStorage.removeItem(SUMMARY_KEY);
     localStorage.removeItem(WEEKLY_KEY);
+    localStorage.removeItem(INIT_KEY);
   }
 }
 
+export function peekDashboardInit(): DashboardInitPayload | null {
+  const now = Date.now();
+  if (initMem && now - initMem.at < INIT_TTL_MS) return initMem.data;
+  return readLocal<DashboardInitPayload>(INIT_KEY, INIT_TTL_MS);
+}
+
 export const reportApi = {
+  getDashboardInit: async (forceRefresh = false): Promise<{ success: boolean; data: DashboardInitPayload }> => {
+    const now = Date.now();
+    if (!forceRefresh && initMem && now - initMem.at < INIT_TTL_MS) {
+      return { success: true, data: initMem.data };
+    }
+
+    if (!forceRefresh) {
+      const local = readLocal<DashboardInitPayload>(INIT_KEY, INIT_TTL_MS);
+      if (local) {
+        initMem = { data: local, at: now };
+        if (!initInflight) {
+          initInflight = fetchInitFromNetwork()
+            .then((res) => res.data)
+            .catch(() => local)
+            .finally(() => { initInflight = null; });
+        }
+        return { success: true, data: local };
+      }
+    }
+
+    if (initInflight && !forceRefresh) {
+      const data = await initInflight;
+      return { success: true, data };
+    }
+
+    initInflight = fetchInitFromNetwork()
+      .then((res) => res.data)
+      .finally(() => { initInflight = null; });
+    const data = await initInflight;
+    return { success: true, data };
+  },
+
   getDashboardSummary: async (params?: Record<string, string | undefined>, forceRefresh = false): Promise<any> => {
     const qk = summaryQueryKey(params);
     const now = Date.now();

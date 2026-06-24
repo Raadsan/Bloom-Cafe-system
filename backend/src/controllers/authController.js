@@ -25,6 +25,7 @@ import {
   verifyFacebookToken,
   loginOrRegisterWithSocial,
 } from '../utils/socialAuthService.js'
+import { dbUnavailableResponse } from '../utils/dbErrors.js'
 
 const POS_LOGIN_ROLES = new Set(['pos', 'cashier', 'waiter', 'admin', 'manager'])
 
@@ -191,6 +192,9 @@ export const login = async (req, res) => {
     })
   } catch (error) {
     console.error('Login Error:', error)
+    if (error?.name === 'PrismaClientInitializationError' || error?.code?.startsWith?.('P1')) {
+      return dbUnavailableResponse(res, error)
+    }
     res.status(500).json({
       success: false,
       message: 'Failed to login',

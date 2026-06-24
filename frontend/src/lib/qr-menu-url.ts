@@ -3,7 +3,7 @@ export function getPublicMenuUrl(qrCode: string): string {
   const base =
     typeof window !== "undefined"
       ? window.location.origin
-      : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:7000";
 
   return `${base}/menu/${encodeURIComponent(qrCode)}`;
 }

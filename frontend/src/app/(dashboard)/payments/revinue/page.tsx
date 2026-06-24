@@ -192,7 +192,7 @@ export default function RevenuePage() {
               Total Revenue
             </p>
             <h3 className="text-xl font-black text-[#1E293B]">
-              {formatCurrency(data?.totalRevenue)}
+              {formatCurrency(data?.totalRevenue ?? 0)}
             </h3>
           </div>
         </div>
@@ -217,7 +217,7 @@ export default function RevenuePage() {
             <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">
               Total Cost
             </p>
-            <h3 className="text-xl font-black text-[#1E293B]">{formatCurrency(data?.totalCost)}</h3>
+            <h3 className="text-xl font-black text-[#1E293B]">{formatCurrency(data?.totalCost ?? 0)}</h3>
           </div>
         </div>
 
@@ -230,7 +230,7 @@ export default function RevenuePage() {
               Net Profit
             </p>
             <h3 className="text-xl font-black text-emerald-600">
-              {formatCurrency(data?.netProfit)}
+              {formatCurrency(data?.netProfit ?? 0)}
             </h3>
           </div>
         </div>
@@ -435,7 +435,7 @@ export default function RevenuePage() {
                 Total Net Profit:
               </p>
               <p className="text-sm font-black text-emerald-600">
-                {formatCurrency(data?.netProfit)}
+                {formatCurrency(data?.netProfit ?? 0)}
               </p>
             </div>
           </div>

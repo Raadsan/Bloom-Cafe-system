@@ -265,7 +265,7 @@ export default function ClientsReportPage() {
                       cursor={{ fill: "rgba(91, 16, 23, 0.06)" }}
                       contentStyle={chartTooltipStyle}
                       itemStyle={{ color: "#ffffff" }}
-                      formatter={(v: number) => formatCurrency(Number(v))}
+                      formatter={(v) => formatCurrency(Number(v ?? 0))}
                     />
                     <Bar dataKey="spent" radius={[0, 4, 4, 0]}>
                       {topSpendersChart.map((_, index) => (

@@ -9,7 +9,7 @@ export function resolveBrandingImageUrl(url?: string | null): string | null {
   }
   if (url.startsWith("/uploads/")) {
     const apiBase =
-      process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, "") || "http://127.0.0.1:5000";
+      process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, "") || "http://127.0.0.1:2000";
     return `${apiBase}${url}`;
   }
   return url;

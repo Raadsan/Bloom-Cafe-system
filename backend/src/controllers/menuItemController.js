@@ -78,7 +78,7 @@ export function invalidateAllMenuItemCaches() {
     .catch(() => {})
 }
 
-export async function warmAllMenuItemsCache(origin = 'http://127.0.0.1:5000') {
+export async function warmAllMenuItemsCache(origin = 'http://127.0.0.1:2000') {
   if (allMenuItemsCache.data && Date.now() - allMenuItemsCache.at < ALL_MENU_ITEMS_TTL_MS) {
     return allMenuItemsCache.data
   }

@@ -114,10 +114,42 @@ async function fetchWeeklyAnalyticsData() {
   return buckets
 }
 
+async function fetchRecentOrdersForDashboard() {
+  return prisma.order.findMany({
+    take: 10,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      table: { select: { id: true, number: true } },
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          role: { select: { id: true, name: true } },
+        },
+      },
+      orderitem: {
+        include: {
+          menuitem: { select: { id: true, name: true, price: true } },
+        },
+      },
+    },
+  })
+}
+
+async function fetchDashboardInitData() {
+  const [summary, weekly, recentOrders] = await Promise.all([
+    fetchDashboardSummaryData({}),
+    fetchWeeklyAnalyticsData(),
+    fetchRecentOrdersForDashboard(),
+  ])
+  return { summary, weekly, recentOrders }
+}
+
 export async function warmReportCaches() {
   await Promise.all([
     reportCache.get(reportCacheKey('summary', {}), () => fetchDashboardSummaryData({}), 90 * 1000),
     reportCache.get('weekly', () => fetchWeeklyAnalyticsData(), WEEKLY_TTL_MS),
+    reportCache.get('dashboard-init', () => fetchDashboardInitData(), 90 * 1000),
   ]).catch(() => {})
 }
 
@@ -165,6 +197,31 @@ const getStartOfMonth = () => {
 const getEndOfMonth = () => {
   const date = new Date()
   return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
+}
+
+// DASHBOARD INIT — summary + weekly chart + recent orders in one round trip
+export const getDashboardInit = async (req, res) => {
+  try {
+    const role = req.user?.role?.toLowerCase()
+    if (role !== 'admin' && role !== 'manager') {
+      return res.status(403).json({ success: false, message: 'Access denied' })
+    }
+
+    const data = await reportCache.get(
+      'dashboard-init',
+      () => fetchDashboardInitData(),
+      90 * 1000
+    )
+
+    return res.status(200).json({ success: true, data })
+  } catch (error) {
+    console.error('Get Dashboard Init Error:', error)
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dashboard data',
+      error: error.message,
+    })
+  }
 }
 
 // DASHBOARD SUMMARY

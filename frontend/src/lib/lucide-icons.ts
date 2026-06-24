@@ -31,13 +31,14 @@ export const LUCIDE_ICON_NAMES: string[] = Object.keys(LucideIcons)
 export function getLucideIcon(name: string | undefined | null): LucideIcon {
   if (!name) return LayoutDashboard;
 
-  const direct = (LucideIcons as Record<string, LucideIcon>)[name];
+  const icons = LucideIcons as unknown as Record<string, LucideIcon>;
+  const direct = icons[name];
   if (direct) return direct;
 
   const match = LUCIDE_ICON_NAMES.find(
     (iconName) => iconName.toLowerCase() === name.toLowerCase()
   );
-  if (match) return (LucideIcons as Record<string, LucideIcon>)[match];
+  if (match) return icons[match];
 
   return LayoutDashboard;
 }

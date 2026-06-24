@@ -1,6 +1,7 @@
 import express from 'express'
 import {
   getDashboardSummary,
+  getDashboardInit,
   getRevenueReport,
   getTopSellingItems,
   getTablePerformanceReport,
@@ -18,6 +19,7 @@ const router = express.Router()
 
 // Admin and Manager share the dashboard summary
 router.get('/summary', protect, getDashboardSummary)
+router.get('/dashboard-init', protect, getDashboardInit)
 router.get('/revenue', protect, checkPermission('/report', 'canView'), getRevenueReport)
 router.get('/top-items', protect, checkPermission('/report', 'canView'), getTopSellingItems)
 router.get('/table-performance', protect, checkPermission('/report', 'canView'), getTablePerformanceReport)

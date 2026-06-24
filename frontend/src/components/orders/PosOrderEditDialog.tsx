@@ -16,6 +16,12 @@ import { useToast } from "@/components/ui/toast";
 import { btnCreatePage, dashboardInputClass, dashboardLabelClass } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 
+type CartLine = {
+  menuItemId: number;
+  name: string;
+  quantity: number;
+};
+
 type PosOrderEditDialogProps = {
   order: Order | null;
   menuItems: MenuItem[];

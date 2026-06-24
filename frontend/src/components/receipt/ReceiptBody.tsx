@@ -13,7 +13,7 @@ export interface ReceiptLineItem {
 export interface ReceiptSnapshot {
   orderId: number;
   customerName: string;
-  customerPhone: string;
+  customerPhone?: string;
   paymentMethod: string;
   orderTypeLabel: string;
   locationLabel?: string;

@@ -290,7 +290,7 @@ export default function FinanceReportPage() {
                     <Tooltip
                       contentStyle={chartTooltipStyle}
                       itemStyle={{ color: "#ffffff" }}
-                      formatter={(v: number) => formatCurrency(Number(v))}
+                      formatter={(v) => formatCurrency(Number(v ?? 0))}
                     />
                     <Area
                       type="monotone"
@@ -337,7 +337,7 @@ export default function FinanceReportPage() {
                     <Tooltip
                       contentStyle={chartTooltipStyle}
                       itemStyle={{ color: "#ffffff" }}
-                      formatter={(v: number) => formatCurrency(Number(v))}
+                      formatter={(v) => formatCurrency(Number(v ?? 0))}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -480,7 +480,7 @@ export default function FinanceReportPage() {
                       cursor={{ fill: "rgba(91, 16, 23, 0.06)" }}
                       contentStyle={chartTooltipStyle}
                       itemStyle={{ color: "#ffffff" }}
-                      formatter={(v: number) => formatCurrency(Number(v))}
+                      formatter={(v) => formatCurrency(Number(v ?? 0))}
                     />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {sourceChartData.map((_, index) => (

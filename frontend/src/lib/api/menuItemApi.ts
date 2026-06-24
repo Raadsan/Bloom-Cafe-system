@@ -103,16 +103,17 @@ export interface UpdateMenuItemPayload {
   options?: string[] | string | null;
 }
 
-export function parseMenuItemOptions(product: MenuItem): string[] {
+export function parseMenuItemOptions(product: { options?: string[] | string | null }): string[] {
   const raw = product.options;
   if (!raw) return [];
   if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
   if (typeof raw === 'string') {
+    const str = raw;
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(str);
       return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
     } catch {
-      return raw.split(',').map(s => s.trim()).filter(Boolean);
+      return str.split(',').map(s => s.trim()).filter(Boolean);
     }
   }
   return [];

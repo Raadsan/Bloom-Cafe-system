@@ -32,7 +32,7 @@ import {
   getOrderMeta,
   getOrderTitle,
 } from "@/lib/kitchen-order-utils";
-import { onDebouncedEvent, ORDERS_CHANGED } from "@/lib/live-updates";
+import { onDebouncedEvent, ORDERS_CHANGED, OrderSocketPayload } from "@/lib/live-updates";
 import { matchesReadyAudience } from "@/lib/order-type-utils";
 
 function getPickupLabel(order: Order) {
@@ -88,7 +88,7 @@ export default function WaiterReadyOrdersView({
 
   useEffect(() => {
     fetchReadyOrders(false);
-    const removeListener = onDebouncedEvent(ORDERS_CHANGED, (detail) => {
+    const removeListener = onDebouncedEvent<OrderSocketPayload>(ORDERS_CHANGED, (detail) => {
       if (!detail?.status || detail.status === "ready" || detail.action === "new") {
         fetchReadyOrders(true);
       }

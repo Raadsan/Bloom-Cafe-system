@@ -25,35 +25,69 @@ import { warmAllMenuItemsCache } from './src/controllers/menuItemController.js'
 import { warmCompositesCache, warmComboFormCache } from './src/controllers/compositeController.js'
 import { warmReportCaches } from './src/controllers/reportController.js'
 import { warmCategoryCaches } from './src/controllers/categoryController.js'
+import { isDbAuthError, isDbUnreachableError } from './src/utils/dbErrors.js'
+
+const skipStartupWarmup =
+  process.env.SKIP_STARTUP_WARMUP === 'true' || process.env.SKIP_STARTUP_WARMUP === '1'
+
+async function verifyDatabase() {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    return true
+  } catch (error) {
+    if (isDbAuthError(error)) {
+      console.error(
+        '❌ MySQL auth failed — check DATABASE_URL in backend/.env (user/password/database).'
+      )
+      console.error(
+        '   Contabo: CREATE USER \'raadsan\'@\'%\' ... GRANT ALL ON bloom_cafe.* ... FLUSH PRIVILEGES;'
+      )
+    } else if (isDbUnreachableError(error)) {
+      console.error('❌ Cannot reach MySQL — check IP, port 3306, firewall, MySQL service.')
+    } else {
+      console.error('❌ Database error:', error?.message)
+    }
+    return false
+  }
+}
+
+async function runStartupWarmup() {
+  await deactivateRoomsMenuItem()
+  await deactivateSystemSettingsMenuItem()
+  await ensureCreateOrderMenuItem()
+  await ensurePickupOrdersMenuItem()
+  await ensurePickupHistoryMenuItem()
+  await ensureDiscountAdvertisementMenuItem()
+  await ensureCompositesMenuItem()
+  await warmAllMenusCache()
+  await warmAllMenuItemsCache()
+  await warmCompositesCache()
+  await warmComboFormCache()
+  await warmCategoryCaches()
+  await warmReportCaches()
+  console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions, Menu Combos)')
+}
 
 const server = http.createServer(app)
 
-// CONNECT SOCKET
 initSocket(server)
 
-const PORT = process.env.PORT || 5000
+const PORT = process.env.PORT || 2000
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
 
-  prisma.$queryRaw`SELECT 1`.catch(() => {})
-
   setImmediate(async () => {
+    const dbOk = await verifyDatabase()
+    if (!dbOk) return
+
+    if (skipStartupWarmup) {
+      console.log('⏭️  Startup DB warmup skipped (SKIP_STARTUP_WARMUP=true)')
+      return
+    }
+
     try {
-      await deactivateRoomsMenuItem()
-      await deactivateSystemSettingsMenuItem()
-      await ensureCreateOrderMenuItem()
-      await ensurePickupOrdersMenuItem()
-      await ensurePickupHistoryMenuItem()
-      await ensureDiscountAdvertisementMenuItem()
-      await ensureCompositesMenuItem()
-      await warmAllMenusCache()
-      await warmAllMenuItemsCache()
-      await warmCompositesCache()
-      await warmComboFormCache()
-      await warmCategoryCaches()
-      await warmReportCaches()
-      console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions, Menu Combos)')
+      await runStartupWarmup()
     } catch (err) {
       console.warn('Sidebar menu ensure skipped:', err?.message)
     }

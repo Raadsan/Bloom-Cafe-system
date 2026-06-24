@@ -128,6 +128,14 @@ export function clearOrdersListCache(): void {
   }
 }
 
+export function peekOrders(params?: GetAllOrdersParams): Order[] | null {
+  const key = cacheKey(params);
+  const now = Date.now();
+  const cached = memoryCache.get(key);
+  if (cached && now - cached.at < ORDERS_TTL_MS) return cached.data;
+  return readOrdersLocal(key);
+}
+
 async function fetchOrdersFromNetwork(params?: GetAllOrdersParams): Promise<Order[]> {
   const key = cacheKey(params);
   const pending = inflight.get(key);
