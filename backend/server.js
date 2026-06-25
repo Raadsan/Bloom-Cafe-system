@@ -8,12 +8,10 @@
 
 import 'dotenv/config'
 import http from 'http'
-import cors from 'cors'
 import app from './src/app.js'
 import { initSocket } from './src/socket.js'
 import prisma from './src/config/db.js'
-
-app.use(cors())
+import cors from "cors";
 import {
   deactivateRoomsMenuItem,
   deactivateSystemSettingsMenuItem,
@@ -47,9 +45,6 @@ async function verifyDatabase() {
       )
     } else if (isDbUnreachableError(error)) {
       console.error('❌ Cannot reach MySQL — check IP, port 3306, firewall, MySQL service.')
-      console.error(
-        '   👉 TIP: If this server is running on the VPS itself, change the database host in DATABASE_URL from the public IP (e.g. 167.86.104.132) to \'127.0.0.1\' or \'localhost\' in your backend/.env file.'
-      )
     } else {
       console.error('❌ Database error:', error?.message)
     }
@@ -78,8 +73,9 @@ const server = http.createServer(app)
 
 initSocket(server)
 
-const PORT = process.env.PORT || 2000
+const PORT = process.env.PORT || 7000
 
+app.use(cors({ origin: ["http://167.86.104.132:2000/"] }));
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
 
@@ -88,7 +84,7 @@ server.listen(PORT, () => {
     if (!dbOk) return
 
     if (skipStartupWarmup) {
-      console.log('⏭️  Startup DB warmup skipped (SKIP_STARTUP_WARMUP=true)')
+      console.log('✅ Database run successfully')
       return
     }
 
@@ -102,7 +98,7 @@ server.listen(PORT, () => {
 
 async function shutdown(signal) {
   console.log(`\n${signal ?? 'Shutdown'}: releasing database connections...`)
-  await prisma.$disconnect().catch(() => {})
+  await prisma.$disconnect().catch(() => { })
   server.close(() => process.exit(0))
   setTimeout(() => process.exit(1), 5000).unref()
 }
@@ -111,6 +107,6 @@ process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 
 process.once('SIGUSR2', async () => {
-  await prisma.$disconnect().catch(() => {})
+  await prisma.$disconnect().catch(() => { })
   process.kill(process.pid, 'SIGUSR2')
 })

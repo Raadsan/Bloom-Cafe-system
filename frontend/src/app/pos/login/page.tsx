@@ -38,7 +38,7 @@ export default function PosLoginPage() {
         };
         const message =
           !axiosErr.response && axiosErr.message === "Network Error"
-            ? "Cannot connect to server. Make sure the backend is running on port 2000."
+            ? "Cannot connect to server. Make sure the backend is running on port 7000."
             : axiosErr.response?.data?.message || "Invalid username or PIN";
         setError(message);
         setPin("");

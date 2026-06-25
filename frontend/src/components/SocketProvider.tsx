@@ -35,9 +35,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       }
       if (typeof window !== 'undefined') {
         const host = window.location.hostname;
-        return `http://${host}:2000`;
+        return `http://${host}:7000`;
       }
-      return 'http://localhost:2000';
+      return 'http://localhost:7000';
     };
     const socketUrl = getSocketUrl();
     const socketInstance = io(socketUrl, {

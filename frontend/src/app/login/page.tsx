@@ -40,7 +40,7 @@ export default function LoginPage() {
       };
       const message =
         !axiosErr.response && axiosErr.message === "Network Error"
-          ? "Cannot connect to server. Make sure the backend is running on port 2000."
+          ? "Cannot connect to server. Make sure the backend is running on port 7000."
           : axiosErr.response?.data?.message ||
             axiosErr.message ||
             "Failed to login. Please try again.";

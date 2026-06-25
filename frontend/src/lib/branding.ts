@@ -14,9 +14,9 @@ export function resolveBrandingImageUrl(url?: string | null): string | null {
       }
       if (typeof window !== 'undefined') {
         const host = window.location.hostname;
-        return `http://${host}:2000`;
+        return `http://${host}:7000`;
       }
-      return "http://127.0.0.1:2000";
+      return "http://127.0.0.1:7000";
     };
     return `${getApiBase()}${url}`;
   }

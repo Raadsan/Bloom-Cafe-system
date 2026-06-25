@@ -6,9 +6,9 @@ const getBaseUrl = () => {
   }
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
-    return `http://${host}:2000/api`;
+    return `http://${host}:7000/api`;
   }
-  return 'http://127.0.0.1:2000/api';
+  return 'http://127.0.0.1:7000/api';
 };
 
 const BASE_URL = getBaseUrl();
