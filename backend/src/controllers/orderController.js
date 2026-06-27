@@ -743,7 +743,7 @@ import prisma from '../config/db.js'
 import { emitOrderUpdate, emitPaymentSuccess } from '../utils/socketEvents.js'
 import { notifyNewOrder, notifyOrderReady, notifyCustomerOrderStatus } from '../utils/orderNotifications.js'
 import { logAudit } from '../utils/auditHelper.js'
-import { sendWaafiPayment } from '../utils/waafiPayment.js'
+import { sendWaafiPayment, normalizeWaafiPhone } from '../utils/waafiPayment.js'
 import { clearTablesCache } from './tableController.js'
 import { clearReportCache } from './reportController.js'
 import { buildOrderItemsPayload } from '../utils/compositeMenuHelper.js'
@@ -984,7 +984,7 @@ export const createPosCheckout = async (req, res) => {
     const orderTotal = Math.max(0, subTotal + taxAmount - discountAmount)
 
     const method = String(paymentMethod).toLowerCase()
-    const phone = paymentPhone?.trim() || customerPhone?.trim() || null
+    let phone = paymentPhone?.trim() || customerPhone?.trim() || null
     const internalRef = generateInternalRef()
 
     if (method === 'premier_wallet' && !phone) {
@@ -993,6 +993,12 @@ export const createPosCheckout = async (req, res) => {
 
     let waafiResponse = null
     if (method === 'premier_wallet') {
+      try {
+        phone = normalizeWaafiPhone(phone)
+      } catch (phoneErr) {
+        return res.status(400).json({ success: false, message: phoneErr.message })
+      }
+
       waafiResponse = await sendWaafiPayment({
         transactionId: internalRef,
         accountNo: phone,
@@ -1000,10 +1006,11 @@ export const createPosCheckout = async (req, res) => {
         description: 'Bloom Cafe – POS Order',
       })
 
-      if (waafiResponse.responseCode !== '2001') {
+      if (!waafiResponse.isSuccess) {
         return res.status(402).json({
           success: false,
-          message: waafiResponse.responseMsg || 'Premier Wallet payment failed',
+          message: waafiResponse.userMessage,
+          code: waafiResponse.responseCode,
         })
       }
     }
