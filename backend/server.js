@@ -22,6 +22,7 @@ import {
   ensureCompositesMenuItem,
   warmAllMenusCache,
 } from './src/controllers/menuController.js'
+import { initFirebase } from './src/utils/fcmService.js'
 import { warmAllMenuItemsCache } from './src/controllers/menuItemController.js'
 import { warmCompositesCache, warmComboFormCache } from './src/controllers/compositeController.js'
 import { warmReportCaches } from './src/controllers/reportController.js'
@@ -75,6 +76,20 @@ initSocket(server)
 
 const PORT = process.env.PORT || 7000
 
+server.listen(PORT, async () => {
+  console.log(`🚀 Server running on port ${PORT}`)
+  initFirebase()
+  try {
+    await deactivateRoomsMenuItem()
+    await deactivateSystemSettingsMenuItem()
+    await ensureCreateOrderMenuItem()
+    await ensurePickupOrdersMenuItem()
+    await ensurePickupHistoryMenuItem()
+    await ensureDiscountAdvertisementMenuItem()
+    console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions)')
+  } catch (err) {
+    console.warn('Sidebar menu ensure skipped:', err?.message)
+  }
 app.use(cors({ origin: ["http://167.86.104.132:2000/"] }));
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
@@ -110,3 +125,5 @@ process.once('SIGUSR2', async () => {
   await prisma.$disconnect().catch(() => { })
   process.kill(process.pid, 'SIGUSR2')
 })
+
+});
