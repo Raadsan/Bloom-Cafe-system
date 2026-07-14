@@ -369,7 +369,6 @@ export async function ensureCreateOrderMenuItem() {
           title: "Create Order",
           url: "/orders/create",
           icon: "CirclePlus",
-          isActive: true,
           order: 2
         }
       });
@@ -393,25 +392,24 @@ export async function ensureCreateOrderMenuItem() {
 
       if (!isWaiter && !isPrivileged) continue;
 
-      await prisma.roleMenuAccess.upsert({
+      const exists = await prisma.roleMenuAccess.findUnique({
         where: {
           roleId_menuId: { roleId: role.id, menuId: createMenu.id }
-        },
-        update: {
-          canView: true,
-          canAdd: true,
-          canEdit: isPrivileged,
-          canDelete: false
-        },
-        create: {
-          roleId: role.id,
-          menuId: createMenu.id,
-          canView: true,
-          canAdd: true,
-          canEdit: isPrivileged,
-          canDelete: false
         }
       });
+
+      if (!exists) {
+        await prisma.roleMenuAccess.create({
+          data: {
+            roleId: role.id,
+            menuId: createMenu.id,
+            canView: true,
+            canAdd: true,
+            canEdit: isPrivileged,
+            canDelete: false
+          }
+        });
+      }
     }
 
     createOrderMenuEnsured = true;
@@ -450,7 +448,6 @@ export async function ensurePickupOrdersMenuItem() {
           title: "Ready Pickup",
           url: "/orders/pickup",
           icon: "BellRing",
-          isActive: true,
           order: 3,
         },
       });
@@ -474,25 +471,24 @@ export async function ensurePickupOrdersMenuItem() {
 
       if (!isWaiter && !isPrivileged) continue;
 
-      await prisma.roleMenuAccess.upsert({
+      const exists = await prisma.roleMenuAccess.findUnique({
         where: {
           roleId_menuId: { roleId: role.id, menuId: pickupMenu.id },
-        },
-        update: {
-          canView: true,
-          canAdd: false,
-          canEdit: isWaiter || isPrivileged,
-          canDelete: false,
-        },
-        create: {
-          roleId: role.id,
-          menuId: pickupMenu.id,
-          canView: true,
-          canAdd: false,
-          canEdit: isWaiter || isPrivileged,
-          canDelete: false,
-        },
+        }
       });
+
+      if (!exists) {
+        await prisma.roleMenuAccess.create({
+          data: {
+            roleId: role.id,
+            menuId: pickupMenu.id,
+            canView: true,
+            canAdd: false,
+            canEdit: isWaiter || isPrivileged,
+            canDelete: false,
+          }
+        });
+      }
     }
 
     pickupOrdersMenuEnsured = true;
@@ -535,7 +531,6 @@ export async function ensurePickupHistoryMenuItem() {
           title: "Pickup History",
           url: "/orders/pickup/history",
           icon: "History",
-          isActive: true,
           order: 4,
         },
       });
@@ -559,25 +554,24 @@ export async function ensurePickupHistoryMenuItem() {
 
       if (!isWaiter && !isPrivileged) continue;
 
-      await prisma.roleMenuAccess.upsert({
+      const exists = await prisma.roleMenuAccess.findUnique({
         where: {
           roleId_menuId: { roleId: role.id, menuId: historyMenu.id },
-        },
-        update: {
-          canView: true,
-          canAdd: false,
-          canEdit: false,
-          canDelete: false,
-        },
-        create: {
-          roleId: role.id,
-          menuId: historyMenu.id,
-          canView: true,
-          canAdd: false,
-          canEdit: false,
-          canDelete: false,
-        },
+        }
       });
+
+      if (!exists) {
+        await prisma.roleMenuAccess.create({
+          data: {
+            roleId: role.id,
+            menuId: historyMenu.id,
+            canView: true,
+            canAdd: false,
+            canEdit: false,
+            canDelete: false,
+          }
+        });
+      }
     }
 
     pickupHistoryMenuEnsured = true;
@@ -664,7 +658,6 @@ export async function ensureDiscountAdvertisementMenuItem() {
           title: "Advertisements",
           url: "/discount-advertisements",
           icon: "Megaphone",
-          isActive: true,
           order: promoMenu.order > 0 ? promoMenu.order : 7
         }
       });
@@ -681,28 +674,27 @@ export async function ensureDiscountAdvertisementMenuItem() {
     }
 
     for (const role of roles) {
-      await prisma.roleMenuAccess.upsert({
+      const exists = await prisma.roleMenuAccess.findUnique({
         where: {
           roleId_menuId: {
             roleId: role.id,
             menuId: promoMenu.id
           }
-        },
-        update: {
-          canView: true,
-          canAdd: true,
-          canEdit: true,
-          canDelete: true
-        },
-        create: {
-          roleId: role.id,
-          menuId: promoMenu.id,
-          canView: true,
-          canAdd: true,
-          canEdit: true,
-          canDelete: true
         }
       });
+
+      if (!exists) {
+        await prisma.roleMenuAccess.create({
+          data: {
+            roleId: role.id,
+            menuId: promoMenu.id,
+            canView: true,
+            canAdd: true,
+            canEdit: true,
+            canDelete: true
+          }
+        });
+      }
     }
     discountAdvertisementMenuEnsured = true;
   } catch (error) {
@@ -768,7 +760,6 @@ export async function ensureCompositesMenuItem() {
           title: "Menu Combos",
           url: "/composites",
           icon: "Layers",
-          isActive: true,
           order: comboMenu.order > 0 ? comboMenu.order : 5,
         },
       });
@@ -785,25 +776,24 @@ export async function ensureCompositesMenuItem() {
     }
 
     for (const role of roles) {
-      await prisma.roleMenuAccess.upsert({
+      const exists = await prisma.roleMenuAccess.findUnique({
         where: {
           roleId_menuId: { roleId: role.id, menuId: comboMenu.id },
-        },
-        update: {
-          canView: true,
-          canAdd: true,
-          canEdit: true,
-          canDelete: true,
-        },
-        create: {
-          roleId: role.id,
-          menuId: comboMenu.id,
-          canView: true,
-          canAdd: true,
-          canEdit: true,
-          canDelete: true,
-        },
+        }
       });
+
+      if (!exists) {
+        await prisma.roleMenuAccess.create({
+          data: {
+            roleId: role.id,
+            menuId: comboMenu.id,
+            canView: true,
+            canAdd: true,
+            canEdit: true,
+            canDelete: true,
+          }
+        });
+      }
     }
 
     clearRoleMenusCache();

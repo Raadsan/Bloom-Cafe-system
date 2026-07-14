@@ -299,12 +299,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const navItems = useMemo(() => {
     const seen = new Set<string>();
-    return menus.filter(item => {
-      const title = item.title.trim();
-      if (seen.has(title)) return false;
-      seen.add(title);
-      return true;
-    });
+    return menus
+      .filter((item) => item.isActive !== false)
+      .filter(item => {
+        const title = item.title.trim();
+        if (seen.has(title)) return false;
+        seen.add(title);
+        return true;
+      });
   }, [menus]);
 
   return (
@@ -334,10 +336,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             ) : (
               navItems.map((item) => {
                 const Icon = getLucideIcon(item.icon);
-                const hasSubmenu = item.items && item.items.length > 0;
+                const activeSubs = (item.items || []).filter((sub) => sub.isActive !== false);
+                const hasSubmenu = activeSubs.length > 0;
                 const isOpen = openMenus[item.id];
                 const itemUrl = normalizeUrl(item.url);
-                const isChildActive = item.items?.some(sub => {
+                const isChildActive = activeSubs.some(sub => {
                   const subUrl = normalizeUrl(sub.url);
                   return isNavRouteActive(pathname, subUrl);
                 });
@@ -365,7 +368,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         </SidebarMenuButton>
                         {isOpen && (
                           <SidebarMenuSub className="ml-8 border-none pl-0 mt-1 py-1 gap-1 group-data-[collapsible=icon]:hidden">
-                            {item.items?.map((sub) => {
+                            {activeSubs.map((sub) => {
                               const subUrl = normalizeUrl(sub.url);
                               const isSubActive = isNavRouteActive(pathname, subUrl);
                               return (

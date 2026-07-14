@@ -36,6 +36,7 @@ import {
   getOrdersByTable,
 } from '../controllers/orderController.js'
 import { protect, checkPermission } from '../middlewares/authMiddleware.js'
+import prisma from '../config/db.js'
 
 const router = express.Router()
 
@@ -72,6 +73,30 @@ router.get('/counts', protect, getOrderQueueCounts)
 
 // Get orders by table
 router.get('/table/:tableId', protect, checkPermission('/orders', 'canView'), getOrdersByTable)
+
+// PUBLIC ticket view — no auth needed (for QR code scanning)
+router.get('/ticket/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid id' })
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        table: true,
+        orderitem: {
+          include: {
+            menuitem: { select: { id: true, name: true, price: true } }
+          }
+        }
+      }
+    })
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' })
+    res.json({ success: true, data: order })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
 
 // Get order by id
 router.get('/:id', protect, canViewOrder, getOrderById)

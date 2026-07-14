@@ -1024,7 +1024,9 @@ export const createPosCheckout = async (req, res) => {
         discountType: discountAmount > 0 ? discountType || null : null,
         discountValue: discountAmount > 0 ? parsedDiscountValue : 0,
         total: orderTotal,
-        status: 'pending',
+        // Takeaway from POS is served immediately (no kitchen steps needed)
+        // Mobile orders (source='mobile') keep the full pending→preparing→ready→served flow
+        status: (type === 'takeaway' && (req.body.source || 'pos') !== 'mobile') ? 'served' : 'pending',
         source: req.body.source || 'pos',
         orderitem: { create: orderItemsData },
         payment: {
@@ -1114,6 +1116,13 @@ export const updateOrderStatus = async (req, res) => {
     const userRole = req.user?.role?.toLowerCase()
 
     if (userRole === 'kitchen' || userRole === 'pos') {
+      // Takeaway: allow direct jump to served (skip kitchen steps)
+      const isTakeaway = order.orderType === 'takeaway'
+      const directServeAllowed =
+        isTakeaway &&
+        (order.status === 'pending' || order.status === 'paid') &&
+        status === 'served'
+
       const kitchenAllowed =
         (order.status === 'pending' && status === 'preparing') ||
         (order.status === 'paid' && status === 'preparing') ||
@@ -1123,7 +1132,7 @@ export const updateOrderStatus = async (req, res) => {
         order.status === 'ready' &&
         status === 'served'
 
-      if (!kitchenAllowed && !posServeAllowed) {
+      if (!kitchenAllowed && !posServeAllowed && !directServeAllowed) {
         return res.status(400).json({
           success: false,
           message:
@@ -1334,7 +1343,7 @@ const orderListLightInclude = {
   orderitem: {
     include: {
       menuitem: {
-        select: { id: true, name: true, price: true },
+        select: { id: true, name: true, price: true, imageUrl: true, tax: true },
       },
     },
   },

@@ -143,6 +143,9 @@ export async function loginOrRegisterWithSocial({
   let user = await findUserBySocialProfile(profile, provider)
 
   if (user) {
+    if (!user.isActive) {
+      throw new Error('INACTIVE')
+    }
     const roleName = user.role?.name?.toLowerCase() || ''
     if (normalizedAudience === 'staff' && roleName === 'client') {
       throw new Error('STAFF_ONLY')

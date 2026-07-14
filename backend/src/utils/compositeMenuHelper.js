@@ -165,9 +165,11 @@ export async function buildOrderItemsPayload(items, prisma) {
 
     const line = buildOrderLineFromMenuItem(menuItem, item.quantity)
     subTotal += line.subtotal
-    taxAmount += line.taxAmount
     orderItemsData.push(line.orderItem)
   }
+
+  // Flat 5% VAT for the whole order
+  taxAmount = subTotal * 0.05;
 
   return { subTotal, taxAmount, orderItemsData }
 }

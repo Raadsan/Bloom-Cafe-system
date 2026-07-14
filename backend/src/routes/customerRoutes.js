@@ -12,7 +12,14 @@ import { protect, checkPermission } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
-router.post('/', protect, checkPermission('/clients', 'canAdd'), createCustomer)
+const allowPosOrClientAdd = (req, res, next) => {
+  if (req.user && req.user.role.toLowerCase() === 'pos') {
+    return next();
+  }
+  return checkPermission('/clients', 'canAdd')(req, res, next);
+};
+
+router.post('/', protect, allowPosOrClientAdd, createCustomer)
 router.get('/all', protect, getAllCustomers)
 router.get('/pos-list', protect, getPosCustomers)
 router.get('/by-phone/:phone', protect, getCustomerByPhone)

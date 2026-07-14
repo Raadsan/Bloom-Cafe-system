@@ -19,90 +19,52 @@ type PosSidebarNavProps = {
   onLogout?: () => void;
 };
 
-function SideBadge({
-  count,
-  active,
-  className,
-}: {
-  count: number;
-  active?: boolean;
-  className?: string;
-}) {
-  if (count <= 0) return null;
-  return (
-    <span
-      className={cn(
-        "absolute top-1.5 right-1.5 min-w-[15px] h-[15px] px-0.5 rounded-full text-[8px] font-bold flex items-center justify-center",
-        active ? "bg-primary text-white" : className ?? "bg-white text-primary"
-      )}
-    >
-      {count > 99 ? "99+" : count}
-    </span>
-  );
-}
-
 function SideNavLink({
   href,
   label,
   icon: Icon,
   active,
   badge,
-  badgeClass,
+  badgeColor,
 }: {
   href: string;
   label: string;
   icon: LucideIcon;
   active?: boolean;
   badge?: number;
-  badgeClass?: string;
+  badgeColor?: string;
 }) {
   return (
     <Link
       href={href}
-      title={label}
       aria-label={label}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "relative w-full flex items-center justify-center py-3 transition-colors",
-        active ? "bg-white text-primary" : "text-white hover:bg-white/10"
+        "relative w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-1 transition-all",
+        active
+          ? "bg-white/15 text-white border-r-2 border-white"
+          : "text-white/55 hover:bg-white/10 hover:text-white"
       )}
     >
-      <Icon className="size-6" strokeWidth={2} />
-      {badge !== undefined && (
-        <SideBadge count={badge} active={active} className={badgeClass} />
+      <Icon className="size-5 shrink-0" strokeWidth={active ? 2.5 : 2} />
+      <span className="text-[9px] font-bold text-center leading-tight tracking-wider uppercase">
+        {label}
+      </span>
+      {badge !== undefined && badge > 0 && (
+        <span
+          className={cn(
+            "absolute top-2 right-2 min-w-[16px] h-[16px] px-0.5 rounded-full text-[8px] font-bold flex items-center justify-center",
+            badgeColor ?? "bg-white text-primary"
+          )}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
       )}
     </Link>
   );
 }
 
-function SideNavButton({
-  label,
-  icon: Icon,
-  onClick,
-  compact,
-}: {
-  label: string;
-  icon: LucideIcon;
-  onClick: () => void;
-  compact?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className={cn(
-        "w-full flex items-center justify-center text-white/60 hover:bg-white/10 hover:text-white transition-colors",
-        compact ? "py-2" : "py-2.5"
-      )}
-    >
-      <Icon className={cn(compact ? "size-4" : "size-5")} strokeWidth={2} />
-    </button>
-  );
-}
-
-/** Vertical POS sidebar — logo aligns with header; nav starts with main content. */
+/** Vertical POS sidebar — logo aligned with header, nav with icon + centered label */
 export default function PosSidebarNav({
   pathname,
   cartCount,
@@ -112,7 +74,7 @@ export default function PosSidebarNav({
   return (
     <aside
       aria-label="POS navigation"
-      className="w-[68px] shrink-0 flex flex-col bg-primary border-r border-primary/80 shadow-xl z-50"
+      className="w-[72px] shrink-0 flex flex-col bg-primary border-r border-primary/80 shadow-xl z-50"
     >
       {/* Logo — same height as top header (h-14) */}
       <div className="shrink-0 h-14 flex items-center justify-center border-b border-white/15 bg-primary">
@@ -125,46 +87,49 @@ export default function PosSidebarNav({
         </Link>
       </div>
 
-      {/* Extra offset — nav starts lower, aligned with product area */}
-      <div className="shrink-0 pt-6 md:pt-8" aria-hidden />
-
       {/* Main nav */}
-      <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex flex-col flex-1 min-h-0 pt-2">
         <SideNavLink
           href="/pos-terminal"
-          label="POS Terminal"
+          label="POS"
           icon={ShoppingCart}
           active={pathname === "/pos-terminal"}
           badge={cartCount}
         />
-        
         <SideNavLink
           href="/kitchen"
           label="Kitchen"
           icon={ChefHat}
           active={pathname === "/kitchen"}
           badge={kitchenCount}
-          badgeClass="bg-orange-400 text-white"
+          badgeColor="bg-orange-400 text-white"
         />
         <SideNavLink
           href="/ready-orders"
-          label="Order history"
+          label="History"
           icon={History}
           active={pathname === "/ready-orders"}
         />
-
-<SideNavLink
+        <SideNavLink
           href="/my-sales"
-          label="My Sales"
+          label="Sales"
           icon={CircleDollarSign}
           active={pathname === "/my-sales"}
         />
       </div>
 
-      {/* Bottom — logout only */}
+      {/* Bottom — logout */}
       <div className="shrink-0 flex flex-col border-t border-white/15 pb-1">
         {onLogout && (
-          <SideNavButton label="Log out" icon={LogOut} onClick={onLogout} compact />
+          <button
+            type="button"
+            onClick={onLogout}
+            aria-label="Log out"
+            className="w-full flex flex-col items-center justify-center gap-1.5 py-3 px-1 text-white/50 hover:bg-white/10 hover:text-white transition-all"
+          >
+            <LogOut className="size-4 shrink-0" strokeWidth={2} />
+            <span className="text-[9px] font-bold uppercase tracking-wider">Logout</span>
+          </button>
         )}
       </div>
     </aside>

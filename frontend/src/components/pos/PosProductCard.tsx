@@ -55,10 +55,9 @@ export default function PosProductCard({
           alt={name}
           className="rounded-none h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
-        <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white/90 to-transparent pointer-events-none" />
         <div className="absolute top-2 left-2 flex flex-col items-start gap-0.5">
           {isComposite && (
-            <span className="bg-amber-500 text-white px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase leading-tight shadow-sm">
+            <span className="bg-primary text-white px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase leading-tight shadow-sm">
               Combo
             </span>
           )}

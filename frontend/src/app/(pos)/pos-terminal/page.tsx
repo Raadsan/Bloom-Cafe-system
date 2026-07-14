@@ -23,6 +23,8 @@ import {
   History,
   Printer,
   Layers,
+  Eraser,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
@@ -44,7 +46,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { btnCreatePage } from "@/lib/dashboard-ui";
 import { onDebouncedEvent, MENU_CHANGED } from "@/lib/live-updates";
-import PosCustomerProfileCard from "@/components/pos/PosCustomerProfileCard";
+import PosCustomerPhoneCombobox from "@/components/pos/PosCustomerPhoneCombobox";
 import PosMenuItemImage from "@/components/pos/PosMenuItemImage";
 import PosProductCard from "@/components/pos/PosProductCard";
 import { usePosSearch } from "@/context/PosSearchContext";
@@ -55,20 +57,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
 
 type ViewMode = "grid" | "list";
 type PosOrderType = "dine-in" | "takeaway" | "delivery";
 
-const POS_ORDER_TYPES: {
-  id: PosOrderType;
-  label: string;
-  icon: typeof ShoppingBag;
-}[] = [
-  { id: "dine-in", label: "Dine-in", icon: Utensils },
-  { id: "takeaway", label: "Takeaway", icon: ShoppingBag },
-  { id: "delivery", label: "Delivery", icon: Truck },
-];
+
 
 type TakeawayTiming = "now" | "later";
 
@@ -231,10 +226,12 @@ export default function PosTerminalPage() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptSnapshot | null>(null);
-  const [isTableDialogOpen, setIsTableDialogOpen] = useState(false);
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [isRecentOrdersOpen, setIsRecentOrdersOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isAddCustomerDialogOpen, setIsAddCustomerDialogOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
 
   const [discount, setDiscount] = useState(0);
   const [tempDiscount, setTempDiscount] = useState("0");
@@ -394,11 +391,12 @@ export default function PosTerminalPage() {
 
   const openOrderDialog = useCallback(() => {
     void ensureOrderDialogData();
-    setIsTableDialogOpen(true);
+    setIsCheckoutOpen(true);
   }, [ensureOrderDialogData]);
 
   useEffect(() => {
     fetchData({ silent: false });
+    void ensureOrderDialogData();
     const removeMenuListener = onDebouncedEvent(
       MENU_CHANGED,
       () => fetchData({ silent: true, menuOnly: true, forceMenu: true }),
@@ -407,7 +405,16 @@ export default function PosTerminalPage() {
     return () => {
       removeMenuListener();
     };
-  }, [fetchData]);
+  }, [fetchData, ensureOrderDialogData]);
+
+  // Load receipt settings once on mount — kept in a separate effect
+  // to avoid changing the dependency array size of the main effect.
+  useEffect(() => {
+    receiptSettingsApi.getSettings()
+      .then(setReceiptSettings)
+      .catch(() => { /* render with defaults if unavailable */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const categoryName = useCallback(
     (id: number) => categories.find(c => c.id === id)?.name || "Menu",
@@ -649,10 +656,7 @@ export default function PosTerminalPage() {
   const isInCart = (productId: number) => cart.some(c => c.id === productId);
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const taxAmount = cart.reduce(
-    (sum, item) => sum + (item.price * item.quantity * item.tax) / 100,
-    0
-  );
+  const taxAmount = subtotal * 0.05;
   const discountAmount =
     discountType === "percentage" ? (subtotal * discount) / 100 : discount;
   const total = Math.max(0, subtotal + taxAmount - discountAmount);
@@ -718,11 +722,6 @@ export default function PosTerminalPage() {
   };
 
   const validateOrderDetails = (): boolean => {
-    if (orderType === "dine-in" && !selectedTable) {
-      showToast("Select a table for dine-in", "error");
-      openOrderDialog();
-      return false;
-    }
     if (orderType === "takeaway" && takeawayTiming === "later" && (!pickupDate || !pickupTime)) {
       showToast("Select pickup date and time", "error");
       openOrderDialog();
@@ -820,6 +819,54 @@ export default function PosTerminalPage() {
       showToast("Order saved", "success");
     }
     setIsProcessing(false);
+  };
+
+  const handleClearOrder = () => {
+    resetTransaction();
+    resetOrderDetails();
+    showToast("Transaction cleared", "success");
+  };
+
+  const handleAddCustomer = async () => {
+    if (!newCustomerName.trim() || !newCustomerPhone.trim()) {
+      showToast("Please fill all fields", "error");
+      return;
+    }
+    try {
+      const created = await customerApi.createCustomer({
+        fullName: newCustomerName.trim(),
+        phone: newCustomerPhone.trim(),
+      });
+      setCustomers(prev => [...prev, created]);
+      applyCustomer(created);
+      setIsAddCustomerDialogOpen(false);
+      setNewCustomerName("");
+      setNewCustomerPhone("");
+      showToast("Customer added successfully", "success");
+    } catch (err) {
+      showToast("Failed to add customer", "error");
+    }
+  };
+
+  const handleKeypadPress = (val: string) => {
+    if (val === "C") {
+      setTempDiscount("0");
+    } else if (val === ".") {
+      if (!tempDiscount.includes(".")) {
+        setTempDiscount(prev => prev + ".");
+      }
+    } else {
+      setTempDiscount(prev => {
+        if (prev === "0") {
+          return val;
+        }
+        const newVal = prev + val;
+        if (discountType === "percentage" && parseFloat(newVal) > 100) {
+          return "100";
+        }
+        return newVal;
+      });
+    }
   };
 
   const fetchRecentOrders = async () => {
@@ -930,18 +977,11 @@ export default function PosTerminalPage() {
       showToast("Your cart is empty", "error");
       return;
     }
+    // Ensure we're not on dine-in (removed from dialog)
+    if (orderType === "dine-in") handleOrderTypeChange("delivery");
     openOrderDialog();
   };
 
-  const handleContinueToCheckout = () => {
-    if (!validateOrderDetails()) return;
-    const cust = customers.find(c => c.id === selectedCustomer);
-    setPaymentPhone(cust?.phone || customerPhone || "");
-    setPaymentMethod("evc_plus");
-    setIsTableDialogOpen(false);
-    void ensureReceiptSettings();
-    setIsCheckoutOpen(true);
-  };
 
   const closeCheckout = (force = false) => {
     if (!force && isProcessing) return;
@@ -1022,6 +1062,11 @@ export default function PosTerminalPage() {
         tax: result.taxAmount ?? receiptSnapshot.tax,
         total: result.total ?? receiptSnapshot.total,
       });
+      // Always fetch fresh receipt settings before opening the receipt popup
+      try {
+        const freshSettings = await receiptSettingsApi.getSettings();
+        setReceiptSettings(freshSettings);
+      } catch { /* use cached settings if fetch fails */ }
       resetTransaction();
       closeCheckout(true);
       setIsReceiptOpen(true);
@@ -1110,10 +1155,38 @@ export default function PosTerminalPage() {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mb-4 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
           <p className="text-sm font-semibold text-muted-foreground shrink-0">
             {filteredProducts.length} Products
           </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleNewOrder}
+              className="h-8 px-3 rounded-lg text-xs font-semibold border border-zinc-200 bg-white hover:bg-zinc-50 flex items-center gap-1.5 shadow-sm text-zinc-700"
+            >
+              New Order
+            </button>
+            <button
+              type="button"
+              onClick={fetchRecentOrders}
+              className="relative h-8 px-3 rounded-lg text-xs font-semibold border border-zinc-200 bg-white hover:bg-zinc-50 flex items-center gap-1.5 shadow-sm text-zinc-700"
+            >
+              Order Saved
+              <span
+                className={cn(
+                  "min-w-4 h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center border border-white",
+                  heldCount > 0
+                    ? "bg-primary text-white animate-pulse"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {heldCount}
+              </span>
+            </button>
+          </div>
+
           <div className="flex items-center gap-1 ml-auto">
             {(["grid", "list"] as ViewMode[]).map(mode => (
               <button
@@ -1145,7 +1218,7 @@ export default function PosTerminalPage() {
 
         <div className="flex-1 overflow-y-auto pr-1 pb-2 min-h-0">
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="h-[148px] bg-white/70 rounded-xl animate-pulse border border-zinc-100" />
               ))}
@@ -1156,7 +1229,7 @@ export default function PosTerminalPage() {
               <p className="text-sm font-medium">No products found</p>
             </div>
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
               {filteredProducts.map(product => {
                 const opts = productOptions[product.id] || {};
                 const itemOptions = parseMenuItemOptions(product);
@@ -1245,46 +1318,75 @@ export default function PosTerminalPage() {
       </main>
 
       {/* ── ORDER SIDEBAR ── */}
-      <aside className="w-full max-w-[400px] shrink-0 bg-white border-l border-border flex flex-col shadow-[-10px_0_32px_rgba(91,16,23,0.07)]">
-        <div className="px-5 py-4 border-b border-border/60">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h1 className="text-lg font-semibold text-[#1e293b] dark:text-white tracking-tight">Order Detail</h1>
-              <button
-                type="button"
-                onClick={copyOrderId}
-                className="flex items-center gap-1.5 text-[11px] text-zinc-500 uppercase tracking-wider mt-1 font-medium hover:text-primary"
-              >
-                Order Id {draftOrderId}
-                <Copy className="size-3" />
-              </button>
+      <aside className="w-full max-w-[460px] shrink-0 bg-white border-l border-border flex flex-col shadow-[-10px_0_32px_rgba(91,16,23,0.07)]">
+        <div className="px-5 py-4 border-b border-border/60 space-y-4 bg-zinc-50/50">
+          {/* Header Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <ShoppingBag className="size-5" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold text-zinc-900 dark:text-white leading-none">Point of Sale New Transaction</h1>
+                <p className="text-[10px] text-zinc-400 mt-1">New transaction</p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground bg-white border border-border px-2 py-1 rounded-md font-medium flex items-center gap-1 shadow-sm">
+                Items <span className="font-bold bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-800">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
+              </span>
               <button
                 type="button"
-                onClick={handleNewOrder}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-border text-foreground hover:bg-muted/50"
+                onClick={handleClearOrder}
+                className="size-8 rounded-lg border border-border bg-white flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-primary transition-all shadow-sm"
+                title="Clear current transaction"
               >
-                New Order
-              </button>
-              <button
-                type="button"
-                onClick={fetchRecentOrders}
-                className="relative px-3 py-1.5 rounded-lg text-xs font-semibold border border-border text-muted-foreground hover:bg-muted/40"
-              >
-                Order Saved
-                <span
-                  className={cn(
-                    "absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center",
-                    heldCount > 0
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground border border-border"
-                  )}
-                >
-                  {heldCount}
-                </span>
+                <Eraser className="size-4" />
               </button>
             </div>
+          </div>
+
+          {/* Customer Selection Row */}
+          <div className="border-t border-border/40 pt-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">CUSTOMER</span>
+              {selectedCustomer && (
+                <button
+                  type="button"
+                  onClick={() => handleSelectCustomerById("")}
+                  className="text-[10px] text-destructive hover:underline font-semibold"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <PosCustomerPhoneCombobox
+                  value={customerPhone}
+                  options={selectPhoneOptions}
+                  selectedCustomerId={selectedCustomer}
+                  onValueChange={handleCustomerPhoneChange}
+                  onBlur={handleCustomerPhoneBlur}
+                  onSelect={handleSelectCustomerById}
+                  placeholder="Select Customer"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddCustomerDialogOpen(true)}
+                className="size-11 rounded-lg border border-primary/20 bg-primary/5 text-primary flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 transition-all shrink-0 shadow-sm"
+                title="Add new customer"
+              >
+                <User className="size-4" />
+              </button>
+            </div>
+            {customerName && (
+              <div className="text-[11px] text-zinc-500 font-medium px-1 flex items-center gap-1.5">
+                <User className="size-3 text-zinc-400" />
+                Selected: <span className="font-semibold text-zinc-700">{customerName}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1445,179 +1547,6 @@ export default function PosTerminalPage() {
         </div>
       </aside>
 
-      {/* Customer & order type */}
-      <Dialog open={isTableDialogOpen} onOpenChange={setIsTableDialogOpen}>
-        <DialogContent className="sm:max-w-[520px] rounded-2xl max-h-[90vh] overflow-y-auto bg-zinc-50 border-zinc-100 p-0 gap-0">
-          <DialogHeader className="px-6 pt-6 pb-2">
-            <DialogTitle className="text-lg font-bold text-zinc-900">Customer & Order</DialogTitle>
-            <DialogDescription className="text-sm text-zinc-500">
-              Customer profile and order details
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 px-6 py-2">
-            <div>
-              <label className="text-xs font-semibold text-zinc-500 uppercase mb-2 block tracking-wide">
-                Order type
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {POS_ORDER_TYPES.map(type => {
-                  const Icon = type.icon;
-                  return (
-                    <button
-                      key={type.id}
-                      type="button"
-                      onClick={() => handleOrderTypeChange(type.id)}
-                      className={cn(
-                        "flex flex-col items-center justify-center gap-1 h-16 rounded-lg border-2 text-[10px] font-bold transition-all bg-white",
-                        orderType === type.id
-                          ? "border-primary bg-primary/5 text-primary shadow-sm"
-                          : "border-zinc-100 text-zinc-500 hover:border-primary/30"
-                      )}
-                    >
-                      <Icon className="size-4" />
-                      {type.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <PosCustomerProfileCard
-              variant="full"
-              customerName={customerName}
-              customerPhone={customerPhone}
-              selectedCustomer={selectedCustomer}
-              selectPhoneOptions={selectPhoneOptions}
-              orderTypeLabel={orderTypeLabel}
-              locationLabel={orderLocationLabel}
-              onNameChange={value => {
-                setCustomerName(value);
-                if (selectedCustomer) setSelectedCustomer(null);
-              }}
-              onPhoneChange={handleCustomerPhoneChange}
-              onPhoneBlur={handleCustomerPhoneBlur}
-              onSelectCustomer={handleSelectCustomerById}
-            />
-
-            {orderType === "dine-in" && (
-              <div className="border-t border-border/60 pt-4 space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase block">
-                    Table
-                  </label>
-                  <select
-                    value={selectedTable ?? ""}
-                    onChange={e =>
-                      setSelectedTable(e.target.value ? Number(e.target.value) : null)
-                    }
-                    className="w-full h-11 px-3 border border-border rounded-lg text-sm bg-white"
-                  >
-                    <option value="">
-                      {activeTables.length === 0 ? "No active tables" : "Select table"}
-                    </option>
-                    {activeTables.map(table => (
-                      <option key={table.id} value={table.id}>
-                        Table {table.number}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {orderType === "takeaway" && (
-              <div className="border-t border-border/60 pt-4 space-y-3">
-                <label className="text-xs font-semibold text-muted-foreground uppercase block">
-                  When to pick up
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleTakeawayTimingChange("now")}
-                    className={cn(
-                      "h-10 rounded-lg border-2 text-sm font-bold transition-all",
-                      takeawayTiming === "now"
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border text-muted-foreground hover:border-primary/30"
-                    )}
-                  >
-                    Now
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTakeawayTimingChange("later")}
-                    className={cn(
-                      "h-10 rounded-lg border-2 text-sm font-bold transition-all",
-                      takeawayTiming === "later"
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border text-muted-foreground hover:border-primary/30"
-                    )}
-                  >
-                    Later
-                  </button>
-                </div>
-                {takeawayTiming === "later" && (
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <input
-                      type="date"
-                      value={pickupDate}
-                      onChange={e => setPickupDate(e.target.value)}
-                      className="w-full h-10 px-3 border border-border rounded-lg text-sm"
-                    />
-                    <input
-                      type="time"
-                      value={pickupTime}
-                      onChange={e => setPickupTime(e.target.value)}
-                      className="w-full h-10 px-3 border border-border rounded-lg text-sm"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {orderType === "delivery" && (
-              <div className="border-t border-border/60 pt-4 space-y-3">
-                <label className="text-xs font-semibold text-muted-foreground uppercase block">
-                  Delivery place
-                </label>
-                <input
-                  type="text"
-                  value={deliveryStreet}
-                  onChange={e => setDeliveryStreet(e.target.value)}
-                  placeholder="Street address *"
-                  className="w-full h-10 px-3 border border-border rounded-lg text-sm"
-                />
-                <input
-                  type="text"
-                  value={deliveryDistrict}
-                  onChange={e => setDeliveryDistrict(e.target.value)}
-                  placeholder="District / area"
-                  className="w-full h-10 px-3 border border-border rounded-lg text-sm"
-                />
-              </div>
-            )}
-          </div>
-          <DialogFooter className="px-6 pb-6 pt-2 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsTableDialogOpen(false)}
-              className="h-11 rounded-lg font-medium"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleContinueToCheckout}
-              className={cn(btnCreatePage, "flex-1 h-11 rounded-lg gap-1")}
-            >
-              Continue to payment
-              <ChevronRight className="size-4" />
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Line note edit */}
       <Dialog open={!!editingLineKey} onOpenChange={open => !open && setEditingLineKey(null)}>
         <DialogContent className="sm:max-w-[360px] rounded-2xl">
@@ -1653,112 +1582,189 @@ export default function PosTerminalPage() {
           if (!open) closeCheckout();
         }}
       >
-        <DialogContent className="sm:max-w-[480px] bg-white border-zinc-100 p-0 gap-0 overflow-hidden rounded-2xl flex flex-col max-h-[92vh]">
-          <DialogTitle className="sr-only">Payment</DialogTitle>
+        <DialogContent className="sm:max-w-[500px] bg-white border-zinc-100 p-0 gap-0 overflow-hidden rounded-2xl flex flex-col max-h-[92vh] [&>button]:hidden">
+          <DialogClose asChild>
+            <button type="button" className="absolute right-4 top-4 size-6 rounded-full bg-red-600 flex items-center justify-center hover:bg-red-700 transition-colors z-50">
+              <X className="size-3.5 text-white" />
+            </button>
+          </DialogClose>
+          <DialogTitle className="sr-only">Checkout</DialogTitle>
 
-          <div className="shrink-0 px-6 py-4 border-b border-zinc-100 bg-zinc-50/40">
-            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-500">
-                1. Customer
-              </span>
-              <ChevronRight className="size-3 text-zinc-300" />
-              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary text-white">
-                2. Payment
-              </span>
-            </div>
-            <DialogTitle className="text-lg font-semibold text-[#1e293b]">Payment</DialogTitle>
-            <DialogDescription className="text-xs text-zinc-500 mt-0.5">
-              Choose payment method and complete the order.
+          <div className="shrink-0 px-6 py-4 border-b border-zinc-100">
+            <DialogTitle className="text-lg font-bold text-zinc-900">Checkout</DialogTitle>
+            <DialogDescription className="hidden">
+              Confirm order details and complete payment.
             </DialogDescription>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
-            <div className="flex items-end justify-between pt-1 pb-1 border-b border-zinc-100">
-              <span className="text-sm font-semibold text-muted-foreground">Amount to pay</span>
-              <span className={cn("text-xl font-bold tabular-nums", priceAmountClass)}>
-                $ {total.toFixed(2)}
-              </span>
-            </div>
-
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+            {/* 1. Order Type Selection */}
             <div>
-              <label className="text-xs font-semibold text-zinc-500 uppercase mb-2 block tracking-wide">
-                Payment method
+              <label className="text-xs font-semibold text-zinc-500 uppercase mb-3 block tracking-wide">
+                Order Type
               </label>
-              <div className="grid grid-cols-3 gap-2">
-                {POS_PAYMENT_METHODS.map(method => {
-                  const Icon = method.icon;
+              <div className="grid grid-cols-2 gap-3">
+                {([{ id: "delivery", label: "Delivery", icon: Truck }, { id: "takeaway", label: "Takeaway", icon: ShoppingBag }] as const).map(type => {
+                  const Icon = type.icon;
                   return (
                     <button
-                      key={method.id}
+                      key={type.id}
                       type="button"
-                      onClick={() => setPaymentMethod(method.id)}
+                      onClick={() => handleOrderTypeChange(type.id)}
                       className={cn(
-                        "flex flex-col items-center justify-center gap-1 h-16 rounded-lg border-2 text-[10px] font-bold transition-all bg-white",
-                        paymentMethod === method.id
-                          ? "border-primary bg-primary/5 text-primary shadow-sm"
-                          : "border-zinc-100 text-zinc-500 hover:border-primary/30"
+                        "flex flex-col items-center justify-center gap-2 h-18 rounded-xl border-2 text-xs font-bold transition-all bg-white",
+                        orderType === type.id
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-zinc-200 text-zinc-500 hover:border-primary/40"
                       )}
                     >
-                      <Icon className="size-4" />
-                      {method.name}
+                      <Icon className="size-4.5" />
+                      {type.label}
                     </button>
                   );
                 })}
               </div>
             </div>
 
+            {/* 2. Customer Info (Read Only) */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-[#1E293B]">
-                Mobile number
-                <span className="text-zinc-400 font-normal"> (optional)</span>
-              </label>
-              <input
-                type="tel"
-                value={paymentPhone}
-                onChange={e => setPaymentPhone(e.target.value)}
-                placeholder="e.g. 61XXXXXXX"
-                className={formInputClass}
-              />
-              <p className="text-xs text-zinc-500">
-                {paymentMethod === "premier_wallet"
-                  ? "Required for Premier Wallet — payment request is sent to this number."
-                  : "Optional. Uses customer phone if left empty."}
-              </p>
+              <label className="text-xs font-semibold text-zinc-500 uppercase block tracking-wide">Customer</label>
+              <div className="px-4 py-3 bg-zinc-50 rounded-xl border border-zinc-100 flex items-center justify-between">
+                <span className="font-semibold text-zinc-800">{customerName || "Guest"}</span>
+                {customerPhone && <span className="text-xs text-zinc-500">{customerPhone}</span>}
+              </div>
+            </div>
+
+            {/* 3. Takeaway / Delivery Details */}
+            {orderType === "takeaway" && (
+              <div className="space-y-3 border-t border-zinc-100 pt-4">
+                <label className="text-xs font-semibold text-zinc-500 uppercase block tracking-wide">
+                  When to pick up
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["now", "later"] as const).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleTakeawayTimingChange(t)}
+                      className={cn(
+                        "h-10 rounded-lg border-2 text-xs font-bold capitalize transition-all",
+                        takeawayTiming === t
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-zinc-200 text-zinc-500 hover:border-primary/40"
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                {takeawayTiming === "later" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)}
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm" />
+                    <input type="time" value={pickupTime} onChange={e => setPickupTime(e.target.value)}
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {orderType === "delivery" && (
+              <div className="space-y-3 border-t border-zinc-100 pt-4">
+                <label className="text-xs font-semibold text-zinc-500 uppercase block tracking-wide">
+                  Delivery Address
+                </label>
+                <input type="text" value={deliveryStreet} onChange={e => setDeliveryStreet(e.target.value)}
+                  placeholder="Street address *"
+                  className="w-full h-11 px-3 border border-zinc-200 rounded-lg text-sm" />
+                <input type="text" value={deliveryDistrict} onChange={e => setDeliveryDistrict(e.target.value)}
+                  placeholder="District / area"
+                  className="w-full h-11 px-3 border border-zinc-200 rounded-lg text-sm" />
+              </div>
+            )}
+
+            {/* 4. Payment Method & Details */}
+            <div className="border-t border-zinc-100 pt-4 space-y-4">
+              {/* Payment Method */}
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 uppercase mb-3 block tracking-wide">
+                  Payment Method
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {POS_PAYMENT_METHODS.map(method => {
+                    const Icon = method.icon;
+                    return (
+                      <button
+                        key={method.id}
+                        type="button"
+                        onClick={() => setPaymentMethod(method.id)}
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-1.5 h-16 rounded-xl border-2 text-[10px] font-bold transition-all bg-white",
+                          paymentMethod === method.id
+                            ? "border-primary bg-primary/5 text-primary shadow-sm"
+                            : "border-zinc-200 text-zinc-500 hover:border-primary/40"
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        {method.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Mobile number */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-zinc-500 uppercase block tracking-wide">
+                  Mobile Number
+                  <span className="text-zinc-400 font-normal normal-case ml-1">(optional)</span>
+                </label>
+                <input
+                  type="tel"
+                  value={paymentPhone}
+                  onChange={e => setPaymentPhone(e.target.value)}
+                  placeholder="e.g. 61XXXXXXX"
+                  className="w-full h-11 px-3 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 font-medium"
+                />
+                <p className="text-xs text-zinc-400">
+                  {paymentMethod === "premier_wallet"
+                    ? "Required for Premier Wallet payment."
+                    : "Optional. Uses customer phone if left empty."}
+                </p>
+              </div>
+            </div>
+
+            {/* 5. Total */}
+            <div className="flex items-center justify-between pt-4 border-t border-zinc-100">
+              <span className="text-sm font-semibold text-zinc-600">Amount to pay</span>
+              <span className={cn("text-2xl font-bold tabular-nums", priceAmountClass)}>
+                ${total.toFixed(2)}
+              </span>
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 m-0 p-4 bg-zinc-50 border-t border-zinc-100 gap-2">
-            <Button
+          <div className="shrink-0 grid grid-cols-2 gap-3 px-6 py-4 bg-zinc-50 border-t border-zinc-100">
+            <button
               type="button"
-              variant="outline"
-              onClick={() => {
-                closeCheckout();
-                openOrderDialog();
-              }}
-              className="rounded-lg font-medium px-5 h-10 text-sm"
+              onClick={() => closeCheckout(true)}
               disabled={isProcessing}
+              className="h-11 rounded-lg border-2 border-primary text-primary font-bold text-sm transition-all hover:bg-primary/5 disabled:opacity-60"
             >
-              Back
-            </Button>
-            <Button
+              Cancel
+            </button>
+            <button
               type="button"
               onClick={handleCheckout}
               disabled={isProcessing}
-              className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-semibold px-6 h-10 gap-2 flex-1 disabled:opacity-70"
+              className="h-11 rounded-lg bg-primary hover:bg-primary/90 text-white font-bold text-sm shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {isProcessing ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Processing...
-                </>
+                <><Loader2 className="size-4 animate-spin" />Processing...</>
               ) : (
-                <>
-                  <CheckCircle2 className="size-4" />
-                  Confirm & pay
-                </>
+                <><CheckCircle2 className="size-4" />Confirm & Pay</>
               )}
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1772,89 +1778,183 @@ export default function PosTerminalPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[420px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl">
+        <DialogContent className="sm:max-w-[440px] bg-white border-zinc-100 p-0 overflow-hidden rounded-2xl flex flex-col max-h-[92vh] [&>button]:hidden">
           <DialogTitle className="sr-only">Receipt</DialogTitle>
-          <div className="p-6 border-b border-zinc-100">
-            <DialogTitle className="text-xl font-bold text-[#1e293b]">Receipt</DialogTitle>
-            <DialogDescription className="text-sm text-zinc-500 mt-1">
-              Payment confirmed. Review and print the receipt for the customer.
-            </DialogDescription>
+
+          {/* Fixed header */}
+          <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-zinc-100 bg-white">
+            <div>
+              <h2 className="text-lg font-bold text-zinc-900">Receipt</h2>
+              <p className="text-xs text-zinc-500">Payment confirmed successfully</p>
+            </div>
+            <div className="size-10 rounded-full bg-emerald-100 flex items-center justify-center">
+              <CheckCircle2 className="size-5 text-emerald-600" />
+            </div>
           </div>
 
+          {/* Scrollable receipt body */}
           {receiptData && (
-            <div className="p-6">
-              <div className="mx-auto max-w-[320px] rounded-lg border border-zinc-200 bg-white p-5 shadow-inner">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5">
+              <div className="mx-auto max-w-[320px] rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <ReceiptBody data={receiptData} settings={receiptSettings} />
               </div>
             </div>
           )}
 
-          <DialogFooter className="p-6 bg-zinc-50 border-t border-zinc-100 gap-3">
-            <Button
+          {/* Fixed footer with buttons */}
+          <div className="shrink-0 grid grid-cols-2 gap-3 px-6 py-4 bg-zinc-50 border-t border-zinc-100">
+            <button
               type="button"
-              variant="outline"
-              onClick={() => {
-                setIsReceiptOpen(false);
-                setReceiptData(null);
-              }}
-              className="rounded-lg font-bold px-6 h-11"
+              onClick={() => { setIsReceiptOpen(false); setReceiptData(null); }}
+              className="h-11 rounded-lg bg-primary hover:bg-primary/90 text-white font-bold text-sm shadow-sm transition-all"
             >
               Close
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
               onClick={handlePrintReceipt}
-              className="bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-lg font-bold px-8 h-11 gap-2"
+              className="h-11 rounded-lg bg-primary hover:bg-primary text-white font-bold text-sm shadow-sm transition-all flex items-center justify-center gap-2"
             >
               <Printer className="size-4" />
               Print Receipt
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Discount */}
       <Dialog open={isDiscountModalOpen} onOpenChange={setIsDiscountModalOpen}>
-        <DialogContent className="sm:max-w-[400px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Apply Discount</DialogTitle>
+        <DialogContent className="sm:max-w-[440px] rounded-2xl p-6 [&>button]:hidden">
+          <DialogClose asChild>
+            <button type="button" className="absolute right-4 top-4 size-6 rounded-full bg-red-600 flex items-center justify-center hover:bg-red-700 transition-colors z-50">
+              <X className="size-3.5 text-white" />
+            </button>
+          </DialogClose>
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-xl font-bold text-zinc-900 leading-tight">Apply Discount</DialogTitle>
+            <p className="text-xs text-zinc-400">Header discount applies after line discounts.</p>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="flex bg-muted p-1 rounded-lg">
-              {(["percentage", "fixed"] as const).map(t => (
+          
+          <div className="py-2">
+            {/* Tabs grid */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <button
+                type="button"
+                onClick={() => setDiscountType("percentage")}
+                className={cn(
+                  "h-11 rounded-lg text-sm font-bold border transition-all",
+                  discountType === "percentage"
+                    ? "bg-primary text-white border-primary shadow-sm"
+                    : "bg-white border-primary text-primary hover:bg-primary/5"
+                )}
+              >
+                Percent
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiscountType("fixed")}
+                className={cn(
+                  "h-11 rounded-lg text-sm font-bold border transition-all",
+                  discountType === "fixed"
+                    ? "bg-primary text-white border-primary shadow-sm"
+                    : "bg-white border-primary text-primary hover:bg-primary/5"
+                )}
+              >
+                Fixed Amount
+              </button>
+            </div>
+
+            {/* Presets Row */}
+            <div className="grid grid-cols-5 gap-1.5 mb-4">
+              {[5, 10, 15, 20].map(pct => (
                 <button
-                  key={t}
+                  key={pct}
                   type="button"
-                  onClick={() => setDiscountType(t)}
+                  onClick={() => {
+                    setDiscountType("percentage");
+                    setTempDiscount(String(pct));
+                  }}
+                  className="h-10 rounded-lg border border-primary text-primary font-bold text-xs bg-white hover:bg-zinc-50 transition-all shadow-sm"
+                >
+                  {pct}%
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setDiscountType("percentage");
+                  setTempDiscount("0");
+                }}
+                className="h-10 rounded-lg border border-primary text-primary font-bold text-xs bg-white hover:bg-zinc-50 transition-all shadow-sm"
+              >
+                Reset
+              </button>
+            </div>
+
+            {/* Value display */}
+            <div className="space-y-1.5 mb-3">
+              <label className="text-xs font-bold text-zinc-600 block">Discount Value</label>
+              <input
+                type="text"
+                readOnly
+                value={tempDiscount}
+                className="w-full h-12 border border-zinc-200 rounded-lg px-3 text-sm font-bold bg-white text-zinc-800 outline-none"
+              />
+            </div>
+
+            {/* Messages */}
+            <div className="text-xs text-zinc-500 font-medium space-y-1 mb-4">
+              <p>Amount After Line Discount: ${subtotal.toFixed(2)}</p>
+              <p className={cn(parseFloat(tempDiscount) > 0 ? "text-primary font-bold" : "text-zinc-400 font-medium")}>
+                {parseFloat(tempDiscount) === 0
+                  ? "No discount applied."
+                  : discountType === "percentage"
+                  ? `Discount applied: ${tempDiscount}% (-$${((subtotal * parseFloat(tempDiscount)) / 100).toFixed(2)})`
+                  : `Discount applied: -$${parseFloat(tempDiscount).toFixed(2)}`}
+              </p>
+            </div>
+
+            {/* Keypad grid */}
+            <div className="grid grid-cols-3 gap-2">
+              {["7", "8", "9", "4", "5", "6", "1", "2", "3", "C", "0", "."].map(key => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleKeypadPress(key)}
                   className={cn(
-                    "flex-1 py-2 text-xs font-bold rounded-md",
-                    discountType === t ? "bg-white shadow-sm text-primary" : "text-muted-foreground"
+                    "h-14 rounded-lg flex items-center justify-center font-bold text-lg border transition-all shadow-sm",
+                    key === "C"
+                      ? "bg-primary hover:bg-primary border-primary text-white"
+                      : "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50"
                   )}
                 >
-                  {t === "percentage" ? "Percentage (%)" : "Fixed ($)"}
+                  {key}
                 </button>
               ))}
             </div>
-            <input
-              type="number"
-              value={tempDiscount}
-              onChange={e => setTempDiscount(e.target.value)}
-              className="w-full h-12 border border-border rounded-xl px-4 text-sm font-bold focus:border-primary outline-none"
-              placeholder="0"
-            />
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsDiscountModalOpen(false)}>Cancel</Button>
-            <Button
+
+          {/* Action Footer */}
+          <div className="grid grid-cols-2 gap-3 pt-4 border-t border-zinc-100 mt-2">
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="h-11 rounded-lg border-2 border-primary text-primary font-bold text-sm transition-all hover:bg-primary/5"
+              >
+                Cancel
+              </button>
+            </DialogClose>
+            <button
+              type="button"
               onClick={() => {
                 setDiscount(parseFloat(tempDiscount) || 0);
                 setIsDiscountModalOpen(false);
               }}
-              className={cn(btnCreatePage, "rounded-xl")}
+              className="h-11 rounded-lg bg-primary hover:bg-primary text-white font-bold text-sm shadow-sm transition-all"
             >
               Apply
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1911,6 +2011,60 @@ export default function PosTerminalPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Add Customer Dialog */}
+      <Dialog open={isAddCustomerDialogOpen} onOpenChange={setIsAddCustomerDialogOpen}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl p-6 [&>button]:hidden">
+          <DialogClose asChild>
+            <button type="button" className="absolute right-4 top-4 size-6 rounded-full bg-red-600 flex items-center justify-center hover:bg-red-700 transition-colors z-50">
+              <X className="size-3.5 text-white" />
+            </button>
+          </DialogClose>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-zinc-900">Add Customer</DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500">Create a new customer profile</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-500 uppercase block">Full Name</label>
+              <input
+                type="text"
+                value={newCustomerName}
+                onChange={e => setNewCustomerName(e.target.value)}
+                className="w-full h-11 px-3 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 placeholder:text-zinc-400 font-medium"
+                placeholder="Customer Name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-500 uppercase block">Phone Number</label>
+              <input
+                type="tel"
+                value={newCustomerPhone}
+                onChange={e => setNewCustomerPhone(e.target.value)}
+                className="w-full h-11 px-3 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 placeholder:text-zinc-400 font-medium"
+                placeholder="Phone Number"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 pt-4 border-t border-zinc-100 mt-2">
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="h-11 rounded-lg border-2 border-primary text-primary font-bold text-sm transition-all hover:bg-primary/5"
+              >
+                Cancel
+              </button>
+            </DialogClose>
+            <button
+              type="button"
+              onClick={handleAddCustomer}
+              className="h-11 rounded-lg bg-primary hover:bg-primary/95 text-white font-bold text-sm shadow-sm transition-all"
+            >
+              Save Customer
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Hidden printable receipt */}
       {receiptData && (
         <div id="printable-receipt" className="hidden print:block bg-white p-4">
@@ -1920,3 +2074,10 @@ export default function PosTerminalPage() {
     </div>
   );
 }
+
+
+
+
+
+
+

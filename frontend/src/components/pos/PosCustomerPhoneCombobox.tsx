@@ -94,7 +94,7 @@ export default function PosCustomerPhoneCombobox({
       />
       {selectedCustomerId && (
         <CheckCircle2
-          className="absolute right-8 top-1/2 -translate-y-1/2 size-4 text-amber-500 pointer-events-none"
+          className="absolute right-8 top-1/2 -translate-y-1/2 size-4 text-primary pointer-events-none"
           aria-hidden
         />
       )}

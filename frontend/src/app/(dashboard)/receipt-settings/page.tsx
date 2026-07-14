@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
 import { useToast } from "@/components/ui/toast";
 import LogoUploadField from "@/components/receipt/LogoUploadField";
+import { ReceiptBody } from "@/components/receipt/ReceiptBody";
 import {
   dashboardPageClass,
   dashboardPageStyle,
@@ -139,19 +140,6 @@ export default function ReceiptSettingsPage() {
 
               <div className="p-8 space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[13px] font-semibold text-foreground flex items-center gap-2">
-                      <Type className="size-3.5 text-muted-foreground" />
-                      Restaurant name
-                    </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Fine Dine Restaurant"
-                      className="w-full px-4 py-3 bg-white dark:bg-[#161616] border border-zinc-200 dark:border-[#2a2a2a] rounded-xl outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all text-sm font-medium dark:text-white"
-                    />
-                  </div>
                   <div className="space-y-2">
                     <label className="text-[13px] font-semibold text-foreground flex items-center gap-2">
                       <Hash className="size-3.5 text-muted-foreground" />
@@ -304,87 +292,33 @@ export default function ReceiptSettingsPage() {
                 </span>
               </div>
 
-              <div className="bg-white dark:bg-card border border-border shadow-xl rounded-2xl p-8 font-mono text-zinc-800 dark:text-zinc-200 relative max-w-[380px] mx-auto min-h-[500px] flex flex-col">
-                <div className="text-center space-y-2 mb-8 mt-4">
-                  {logoUrl ? (
-                    <div className="flex justify-center mb-4">
-                      <img src={logoUrl} alt="Logo" className="max-h-16 w-auto" />
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 bg-zinc-100 dark:bg-zinc-800 rounded-full mx-auto flex items-center justify-center mb-4 border border-zinc-200 dark:border-zinc-700">
-                      <ImageIcon className="size-5 text-zinc-300" />
-                    </div>
-                  )}
-                  <h2 className="text-lg font-bold uppercase tracking-tight leading-tight">
-                    {name || "Restaurant name"}
-                  </h2>
-                  <div className="text-[11px] text-zinc-500 space-y-0.5 font-medium">
-                    {address && <p>{address}</p>}
-                    {phones.map((p, idx) => (
-                      <p key={idx}>
-                        {p.provider && <span className="font-bold">{p.provider}: </span>}
-                        {p.number}
-                      </p>
-                    ))}
-                    {vatNumber && <p className="font-bold">VAT: {vatNumber}</p>}
-                  </div>
-                </div>
-
-                <div className="border-b border-dashed border-zinc-300 dark:border-zinc-600 pb-3 mb-3 text-[11px] text-zinc-400 font-medium">
-                  <div className="flex justify-between">
-                    <span>Date</span>
-                    <span>{new Date().toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Time</span>
-                    <span>{new Date().toLocaleTimeString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Receipt no</span>
-                    <span>#001234</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Table</span>
-                    <span>T-12</span>
-                  </div>
-                </div>
-
-                <div className="flex-1 space-y-2 mb-6">
-                  {[
-                    { qty: 2, name: "Grilled Salmon", price: 48.0 },
-                    { qty: 1, name: "Classic Caesar Salad", price: 12.5 },
-                    { qty: 3, name: "Fresh Orange Juice", price: 15.0 },
-                  ].map((item, i) => (
-                    <div key={i} className="flex justify-between text-[11px] font-medium italic">
-                      <span className="flex-1">
-                        {item.qty}x {item.name}
-                      </span>
-                      <span className="tabular-nums">${item.price.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-dashed border-zinc-300 dark:border-zinc-600 pt-4 space-y-1.5 text-[12px] font-bold">
-                  <div className="flex justify-between text-zinc-400 font-medium">
-                    <span>Subtotal</span>
-                    <span className="tabular-nums">$75.50</span>
-                  </div>
-                  <div className="flex justify-between text-zinc-400 font-medium">
-                    <span>Tax / VAT (5%)</span>
-                    <span className="tabular-nums">$3.78</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-black pt-2">
-                    <span>Total</span>
-                    <span className="tabular-nums">$79.28</span>
-                  </div>
-                </div>
-
-                <div className="mt-auto pt-8 text-center pb-4">
-                  <div className="text-[11px] text-zinc-400 italic leading-relaxed font-medium">
-                    {footerText || "Thank you for your visit! Have a wonderful day!"}
-                    {email && <p className="mt-1 font-bold not-italic">{email}</p>}
-                  </div>
-                </div>
+              <div className="bg-white border border-border shadow-xl rounded-2xl overflow-hidden max-w-[320px] mx-auto">
+                <ReceiptBody
+                  data={{
+                    orderId: 15176,
+                    customerName: "Guest",
+                    paymentMethod: "Cash",
+                    orderTypeLabel: "Takeaway",
+                    items: [
+                      { menuItemId: 1, name: "Iced Latte", price: 2.21, quantity: 1 },
+                      { menuItemId: 2, name: "Iced Spanish Latte", price: 2.76, quantity: 1 },
+                    ],
+                    subtotal: 4.97,
+                    tax: 0.25,
+                    total: 5.22,
+                    createdAt: new Date().toISOString(),
+                    servedBy: email || "bloomcff@gmail.com",
+                  }}
+                  settings={{
+                    name: name || "Bloom Cafe",
+                    address: address || "",
+                    phone: phones.length ? JSON.stringify(phones) : undefined,
+                    vatNumber: vatNumber || undefined,
+                    footerText: footerText || undefined,
+                    email: email || undefined,
+                    logoUrl: logoUrl || undefined,
+                  } as any}
+                />
               </div>
             </div>
           </div>
