@@ -74,7 +74,6 @@ export const getPosCustomers = async (req, res) => {
         id: true,
         fullName: true,
         phone: true,
-        email: true,
         createdAt: true,
         updatedAt: true,
       },

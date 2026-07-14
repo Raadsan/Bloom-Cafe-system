@@ -11,7 +11,6 @@ import http from 'http'
 import app from './src/app.js'
 import { initSocket } from './src/socket.js'
 import prisma from './src/config/db.js'
-import cors from "cors";
 import {
   deactivateRoomsMenuItem,
   deactivateSystemSettingsMenuItem,
@@ -76,23 +75,9 @@ initSocket(server)
 
 const PORT = process.env.PORT || 7000
 
-server.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT}`)
-  initFirebase()
-  try {
-    await deactivateRoomsMenuItem()
-    await deactivateSystemSettingsMenuItem()
-    await ensureCreateOrderMenuItem()
-    await ensurePickupOrdersMenuItem()
-    await ensurePickupHistoryMenuItem()
-    await ensureDiscountAdvertisementMenuItem()
-    console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions)')
-  } catch (err) {
-    console.warn('Sidebar menu ensure skipped:', err?.message)
-  }
-app.use(cors({ origin: ["http://167.86.104.132:2000/"] }));
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
+  initFirebase()
 
   setImmediate(async () => {
     const dbOk = await verifyDatabase()
@@ -124,6 +109,4 @@ process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.once('SIGUSR2', async () => {
   await prisma.$disconnect().catch(() => { })
   process.kill(process.pid, 'SIGUSR2')
-})
-
-});
+})
