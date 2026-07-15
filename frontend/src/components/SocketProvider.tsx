@@ -31,11 +31,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const getSocketUrl = () => {
       if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL.replace('/api', '');
+        return process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '');
       }
       if (typeof window !== 'undefined') {
+        const protocol = window.location.protocol;
         const host = window.location.hostname;
-        return `http://${host}:7000`;
+        return `${protocol}//${host}:7000`;
       }
       return 'http://localhost:7000';
     };

@@ -9,7 +9,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== "undefined"
-    ? window.location.origin.replace(":2000", ":7000") + "/api"
+    ? `${window.location.protocol}//${window.location.hostname}:7000/api`
     : "http://localhost:7000/api");
 
 export default function OrderTicketPage() {

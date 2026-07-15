@@ -28,7 +28,7 @@ import { PosSearchProvider } from "@/context/PosSearchContext";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { STATIC_APP_LOGO } from "@/lib/branding";
+import { resolveBrandingImageUrl, STATIC_APP_LOGO } from "@/lib/branding";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,6 +75,8 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
   const [cartCount, setCartCount] = useState(0);
   const [kitchenCount, setKitchenCount] = useState(0);
   const [clock, setClock] = useState("");
+  const [brandLogo, setBrandLogo] = useState(STATIC_APP_LOGO);
+  const [brandName, setBrandName] = useState("Bloom POS");
 
   // Recent orders popup
   const [showRecentOrders, setShowRecentOrders] = useState(false);
@@ -102,6 +104,13 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    receiptSettingsApi.getSettings().then(settings => {
+      const logo = resolveBrandingImageUrl(settings.logoUrl) || STATIC_APP_LOGO;
+      setBrandLogo(logo);
+      setBrandName(settings.name ? `${settings.name} POS` : "Bloom POS");
+    }).catch(() => {});
+  }, []);
   useEffect(() => {
     const cached = authApi.getCachedUser();
     if (cached) setUser(cached);
@@ -172,8 +181,8 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
         <header className="h-16 shrink-0 bg-white text-zinc-800 flex items-center px-4 gap-3 border-b border-zinc-200/80 shadow-sm z-50">
           {/* Logo */}
           <Link href="/pos-terminal" className="flex items-center gap-2.5 shrink-0 hover:opacity-90 transition-opacity">
-            <img src={STATIC_APP_LOGO} alt="POS" className="h-8 w-8 object-contain" />
-            <span className="font-bold text-base text-zinc-800 hidden sm:block">Bloom POS</span>
+            <img src={brandLogo} alt={brandName} className="h-8 w-8 object-contain" />
+            <span className="font-bold text-base text-zinc-800 hidden sm:block">{brandName}</span>
           </Link>
 
           {/* Clock & Online badge */}

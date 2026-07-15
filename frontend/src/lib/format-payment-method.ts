@@ -1,5 +1,5 @@
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  evc_plus: "EVC Plus",
+  evc_plus: "Merchant",
   edahab: "eDahab",
   premier_wallet: "Premier Wallet",
   waafi: "Premier Wallet",

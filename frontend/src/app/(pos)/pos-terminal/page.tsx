@@ -25,6 +25,9 @@ import {
   Layers,
   Eraser,
   User,
+  Store,
+  Trash2,
+  UtensilsCrossed,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { categoryApi, Category } from "@/lib/api/categoryApi";
@@ -50,6 +53,7 @@ import PosCustomerPhoneCombobox from "@/components/pos/PosCustomerPhoneCombobox"
 import PosMenuItemImage from "@/components/pos/PosMenuItemImage";
 import PosProductCard from "@/components/pos/PosProductCard";
 import { usePosSearch } from "@/context/PosSearchContext";
+import { STATIC_APP_LOGO } from "@/lib/branding";
 import {
   Dialog,
   DialogContent,
@@ -101,10 +105,11 @@ type PosPaymentMethod = Extract<PaymentMethod, "evc_plus" | "edahab" | "premier_
 const POS_PAYMENT_METHODS: {
   id: PosPaymentMethod;
   name: string;
-  icon: typeof Smartphone;
+  icon?: any;
+  useLogoImage?: boolean;
   providerName: string;
 }[] = [
-  { id: "evc_plus", name: "EVC Plus", icon: Smartphone, providerName: "EVC Plus" },
+  { id: "evc_plus", name: "Merchant", icon: Store, providerName: "Merchant" },
   { id: "edahab", name: "eDahab", icon: Smartphone, providerName: "eDahab" },
   { id: "premier_wallet", name: "Premier Wallet", icon: Wallet, providerName: "Premier Wallet" },
 ];
@@ -977,8 +982,6 @@ export default function PosTerminalPage() {
       showToast("Your cart is empty", "error");
       return;
     }
-    // Ensure we're not on dine-in (removed from dialog)
-    if (orderType === "dine-in") handleOrderTypeChange("delivery");
     openOrderDialog();
   };
 
@@ -1155,38 +1158,24 @@ export default function PosTerminalPage() {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
-          <p className="text-sm font-semibold text-muted-foreground shrink-0">
-            {filteredProducts.length} Products
-          </p>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleNewOrder}
-              className="h-8 px-3 rounded-lg text-xs font-semibold border border-zinc-200 bg-white hover:bg-zinc-50 flex items-center gap-1.5 shadow-sm text-zinc-700"
-            >
-              New Order
-            </button>
-            <button
-              type="button"
-              onClick={fetchRecentOrders}
-              className="relative h-8 px-3 rounded-lg text-xs font-semibold border border-zinc-200 bg-white hover:bg-zinc-50 flex items-center gap-1.5 shadow-sm text-zinc-700"
-            >
-              Order Saved
-              <span
-                className={cn(
-                  "min-w-4 h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center border border-white",
-                  heldCount > 0
-                    ? "bg-primary text-white animate-pulse"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {heldCount}
-              </span>
-            </button>
+        <div className="flex flex-wrap items-center gap-2 mb-4 shrink-0">
+          {/* Search bar — prominent & full-width on left */}
+          <div className="relative flex-1 min-w-[180px] max-w-[340px]">
+            <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full h-9 pl-9 pr-3 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 shadow-sm"
+            />
           </div>
 
+          <p className="text-xs font-semibold text-muted-foreground shrink-0 hidden md:block">
+            {filteredProducts.length} items
+          </p>
+
+          {/* View toggle */}
           <div className="flex items-center gap-1 ml-auto">
             {(["grid", "list"] as ViewMode[]).map(mode => (
               <button
@@ -1204,16 +1193,16 @@ export default function PosTerminalPage() {
               </button>
             ))}
           </div>
-          <div className="relative w-[200px] max-w-[42vw] shrink-0">
-            <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full h-8 pl-8 pr-3 bg-white border border-zinc-200 rounded-lg text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
-            />
-          </div>
+
+          {/* New Order button */}
+          <button
+            type="button"
+            onClick={handleNewOrder}
+            className="h-9 px-3.5 rounded-lg text-xs font-bold border-2 border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/40 flex items-center gap-1.5 shadow-sm transition-all shrink-0"
+          >
+            <Plus className="size-3.5" />
+            New Order
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto pr-1 pb-2 min-h-0">
@@ -1327,7 +1316,7 @@ export default function PosTerminalPage() {
                 <ShoppingBag className="size-5" />
               </div>
               <div>
-                <h1 className="text-sm font-bold text-zinc-900 dark:text-white leading-none">Point of Sale New Transaction</h1>
+                <h1 className="text-sm font-bold text-zinc-900 dark:text-white leading-none">Point of Sale</h1>
                 <p className="text-[10px] text-zinc-400 mt-1">New transaction</p>
               </div>
             </div>
@@ -1335,6 +1324,19 @@ export default function PosTerminalPage() {
               <span className="text-xs text-muted-foreground bg-white border border-border px-2 py-1 rounded-md font-medium flex items-center gap-1 shadow-sm">
                 Items <span className="font-bold bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-800">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
               </span>
+              <button
+                type="button"
+                onClick={fetchRecentOrders}
+                className="relative size-8 rounded-lg border border-border bg-white flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-primary transition-all shadow-sm"
+                title="View saved orders"
+              >
+                <History className="size-4" />
+                {heldCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center bg-primary text-white animate-pulse border border-white">
+                    {heldCount}
+                  </span>
+                )}
+              </button>
               <button
                 type="button"
                 onClick={handleClearOrder}
@@ -1388,6 +1390,21 @@ export default function PosTerminalPage() {
               </div>
             )}
           </div>
+
+          {orderType === "dine-in" && (
+            <div className="border-t border-border/40 pt-3 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <UtensilsCrossed className="size-3.5 text-primary" />
+                <label htmlFor="pos-table" className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Assign Table</label>
+              </div>
+              <select id="pos-table" value={selectedTable ?? ""} onChange={e => setSelectedTable(e.target.value ? Number(e.target.value) : null)} className="w-full h-10 px-3 rounded-lg border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
+                <option value="">Select a table</option>
+                {activeTables.map(table => (
+                  <option key={table.id} value={table.id}>Table {table.number}{table.name ? ` - ${table.name}` : ""}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2 min-h-0">
@@ -1603,8 +1620,8 @@ export default function PosTerminalPage() {
               <label className="text-xs font-semibold text-zinc-500 uppercase mb-3 block tracking-wide">
                 Order Type
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                {([{ id: "delivery", label: "Delivery", icon: Truck }, { id: "takeaway", label: "Takeaway", icon: ShoppingBag }] as const).map(type => {
+              <div className="grid grid-cols-3 gap-3">
+                {([{ id: "dine-in", label: "Dine In", icon: Utensils }, { id: "takeaway", label: "Takeaway", icon: ShoppingBag }, { id: "delivery", label: "Delivery", icon: Truck }] as const).map(type => {
                   const Icon = type.icon;
                   return (
                     <button
@@ -1635,39 +1652,8 @@ export default function PosTerminalPage() {
               </div>
             </div>
 
-            {/* 3. Takeaway / Delivery Details */}
-            {orderType === "takeaway" && (
-              <div className="space-y-3 border-t border-zinc-100 pt-4">
-                <label className="text-xs font-semibold text-zinc-500 uppercase block tracking-wide">
-                  When to pick up
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["now", "later"] as const).map(t => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => handleTakeawayTimingChange(t)}
-                      className={cn(
-                        "h-10 rounded-lg border-2 text-xs font-bold capitalize transition-all",
-                        takeawayTiming === t
-                          ? "border-primary bg-primary/5 text-primary"
-                          : "border-zinc-200 text-zinc-500 hover:border-primary/40"
-                      )}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                {takeawayTiming === "later" && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <input type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)}
-                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm" />
-                    <input type="time" value={pickupTime} onChange={e => setPickupTime(e.target.value)}
-                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm" />
-                  </div>
-                )}
-              </div>
-            )}
+            {/* 3. Dine-in / Delivery Details */}
+            {/* Table selection moved to sidebar - omitted from checkout dialog */}
 
             {orderType === "delivery" && (
               <div className="space-y-3 border-t border-zinc-100 pt-4">
@@ -1692,7 +1678,6 @@ export default function PosTerminalPage() {
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {POS_PAYMENT_METHODS.map(method => {
-                    const Icon = method.icon;
                     return (
                       <button
                         key={method.id}
@@ -1705,7 +1690,7 @@ export default function PosTerminalPage() {
                             : "border-zinc-200 text-zinc-500 hover:border-primary/40"
                         )}
                       >
-                        <Icon className="size-4" />
+                        <method.icon className="size-4.5" />
                         {method.name}
                       </button>
                     );
@@ -1960,13 +1945,51 @@ export default function PosTerminalPage() {
 
       {/* Held orders */}
       <Dialog open={isRecentOrdersOpen} onOpenChange={setIsRecentOrdersOpen}>
-        <DialogContent className="sm:max-w-[560px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Saved Orders</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[360px] overflow-y-auto space-y-2 py-2">
+        <DialogContent className="sm:max-w-[560px] rounded-2xl p-0 overflow-hidden [&>button]:hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <History className="size-4 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold leading-none">Saved Orders</DialogTitle>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{recentOrders.length} order{recentOrders.length !== 1 ? "s" : ""} on hold</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {recentOrders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ids = recentOrders.map(o => o.id);
+                    await clearLoadedHeldOrders(ids, true);
+                    setActiveHeldOrderId(null);
+                    showToast("All saved orders cleared", "success");
+                  }}
+                  className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-[11px] font-semibold hover:bg-red-100 transition-colors"
+                >
+                  <Trash2 className="size-3" />
+                  Clear All
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsRecentOrdersOpen(false)}
+                className="size-7 rounded-lg border border-border bg-white flex items-center justify-center text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-colors"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Orders list */}
+          <div className="max-h-[400px] overflow-y-auto p-3 space-y-2">
             {recentOrders.length === 0 ? (
-              <p className="text-center text-muted-foreground py-10">No saved orders</p>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <UtensilsCrossed className="size-10 mb-3 opacity-20" />
+                <p className="text-sm font-medium">No saved orders</p>
+              </div>
             ) : (
               recentOrders.map(order => {
                 const isActive = activeHeldOrderId === order.id;
@@ -1979,31 +2002,47 @@ export default function PosTerminalPage() {
                         ? "Dine-in"
                         : "Saved";
                 return (
-                  <button
+                  <div
                     key={order.id}
-                    type="button"
-                    onClick={() => resumeOrder(order)}
                     className={cn(
-                      "w-full flex items-center justify-between p-4 rounded-xl border text-left transition-colors",
-                      isActive
-                        ? "bg-primary/10 border-primary/40"
-                        : "bg-muted/30 border-border hover:border-primary/30"
+                      "flex items-center gap-2 rounded-xl border transition-colors",
+                      isActive ? "bg-primary/10 border-primary/40" : "bg-muted/30 border-border"
                     )}
                   >
-                    <div className="flex items-center gap-3">
-                      <History className="size-5 text-primary" />
-                      <div>
+                    <button
+                      type="button"
+                      onClick={() => resumeOrder(order)}
+                      className="flex-1 flex items-center gap-3 p-3 text-left hover:opacity-80 transition-opacity"
+                    >
+                      <History className="size-5 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold">Order #{order.id}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">
                           {typeLabel} · {order.orderitem?.length || 0} items
                           {isActive ? " · In cart" : ""}
                         </p>
                       </div>
-                    </div>
-                    <span className={cn("text-sm font-bold", priceAmountClass)}>
-                      ${order.total?.toFixed(2)}
-                    </span>
-                  </button>
+                      <span className={cn("text-sm font-bold", priceAmountClass)}>
+                        ${order.total?.toFixed(2)}
+                      </span>
+                    </button>
+                    {/* Per-order delete */}
+                    <button
+                      type="button"
+                      title="Remove this saved order"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await clearLoadedHeldOrders([order.id], false);
+                        setRecentOrders(prev => prev.filter(o => o.id !== order.id));
+                        setHeldCount(c => Math.max(0, c - 1));
+                        if (activeHeldOrderId === order.id) setActiveHeldOrderId(null);
+                        showToast(`Order #${order.id} removed`, "success");
+                      }}
+                      className="size-7 rounded-lg mr-2 flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
                 );
               })
             )}

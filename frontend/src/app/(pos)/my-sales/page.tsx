@@ -56,6 +56,33 @@ import {
   chartAxisTick,
 } from "@/lib/dashboard-ui";
 
+type DatePreset = "today" | "yesterday" | "week" | "last-month" | "custom";
+
+function formatDateInput(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().split("T")[0];
+}
+
+function getPresetRange(preset: Exclude<DatePreset, "custom">) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (preset === "today") return { startDate: formatDateInput(today), endDate: formatDateInput(today) };
+  if (preset === "yesterday") {
+    const date = new Date(today);
+    date.setDate(date.getDate() - 1);
+    return { startDate: formatDateInput(date), endDate: formatDateInput(date) };
+  }
+  if (preset === "week") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    return { startDate: formatDateInput(start), endDate: formatDateInput(today) };
+  }
+  return {
+    startDate: formatDateInput(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+    endDate: formatDateInput(new Date(today.getFullYear(), today.getMonth(), 0)),
+  };
+}
+
 function getDayName(dateStr: string) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return days[new Date(dateStr).getDay()];
@@ -67,12 +94,8 @@ export default function MySalesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [pageSize, setPageSize] = useState(10);
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(new Date().setDate(new Date().getDate() - 30))
-      .toISOString()
-      .split("T")[0],
-    endDate: new Date().toISOString().split("T")[0],
-  });
+  const [datePreset, setDatePreset] = useState<DatePreset>("today");
+  const [dateRange, setDateRange] = useState(() => getPresetRange("today"));
   const { showToast } = useToast();
 
   const fetchMyOrders = useCallback(async () => {
@@ -93,6 +116,11 @@ export default function MySalesPage() {
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(val || 0);
+
+  const applyDatePreset = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset !== "custom") setDateRange(getPresetRange(preset));
+  };
 
   const rangeOrders = useMemo(() => {
     const start = new Date(dateRange.startDate);
@@ -184,23 +212,19 @@ export default function MySalesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 trezo-card p-2">
-          <div className="flex items-center gap-2 px-2">
-            <Calendar className="size-3.5 text-muted-foreground" />
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))}
-              className="text-xs font-semibold bg-transparent outline-none border-none cursor-pointer text-foreground"
-            />
-            <span className="text-muted-foreground">to</span>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange((prev) => ({ ...prev, endDate: e.target.value }))}
-              className="text-xs font-semibold bg-transparent outline-none border-none cursor-pointer text-foreground"
-            />
+          <div className="flex items-center gap-1 p-1 rounded-md bg-muted/40 overflow-x-auto max-w-full">
+            {([["today", "Today"], ["yesterday", "Yesterday"], ["week", "1 Week"], ["last-month", "Last Month"], ["custom", "Custom"]] as const).map(([value, label]) => (
+              <button key={value} type="button" onClick={() => applyDatePreset(value)} className={cn("h-8 px-2.5 rounded text-[11px] font-bold whitespace-nowrap transition-colors", datePreset === value ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-background")}>
+                {label}
+              </button>
+            ))}
           </div>
-          <Button
+          <div className={cn("items-center gap-2 px-2", datePreset === "custom" ? "flex" : "hidden")}>
+            <Calendar className="size-3.5 text-muted-foreground" />
+            <input type="date" value={dateRange.startDate} onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))} className="text-xs font-semibold bg-transparent outline-none border-none cursor-pointer text-foreground" />
+            <span className="text-muted-foreground">to</span>
+            <input type="date" value={dateRange.endDate} onChange={(e) => setDateRange((prev) => ({ ...prev, endDate: e.target.value }))} className="text-xs font-semibold bg-transparent outline-none border-none cursor-pointer text-foreground" />
+          </div>          <Button
             type="button"
             onClick={fetchMyOrders}
             disabled={loading}

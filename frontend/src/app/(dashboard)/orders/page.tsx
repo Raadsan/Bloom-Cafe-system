@@ -108,7 +108,7 @@ const ORDER_PAYMENT_METHODS: {
   icon: typeof Smartphone;
   providerName: string;
 }[] = [
-  { id: "evc_plus", name: "EVC Plus", icon: Smartphone, providerName: "EVC Plus" },
+  { id: "evc_plus", name: "Merchant", icon: Smartphone, providerName: "Merchant" },
   { id: "edahab", name: "eDahab", icon: Smartphone, providerName: "eDahab" },
   { id: "premier_wallet", name: "Premier Wallet", icon: Wallet, providerName: "Premier Wallet" },
 ];

@@ -13,8 +13,9 @@ export function resolveBrandingImageUrl(url?: string | null): string | null {
         return process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, "");
       }
       if (typeof window !== 'undefined') {
+        const protocol = window.location.protocol;
         const host = window.location.hostname;
-        return `http://${host}:7000`;
+        return `${protocol}//${host}:7000`;
       }
       return "http://127.0.0.1:7000";
     };

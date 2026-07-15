@@ -1,9 +1,10 @@
 /** Full customer menu URL encoded inside table QR codes. */
 export function getPublicMenuUrl(qrCode: string): string {
   const base =
-    typeof window !== "undefined"
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (typeof window !== "undefined"
       ? window.location.origin
-      : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:7000";
+      : "http://localhost:2000");
 
   return `${base}/menu/${encodeURIComponent(qrCode)}`;
 }

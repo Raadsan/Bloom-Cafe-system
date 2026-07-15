@@ -5,8 +5,9 @@ const getBaseUrl = () => {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol;
     const host = window.location.hostname;
-    return `http://${host}:7000/api`;
+    return `${protocol}//${host}:7000/api`;
   }
   return 'http://127.0.0.1:7000/api';
 };

@@ -30,8 +30,13 @@ const openSans = Open_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Restaurant System",
+  title: "Bloom Cofe",
   description: "Restaurant Management System with QR Code",
+  icons: {
+    icon: [{ url: "/bloom-icon.jpeg", type: "image/jpeg" }],
+    shortcut: "/bloom-icon.jpeg",
+    apple: "/bloom-icon.jpeg",
+  },
 };
 
 export default function RootLayout({

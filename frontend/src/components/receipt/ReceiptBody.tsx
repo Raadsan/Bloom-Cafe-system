@@ -91,9 +91,10 @@ export function ReceiptBody({
 }) {
   // QR points to public ticket page for this order
   const frontendBase =
-    typeof window !== "undefined"
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (typeof window !== "undefined"
       ? window.location.origin
-      : "http://localhost:2000";
+      : "http://localhost:2000");
   const ticketUrl = `${frontendBase}/pos/ticket/${data.orderId}`;
 
   const dateStr = new Date(data.createdAt).toLocaleDateString("en-US", {
