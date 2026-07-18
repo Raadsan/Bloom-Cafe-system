@@ -4,29 +4,29 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
-import userRoutes from './routes/userRoutes.js';
-import tableRoutes from './routes/tableRoutes.js';
-import categoryRoutes from './routes/categoryRoutes.js'
-import menuItemRoutes from './routes/menuItemRoutes.js'
-import orderRoutes from './routes/orderRoutes.js'
-import roleRoutes from './routes/roleRoutes.js'
-import authRoutes from './routes/authRoutes.js'
-import notificationRoutes from './routes/notificationRoutes.js'
-import paymentRoutes from './routes/paymentRoutes.js'
-import auditLogRoutes from './routes/auditLogRoutes.js'
-import reportRoutes from './routes/reportRoutes.js'
-import ingredientRoutes from './routes/ingredientRoutes.js'
-import bomRoutes from './routes/bomRoutes.js'
-import stockMovementRoutes from './routes/stockMovementRoutes.js'
-import trackingRoutes from './routes/trackingRoutes.js'
-import cartRoutes from './routes/cartRoutes.js'
-import menuRoutes from './routes/menuRoutes.js';
-import customerRoutes from './routes/customerRoutes.js'
-import expenseRoutes from './routes/expenseRoutes.js';
-import receiptSettingsRoutes from './routes/receiptSettingsRoutes.js'
-import addressRoutes from './routes/addressRoutes.js'
-import discountAdvertisementRoutes from './routes/discountAdvertisementRoutes.js'
-import compositeRoutes from './routes/compositeRoutes.js'
+import userRoutes from './modules/user/user.routes.js';
+import tableRoutes from './modules/table/table.routes.js';
+import categoryRoutes from './modules/category/category.routes.js';
+import menuItemRoutes from './modules/menuItem/menuItem.routes.js';
+import orderRoutes from './modules/order/order.routes.js';
+import roleRoutes from './modules/role/role.routes.js';
+import authRoutes from './modules/auth/auth.routes.js';
+import notificationRoutes from './modules/notification/notification.routes.js';
+import paymentRoutes from './modules/payment/payment.routes.js';
+import auditLogRoutes from './modules/auditLog/auditLog.routes.js';
+import reportRoutes from './modules/report/report.routes.js';
+import ingredientRoutes from './modules/ingredient/ingredient.routes.js';
+import bomRoutes from './modules/bom/bom.routes.js';
+import stockMovementRoutes from './modules/stockMovement/stockMovement.routes.js';
+import trackingRoutes from './modules/tracking/tracking.routes.js';
+import cartRoutes from './modules/cart/cart.routes.js';
+import menuRoutes from './modules/menu/menu.routes.js';
+import customerRoutes from './modules/customer/customer.routes.js';
+import expenseRoutes from './modules/expense/expense.routes.js';
+import receiptSettingsRoutes from './modules/receiptSettings/receiptSettings.routes.js';
+import addressRoutes from './modules/address/address.routes.js';
+import discountAdvertisementRoutes from './modules/discountAdvertisement/discountAdvertisement.routes.js';
+import compositeRoutes from './modules/composite/composite.routes.js';
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -46,7 +46,7 @@ app.use(cors({
   credentials: true
 }));
 
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 app.use('/api/users', userRoutes);
 app.use('/api/tables', tableRoutes);

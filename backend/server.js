@@ -20,12 +20,12 @@ import {
   ensureDiscountAdvertisementMenuItem,
   ensureCompositesMenuItem,
   warmAllMenusCache,
-} from './src/controllers/menuController.js'
+} from './src/modules/menu/menu.controller.js'
 import { initFirebase } from './src/utils/fcmService.js'
-import { warmAllMenuItemsCache } from './src/controllers/menuItemController.js'
-import { warmCompositesCache, warmComboFormCache } from './src/controllers/compositeController.js'
-import { warmReportCaches } from './src/controllers/reportController.js'
-import { warmCategoryCaches } from './src/controllers/categoryController.js'
+import { warmAllMenuItemsCache } from './src/modules/menuItem/menuItem.controller.js'
+import { warmCompositesCache, warmComboFormCache } from './src/modules/composite/composite.controller.js'
+import { warmReportCaches } from './src/modules/report/report.controller.js'
+import { warmCategoryCaches } from './src/modules/category/category.controller.js'
 import { isDbAuthError, isDbUnreachableError } from './src/utils/dbErrors.js'
 
 const skipStartupWarmup =
