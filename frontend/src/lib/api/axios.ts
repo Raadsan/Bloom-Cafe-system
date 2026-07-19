@@ -16,27 +16,30 @@ const BASE_URL = getBaseUrl();
 
 const api = axios.create({
   baseURL: BASE_URL,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
 
 // ── Attach JWT token on every request ────────────────────────────
-api.interceptors.request.use(
-  (config) => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+let refreshPromise: Promise<void> | null = null;
 
 // ── Auto-logout on 401 Unauthorized ──────────────────────────────
 // Skip redirect if already on the login page (so login errors show properly)
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
+      const original = error.config as typeof error.config & { _retried?: boolean };
+      const isRefresh = original?.url?.includes('/auth/refresh');
+      const isLoginRequest = original?.url?.includes('/auth/login') || original?.url?.includes('/auth/pos-login');
+      if (!original?._retried && !isRefresh && !isLoginRequest) {
+        original._retried = true;
+        try {
+          refreshPromise ??= api.post('/auth/refresh').then(() => undefined).finally(() => { refreshPromise = null; });
+          await refreshPromise;
+          return api.request(original);
+        } catch { /* redirect below */ }
+      }
       const path = window.location.pathname;
       const isLoginPage =
         path === '/login' ||
@@ -51,9 +54,8 @@ api.interceptors.response.use(
         path === '/my-sales' ||
         path === '/my-profile';
       if (!isLoginPage) {
-        localStorage.removeItem('token');
         localStorage.removeItem('auth_user');
-        window.location.href = isPosRoute ? '/pos/login' : '/login';
+        window.location.replace(isPosRoute ? '/pos/login' : '/login');
       }
     }
     return Promise.reject(error);

@@ -22,6 +22,7 @@ import {
 import { PermissionProvider } from "@/context/PermissionContext";
 import { pageHeaderBarTitleClass } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   onDebouncedEvent,
   REFRESH_NOTIFICATIONS,
@@ -29,7 +30,7 @@ import {
   NOTIFICATIONS_MARKED_ALL_READ,
 } from "@/lib/live-updates";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -341,4 +342,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </PermissionProvider>
     </SidebarProvider>
   );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return <ProtectedRoute>{<DashboardLayoutContent>{children}</DashboardLayoutContent>}</ProtectedRoute>;
 }

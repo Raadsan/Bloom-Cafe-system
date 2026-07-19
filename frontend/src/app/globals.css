@@ -341,7 +341,9 @@
     left: 0;
     top: 0;
     width: 80mm; /* Standard receipt width */
-    padding: 5mm;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
   }
   @page {
     size: auto;

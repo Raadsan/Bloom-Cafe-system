@@ -863,7 +863,7 @@ export default function WaiterCreateOrderPage() {
       </Dialog>
 
       {receiptData && (
-        <div id="printable-receipt" className="hidden print:block bg-white p-4">
+        <div id="printable-receipt" className="hidden print:block bg-white">
           <ReceiptBody data={receiptData} settings={receiptSettings} />
         </div>
       )}

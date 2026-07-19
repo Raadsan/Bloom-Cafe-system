@@ -448,8 +448,9 @@ export default function CompositesPage() {
       showToast("Combo deleted", "success");
       setIsDeleteOpen(false);
       resetForm();
-    } catch {
-      showToast("Delete failed", "error");
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      showToast(message || "Delete failed", "error");
     } finally {
       setSaving(false);
     }

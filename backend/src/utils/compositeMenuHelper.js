@@ -148,7 +148,7 @@ export async function loadMenuItemsForOrderSale(menuItemIds, prisma) {
   return { itemMap, componentMap }
 }
 
-export async function buildOrderItemsPayload(items, prisma) {
+export async function buildOrderItemsPayload(items, prisma, { allowOverrides = false } = {}) {
   const menuItemIds = items.map((item) => Number(item.menuItemId))
   const { itemMap, componentMap } = await loadMenuItemsForOrderSale(menuItemIds, prisma)
 
@@ -164,12 +164,34 @@ export async function buildOrderItemsPayload(items, prisma) {
     }
 
     const line = buildOrderLineFromMenuItem(menuItem, item.quantity)
+    if (allowOverrides) {
+      const qty = line.orderItem.quantity
+      const requestedRate = Number(item.unitPrice)
+      const requestedTax = Number(item.tax)
+      const requestedDiscount = Number(item.discountAmount)
+      const rate = Number.isFinite(requestedRate) && requestedRate >= 0
+        ? requestedRate
+        : line.orderItem.unitPrice
+      const tax = Number.isFinite(requestedTax)
+        ? Math.min(100, Math.max(0, requestedTax))
+        : line.orderItem.tax
+      const gross = rate * qty
+      const lineDiscount = Number.isFinite(requestedDiscount)
+        ? Math.min(gross, Math.max(0, requestedDiscount))
+        : 0
+      const effectiveUnitPrice = qty > 0 ? (gross - lineDiscount) / qty : 0
+      line.orderItem.unitPrice = effectiveUnitPrice
+      line.orderItem.tax = tax
+      line.subtotal = effectiveUnitPrice * qty
+      line.taxAmount = line.subtotal * (tax / 100)
+    }
     subTotal += line.subtotal
+    taxAmount += line.taxAmount
     orderItemsData.push(line.orderItem)
   }
 
-  // Flat 5% VAT for the whole order
-  taxAmount = subTotal * 0.05;
+  // Keep the legacy flat VAT outside POS; POS sends each edited line's tax rate.
+  if (!allowOverrides) taxAmount = subTotal * 0.05
 
   return { subTotal, taxAmount, orderItemsData }
 }

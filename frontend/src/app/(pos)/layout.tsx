@@ -29,6 +29,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { resolveBrandingImageUrl, STATIC_APP_LOGO } from "@/lib/branding";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -433,7 +434,7 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* Hidden printable receipt for recent orders printer */}
       {selectedOrder && (
-        <div id="printable-receipt" className="hidden print:block bg-white p-4">
+        <div id="printable-receipt" className="hidden print:block bg-white">
           <ReceiptBody
             data={orderToReceiptSnapshot(selectedOrder)}
             settings={receiptSettings}
@@ -458,8 +459,10 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   return (
-    <PosSearchProvider>
-      <PosLayoutInner>{children}</PosLayoutInner>
-    </PosSearchProvider>
+    <ProtectedRoute loginPath="/login">
+      <PosSearchProvider>
+        <PosLayoutInner>{children}</PosLayoutInner>
+      </PosSearchProvider>
+    </ProtectedRoute>
   );
 }

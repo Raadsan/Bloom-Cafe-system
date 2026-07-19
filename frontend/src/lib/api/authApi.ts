@@ -21,6 +21,7 @@ export interface AuthUser {
   avatarUrl?: string;
   role: string;
   roleId?: number;
+  authContext?: 'dashboard' | 'pos';
   createdAt?: string;
 }
 
@@ -42,7 +43,22 @@ export interface LoginResponse {
 }
 
 const USER_STORAGE_KEY = 'auth_user';
+const LOGOUT_COOKIE = 'restaurant_logout';
 let getMeInflight: Promise<AuthUser> | null = null;
+
+function clearLogoutLock(): void {
+  if (typeof document !== 'undefined') {
+    document.cookie = `${LOGOUT_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0`;
+    document.documentElement.style.visibility = '';
+  }
+}
+
+function setLogoutLock(hidePage = true): void {
+  if (typeof document !== 'undefined') {
+    document.cookie = `${LOGOUT_COOKIE}=1; Path=/; SameSite=Lax; Max-Age=604800`;
+    if (hidePage) document.documentElement.style.visibility = 'hidden';
+  }
+}
 
 /** Save user to localStorage */
 function saveUserToStorage(user: AuthUser): void {
@@ -67,7 +83,6 @@ function getUserFromStorage(): AuthUser | null {
 function clearUserFromStorage(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem('token');
   }
 }
 
@@ -90,6 +105,7 @@ function mapAuthUser(user: Record<string, unknown>): AuthUser {
     avatarUrl: (user.avatarUrl as string) || undefined,
     role: (user.role as string) || 'staff',
     roleId: user.roleId as number | undefined,
+    authContext: user.authContext === 'pos' ? 'pos' : 'dashboard',
     createdAt: user.createdAt
       ? new Date(user.createdAt as string).toISOString()
       : undefined,
@@ -113,11 +129,12 @@ export const authApi = {
       avatarUrl: user.avatarUrl || undefined,
       role: user.role,
       roleId: user.roleId,
+      authContext: user.authContext === 'pos' ? 'pos' : 'dashboard',
       createdAt: user.createdAt
     };
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('token', token);
+      clearLogoutLock();
       saveUserToStorage(authUser);
     }
 
@@ -133,7 +150,7 @@ export const authApi = {
     const authUser = mapAuthUser(user);
 
     if (typeof window !== "undefined") {
-      localStorage.setItem("token", token);
+      clearLogoutLock();
       saveUserToStorage(authUser);
     }
 
@@ -149,14 +166,14 @@ export const authApi = {
     const authUser = mapAuthUser(user);
 
     if (typeof window !== "undefined") {
-      localStorage.setItem("token", token);
+      clearLogoutLock();
       saveUserToStorage(authUser);
     }
 
     return { token, user: authUser };
   },
 
-  /** POS login — username + 4-digit PIN */
+  /** POS login — username + 6-digit PIN */
   posLogin: async (credentials: PosLoginCredentials): Promise<LoginResponse> => {
     const res = await api.post('/auth/pos-login', credentials);
     const { token, user } = res.data;
@@ -168,11 +185,12 @@ export const authApi = {
       phone: user.phone || undefined,
       role: user.role,
       roleId: user.roleId,
+      authContext: user.authContext === 'pos' ? 'pos' : 'dashboard',
       createdAt: user.createdAt,
     };
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('token', token);
+      clearLogoutLock();
       saveUserToStorage(authUser);
     }
 
@@ -226,12 +244,22 @@ export const authApi = {
     await api.post('/auth/reset-password', { email, newPassword });
   },
 
+  /** End a newly-created session that failed a permission check, without navigating. */
+  denySession: async (): Promise<void> => {
+    if (typeof window !== 'undefined') {
+      setLogoutLock(false);
+      clearUserFromStorage();
+    }
+    await api.post('/auth/logout').catch(() => {});
+  },
+
   /** Clear token + user cache and redirect to login. */
   logout: (redirectTo = '/login') => {
     if (typeof window !== 'undefined') {
-      void api.post('/auth/logout').catch(() => {});
+      setLogoutLock();
       clearUserFromStorage();
-      window.location.href = redirectTo;
+      void api.post('/auth/logout').catch(() => {});
+      window.location.replace(redirectTo);
     } else {
       clearUserFromStorage();
     }

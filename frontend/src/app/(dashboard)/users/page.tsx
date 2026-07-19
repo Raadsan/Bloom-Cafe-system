@@ -227,12 +227,12 @@ export default function UsersPage() {
         showToast("Username is required for POS staff", "error");
         return;
       }
-      if (isAddOpen && !/^\d{4}$/.test(formPosPin)) {
-        showToast("POS PIN must be exactly 4 digits", "error");
+      if (isAddOpen && !/^\d{6}$/.test(formPosPin)) {
+        showToast("POS PIN must be exactly 6 digits", "error");
         return;
       }
-      if (isEditOpen && formPosPin && !/^\d{4}$/.test(formPosPin)) {
-        showToast("POS PIN must be exactly 4 digits", "error");
+      if (isEditOpen && formPosPin && !/^\d{6}$/.test(formPosPin)) {
+        showToast("POS PIN must be exactly 6 digits", "error");
         return;
       }
     } else {
@@ -629,15 +629,15 @@ export default function UsersPage() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-[#1E293B]">
-                    {isEditOpen ? "New PIN (optional)" : "PIN (4 digits) *"}
+                    {isEditOpen ? "New PIN (optional, 6 digits)" : "PIN (6 digits) *"}
                   </label>
                   <input
                     type="password"
                     inputMode="numeric"
-                    maxLength={4}
+                    maxLength={6}
                     value={formPosPin}
-                    onChange={(e) => setFormPosPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                    placeholder={isEditOpen ? "Leave blank to keep current" : "1234"}
+                    onChange={(e) => setFormPosPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder={isEditOpen ? "Leave blank to keep current" : "123456"}
                     autoComplete="off"
                     className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-4 focus:ring-primary/5 transition-all text-[15px] font-medium tracking-[0.3em]"
                   />

@@ -14,8 +14,8 @@ const router = express.Router()
 router.get('/', protect, getAllComposites)
 router.get('/form-data', protect, getComboFormData)
 router.get('/:id', protect, getCompositeById)
-router.post('/', protect, checkPermission('/menus', 'canAdd'), createComposite)
-router.put('/:id', protect, checkPermission('/menus', 'canEdit'), updateComposite)
-router.delete('/:id', protect, checkPermission('/menus', 'canDelete'), deleteComposite)
+router.post('/', protect, checkPermission('/composites', 'canAdd'), createComposite)
+router.put('/:id', protect, checkPermission('/composites', 'canEdit'), updateComposite)
+router.delete('/:id', protect, checkPermission('/composites', 'canDelete'), deleteComposite)
 
 export default router

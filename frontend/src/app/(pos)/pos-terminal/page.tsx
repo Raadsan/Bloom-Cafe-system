@@ -156,7 +156,17 @@ interface CartLine {
   categoryName?: string;
   variant?: string;
   lineNote?: string;
+  lineDiscount: number;
   isComposite?: boolean;
+}
+
+type LineEditField = "quantity" | "price" | "discount" | "tax";
+interface LineEditDraft {
+  quantity: string;
+  price: string;
+  discount: string;
+  tax: string;
+  note: string;
 }
 
 function cartLineKey(id: number, variant?: string): string {
@@ -180,6 +190,7 @@ function normalizeCartLine(raw: unknown): CartLine | null {
     categoryName: item.categoryName as string | undefined,
     variant,
     lineNote: item.lineNote as string | undefined,
+    lineDiscount: Math.max(0, Number(item.lineDiscount) || 0),
     isComposite: Boolean(item.isComposite),
   };
 }
@@ -227,6 +238,8 @@ export default function PosTerminalPage() {
   const [productOptions, setProductOptions] = useState<Record<number, ProductOpts>>({});
   const [activeProductId, setActiveProductId] = useState<number | null>(null);
   const [editingLineKey, setEditingLineKey] = useState<string | null>(null);
+  const [lineEditDraft, setLineEditDraft] = useState<LineEditDraft | null>(null);
+  const [lineEditField, setLineEditField] = useState<LineEditField>("quantity");
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
@@ -637,6 +650,7 @@ export default function PosTerminalPage() {
           variant,
           isComposite: product.isComposite,
           lineNote: comboNote,
+          lineDiscount: 0,
         },
       ];
     });
@@ -658,10 +672,64 @@ export default function PosTerminalPage() {
     );
   };
 
+  const openLineEditor = (item: CartLine) => {
+    setEditingLineKey(item.key);
+    setLineEditDraft({
+      quantity: String(item.quantity),
+      price: item.price.toFixed(2),
+      discount: item.lineDiscount.toFixed(2),
+      tax: item.tax.toFixed(2),
+      note: item.lineNote || "",
+    });
+    setLineEditField("quantity");
+  };
+
+  const closeLineEditor = () => {
+    setEditingLineKey(null);
+    setLineEditDraft(null);
+  };
+
+  const updateLineDraft = (field: LineEditField, value: string) => {
+    setLineEditDraft(current => current ? { ...current, [field]: value } : current);
+  };
+
+  const pressLineKey = (key: string) => {
+    if (!lineEditDraft) return;
+    const current = lineEditDraft[lineEditField];
+    if (key === "C") {
+      updateLineDraft(lineEditField, "");
+      return;
+    }
+    if (key === "backspace") {
+      updateLineDraft(lineEditField, current.slice(0, -1));
+      return;
+    }
+    if (key === "." && current.includes(".")) return;
+    updateLineDraft(lineEditField, `${current}${key}`);
+  };
+
+  const saveLineEditor = () => {
+    if (!editingLineKey || !lineEditDraft) return;
+    const quantity = Math.max(1, Math.floor(Number(lineEditDraft.quantity) || 1));
+    const price = Math.max(0, Number(lineEditDraft.price) || 0);
+    const tax = Math.min(100, Math.max(0, Number(lineEditDraft.tax) || 0));
+    const discount = Math.min(price * quantity, Math.max(0, Number(lineEditDraft.discount) || 0));
+    setCart(current => current.map(item => item.key === editingLineKey
+      ? { ...item, quantity, price, tax, lineDiscount: discount, lineNote: lineEditDraft.note.trim() || undefined }
+      : item
+    ));
+    closeLineEditor();
+  };
+
   const isInCart = (productId: number) => cart.some(c => c.id === productId);
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const taxAmount = subtotal * 0.05;
+  const lineNet = (item: CartLine) =>
+    Math.max(0, item.price * item.quantity - item.lineDiscount);
+  const subtotal = cart.reduce((sum, item) => sum + lineNet(item), 0);
+  const taxAmount = cart.reduce(
+    (sum, item) => sum + lineNet(item) * (Math.max(0, item.tax) / 100),
+    0
+  );
   const discountAmount =
     discountType === "percentage" ? (subtotal * discount) / 100 : discount;
   const total = Math.max(0, subtotal + taxAmount - discountAmount);
@@ -773,7 +841,13 @@ export default function PosTerminalPage() {
       customerName: getCustomerNamePayload(),
       customerPhone: phone,
       notes: buildOrderNotes(status === "held" ? "Held Order" : undefined),
-      items: cart.map(i => ({ menuItemId: i.id, quantity: i.quantity })),
+      items: cart.map(i => ({
+        menuItemId: i.id,
+        quantity: i.quantity,
+        unitPrice: i.price,
+        tax: i.tax,
+        discountAmount: i.lineDiscount,
+      })),
       ...getDiscountPayload(),
     };
   };
@@ -957,6 +1031,7 @@ export default function PosTerminalPage() {
         name: m.name,
         price: oi.unitPrice ?? getMenuItemEffectivePrice(m),
         tax: oi.tax ?? (m.tax || 0),
+        lineDiscount: 0,
         quantity: oi.quantity,
         imageUrl: m.imageUrl,
       };
@@ -1031,7 +1106,7 @@ export default function PosTerminalPage() {
       items: cart.map(item => ({
         menuItemId: item.id,
         name: item.variant ? `${item.name} (${item.variant})` : item.name,
-        price: item.price,
+        price: item.quantity > 0 ? lineNet(item) / item.quantity : 0,
         quantity: item.quantity,
       })),
       subtotal,
@@ -1437,7 +1512,7 @@ export default function PosTerminalPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setEditingLineKey(item.key)}
+                    onClick={() => openLineEditor(item)}
                     className="flex-1 min-w-0 text-left text-xs font-medium text-foreground truncate hover:text-primary"
                     title={lineLabel}
                   >
@@ -1468,8 +1543,17 @@ export default function PosTerminalPage() {
                       priceAmountClass
                     )}
                   >
-                    ${(item.price * item.quantity).toFixed(2)}
+                    ${lineNet(item).toFixed(2)}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => openLineEditor(item)}
+                    className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition hover:bg-primary/10 hover:text-primary"
+                    aria-label={`Edit ${item.name}`}
+                    title="Edit item"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => removeFromCart(item.key)}
@@ -1564,29 +1648,127 @@ export default function PosTerminalPage() {
         </div>
       </aside>
 
-      {/* Line note edit */}
-      <Dialog open={!!editingLineKey} onOpenChange={open => !open && setEditingLineKey(null)}>
-        <DialogContent className="sm:max-w-[360px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Item note</DialogTitle>
-          </DialogHeader>
-          <textarea
-            rows={3}
-            value={cart.find(c => c.key === editingLineKey)?.lineNote || ""}
-            onChange={e => {
-              const val = e.target.value;
-              setCart(prev =>
-                prev.map(item =>
-                  item.key === editingLineKey ? { ...item, lineNote: val } : item
-                )
-              );
-            }}
-            placeholder="e.g. no sugar"
-            className="w-full px-3 py-2 text-sm border border-border rounded-lg outline-none focus:border-primary resize-none"
-          />
-          <DialogFooter>
-            <Button onClick={() => setEditingLineKey(null)} className={cn(btnCreatePage, "w-full rounded-xl")}>
-              Done
+      {/* Cart line update */}
+      <Dialog open={!!editingLineKey && !!lineEditDraft} onOpenChange={open => !open && closeLineEditor()}>
+        <DialogContent className="sm:max-w-[500px] gap-0 overflow-hidden rounded-xl border-zinc-200 bg-white p-0 [&>button]:hidden">
+          <DialogClose asChild>
+            <button
+              type="button"
+              className="absolute right-4 top-4 z-20 flex size-6 items-center justify-center rounded-full bg-red-600 text-white transition hover:bg-red-700"
+              aria-label="Close item editor"
+            >
+              <X className="size-3.5" />
+            </button>
+          </DialogClose>
+
+          <div className="border-b border-zinc-200 px-5 py-4 pr-12">
+            <DialogTitle className="text-lg font-bold text-zinc-900">
+              Update {cart.find(item => item.key === editingLineKey)?.name || "Item"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Update quantity, price, discount, tax rate, and item note.
+            </DialogDescription>
+          </div>
+
+          {lineEditDraft && (
+            <div className="space-y-4 p-5">
+              <div className="grid grid-cols-2 gap-4">
+                {([
+                  { key: "tax", label: "Tax Rate", suffix: "%" },
+                  { key: "quantity", label: "Quantity" },
+                  { key: "price", label: "Rate" },
+                  { key: "discount", label: "Discount Amount" },
+                ] as const).map(field => (
+                  <label key={field.key} className="space-y-1.5 text-sm font-medium text-zinc-700">
+                    <span>{field.label}</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={field.key === "quantity" ? 1 : 0}
+                        max={field.key === "tax" ? 100 : undefined}
+                        step={field.key === "quantity" ? 1 : 0.01}
+                        value={lineEditDraft[field.key]}
+                        onFocus={() => setLineEditField(field.key)}
+                        onChange={event => updateLineDraft(field.key, event.target.value)}
+                        className={cn(
+                          "h-11 w-full rounded-md border bg-white px-3 text-sm outline-none transition focus:ring-2 focus:ring-primary/15",
+                          "suffix" in field ? "pr-9" : "",
+                          lineEditField === field.key ? "border-primary" : "border-zinc-200"
+                        )}
+                      />
+                      {"suffix" in field && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500">{field.suffix}</span>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <label className="block space-y-1.5 text-sm font-medium text-zinc-700">
+                <span>Item Note</span>
+                <input
+                  type="text"
+                  value={lineEditDraft.note}
+                  onChange={event => setLineEditDraft(current => current ? { ...current, note: event.target.value } : current)}
+                  placeholder="e.g. no sugar"
+                  className="h-10 w-full rounded-md border border-zinc-200 px-3 text-sm outline-none focus:border-primary"
+                />
+              </label>
+
+              <div className="grid grid-cols-4 gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+                {([
+                  ["quantity", "Qty"],
+                  ["price", "Rate"],
+                  ["discount", "Discount"],
+                  ["tax", "Tax"],
+                ] as const).map(([field, label]) => (
+                  <button
+                    key={field}
+                    type="button"
+                    onClick={() => setLineEditField(field)}
+                    className={cn(
+                      "h-11 rounded-md border text-xs font-bold transition",
+                      lineEditField === field
+                        ? "border-primary bg-primary text-white"
+                        : "border-zinc-200 bg-white text-zinc-600 hover:border-primary/50"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 rounded-lg border border-zinc-200 p-3">
+                {["7", "8", "9", "4", "5", "6", "1", "2", "3", "C", "0", "."].map(key => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => pressLineKey(key)}
+                    className={cn(
+                      "h-12 rounded-md bg-zinc-50 text-lg font-semibold text-zinc-800 transition hover:bg-zinc-100",
+                      key === "C" && "bg-amber-400 text-white hover:bg-amber-500"
+                    )}
+                  >
+                    {key}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => pressLineKey("backspace")}
+                  className="col-span-3 h-10 rounded-md border border-red-300 text-sm font-bold text-red-600 transition hover:bg-red-50"
+                >
+                  Backspace
+                </button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-row justify-end gap-2 border-t border-zinc-200 bg-zinc-50 px-5 py-4">
+            <Button type="button" variant="outline" onClick={closeLineEditor} className="rounded-md">
+              Cancel
+            </Button>
+            <Button type="button" onClick={saveLineEditor} className={cn(btnCreatePage, "rounded-md")}>
+              Update
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1642,6 +1824,50 @@ export default function PosTerminalPage() {
                 })}
               </div>
             </div>
+
+            {orderType === "takeaway" && (
+              <div className="space-y-3 border-t border-zinc-100 pt-4">
+                <label className="text-xs font-semibold text-zinc-500 uppercase block tracking-wide">
+                  When to pick up
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["now", "later"] as const).map(timing => (
+                    <button
+                      key={timing}
+                      type="button"
+                      onClick={() => handleTakeawayTimingChange(timing)}
+                      className={cn(
+                        "h-10 rounded-lg border-2 text-xs font-bold capitalize transition-all",
+                        takeawayTiming === timing
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-zinc-200 text-zinc-500 hover:border-primary/40"
+                      )}
+                    >
+                      {timing}
+                    </button>
+                  ))}
+                </div>
+
+                {takeawayTiming === "later" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="date"
+                      value={pickupDate}
+                      onChange={e => setPickupDate(e.target.value)}
+                      aria-label="Pickup date"
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm"
+                    />
+                    <input
+                      type="time"
+                      value={pickupTime}
+                      onChange={e => setPickupTime(e.target.value)}
+                      aria-label="Pickup time"
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 2. Customer Info (Read Only) */}
             <div className="space-y-2">
@@ -2106,7 +2332,7 @@ export default function PosTerminalPage() {
 
       {/* Hidden printable receipt */}
       {receiptData && (
-        <div id="printable-receipt" className="hidden print:block bg-white p-4">
+        <div id="printable-receipt" className="hidden print:block bg-white">
           <ReceiptBody data={receiptData} settings={receiptSettings} />
         </div>
       )}

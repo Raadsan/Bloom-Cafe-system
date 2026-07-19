@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import prisma from '../config/db.js'
+import { ACCESS_COOKIE, readCookie } from '../utils/authCookies.js'
 
 // Production-grade in-memory cache for user sessions and permissions to eliminate remote DB latency
 const userCache = new Map()
@@ -40,16 +41,21 @@ export const protect = async (req, res, next) => {
   try {
     let token = req.headers.authorization
 
-    if (!token || !token.startsWith('Bearer ')) {
+    if (token?.startsWith('Bearer ')) {
+      token = token.split(' ')[1]
+    } else {
+      token = readCookie(req, ACCESS_COOKIE)
+    }
+
+    if (!token) {
       return res.status(401).json({
         success: false,
         message: 'Not authorized, no token provided'
       })
     }
 
-    token = token.split(' ')[1]
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    if (decoded.type && decoded.type !== 'access') throw new Error('Invalid token type')
 
     // Load from cache to prevent remote database network roundtrips on every request
     const user = await getCachedUser(decoded.id)
@@ -73,7 +79,8 @@ export const protect = async (req, res, next) => {
       email: user.email,
       role: user.role.name,
       roleId: user.roleId,
-      fullName: user.fullName
+      fullName: user.fullName,
+      authContext: decoded.authContext || 'dashboard'
     }
 
     next()

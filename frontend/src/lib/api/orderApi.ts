@@ -59,7 +59,13 @@ export interface CreateOrderPayload {
   discountAmount?: number;
   discountType?: 'percentage' | 'fixed';
   discountValue?: number;
-  items: { menuItemId: number; quantity: number }[];
+  items: {
+    menuItemId: number;
+    quantity: number;
+    unitPrice?: number;
+    tax?: number;
+    discountAmount?: number;
+  }[];
 }
 
 export interface PosCheckoutPayload extends CreateOrderPayload {
@@ -85,6 +91,8 @@ export type GetAllOrdersParams = {
   posQueue?: boolean;
   kitchenQueue?: boolean;
   includeServed?: boolean;
+  startDate?: string;
+  endDate?: string;
   limit?: number;
 };
 
@@ -149,6 +157,8 @@ async function fetchOrdersFromNetwork(params?: GetAllOrdersParams): Promise<Orde
   if (params?.posQueue) query.set('posQueue', 'true');
   if (params?.kitchenQueue) query.set('kitchenQueue', 'true');
   if (params?.includeServed) query.set('includeServed', 'true');
+  if (params?.startDate) query.set('startDate', params.startDate);
+  if (params?.endDate) query.set('endDate', params.endDate);
   if (params?.limit) query.set('limit', String(params.limit));
 
   const request = api

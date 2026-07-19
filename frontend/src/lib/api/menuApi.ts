@@ -54,35 +54,21 @@ let allMenusMem: { data: Menu[]; at: number } | null = null;
 let allMenusInflight: Promise<Menu[]> | null = null;
 
 function readLocalCache(roleId: number): Menu[] | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const cached = localStorage.getItem(MENU_CACHE_KEY(roleId));
-    if (cached) return JSON.parse(cached) as Menu[];
-  } catch { /* ignore */ }
+  void roleId;
   return null;
 }
 
 function writeLocalCache(roleId: number, data: Menu[]) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(MENU_CACHE_KEY(roleId), JSON.stringify(data));
-  } catch { /* ignore */ }
+  void roleId;
+  void data;
 }
 
 function readAllMenusLocal(): Menu[] | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const cached = localStorage.getItem(ALL_MENUS_CACHE_KEY);
-    if (cached) return JSON.parse(cached) as Menu[];
-  } catch { /* ignore */ }
   return null;
 }
 
 function writeAllMenusLocal(data: Menu[]) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(ALL_MENUS_CACHE_KEY, JSON.stringify(data));
-  } catch { /* ignore */ }
+  void data;
 }
 
 function setAllMenusMem(data: Menu[]) {
@@ -144,24 +130,10 @@ export function syncRoleCachesFromAllMenus(allMenus: Menu[]) {
     writeLocalCache(roleId, patched);
   });
 
-  if (typeof window !== 'undefined') {
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith('sidebar_menus_'))
-      .forEach((key) => {
-        try {
-          const roleId = Number(key.replace('sidebar_menus_', ''));
-          if (!Number.isFinite(roleId)) return;
-          const raw = localStorage.getItem(key);
-          if (!raw) return;
-          const parsed = JSON.parse(raw) as Menu[];
-          writeLocalCache(roleId, patchRoleList(parsed));
-        } catch { /* ignore */ }
-      });
-  }
 }
 
 export const menuApi = {
-  peekAllMenus: (): Menu[] | null => allMenusMem?.data ?? readAllMenusLocal(),
+  peekAllMenus: (): Menu[] | null => allMenusMem?.data ?? null,
 
   setAllMenusCache: (data: Menu[]) => {
     setAllMenusMem(data);

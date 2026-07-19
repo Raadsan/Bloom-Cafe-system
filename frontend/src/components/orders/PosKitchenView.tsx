@@ -12,6 +12,8 @@ import {
   User,
   Eye,
   PackageCheck,
+  Calendar,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { orderApi, Order } from "@/lib/api/orderApi";
@@ -201,6 +203,10 @@ interface PosKitchenViewProps {
   loading: boolean;
   menuItems: MenuItem[];
   onRefresh: (forceRefresh?: boolean) => Promise<void>;
+  datePreset: "today" | "yesterday" | "week" | "last-month" | "custom";
+  dateRange: { startDate: string; endDate: string };
+  onDatePresetChange: (preset: "today" | "yesterday" | "week" | "last-month" | "custom") => void;
+  onDateRangeChange: React.Dispatch<React.SetStateAction<{ startDate: string; endDate: string }>>;
 }
 
 export default function PosKitchenView({
@@ -208,6 +214,10 @@ export default function PosKitchenView({
   loading,
   menuItems,
   onRefresh,
+  datePreset,
+  dateRange,
+  onDatePresetChange,
+  onDateRangeChange,
 }: PosKitchenViewProps) {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<KitchenTab>("pending");
@@ -299,8 +309,59 @@ export default function PosKitchenView({
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden">
       <div className="shrink-0 px-4 pt-4 pb-3 border-b border-zinc-100 bg-white">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div>
         <h1 className="text-xl font-bold text-[#1e293b] uppercase tracking-tight">Kitchen</h1>
         <p className="text-xs text-zinc-500 mt-0.5">Pending → Preparing → Ready → Served</p>
+          </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-100 bg-zinc-50/60 p-2 md:max-w-[70%]">
+          <div className="flex items-center gap-1 rounded-lg bg-white p-1 overflow-x-auto max-w-full">
+            {([['today', 'Today'], ['yesterday', 'Yesterday'], ['week', '1 Week'], ['last-month', 'Last Month'], ['custom', 'Custom']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onDatePresetChange(value)}
+                className={cn(
+                  "h-8 px-2.5 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors",
+                  datePreset === value ? "bg-primary text-white shadow-sm" : "text-zinc-500 hover:bg-zinc-100"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {datePreset === "custom" && (
+            <div className="flex flex-wrap items-center gap-2 px-1">
+              <Calendar className="size-3.5 text-zinc-400" />
+              <input
+                type="date"
+                value={dateRange.startDate}
+                max={dateRange.endDate}
+                onChange={event => onDateRangeChange(previous => ({ ...previous, startDate: event.target.value }))}
+                className="text-xs font-semibold bg-transparent outline-none text-zinc-700"
+              />
+              <span className="text-xs text-zinc-400">to</span>
+              <input
+                type="date"
+                value={dateRange.endDate}
+                min={dateRange.startDate}
+                onChange={event => onDateRangeChange(previous => ({ ...previous, endDate: event.target.value }))}
+                className="text-xs font-semibold bg-transparent outline-none text-zinc-700"
+              />
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading}
+            onClick={() => onRefresh(true)}
+            className="h-9 px-3 rounded-lg text-xs font-bold gap-1.5"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+        </div>
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {TAB_CONFIG.map(tab => {
             const Icon = tab.icon;

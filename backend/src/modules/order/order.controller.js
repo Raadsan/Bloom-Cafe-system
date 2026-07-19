@@ -760,8 +760,8 @@ const orderListInflight = new Map()
 const ORDER_LIST_TTL_MS = 90 * 1000
 
 function orderListCacheKey(req) {
-  const { status, onlyMine, readyPickup, waiterHistory, posQueue, kitchenQueue, includeServed, limit } = req.query
-  return `${req.user?.id || 0}:${status || ''}:${onlyMine || ''}:${readyPickup || ''}:${waiterHistory || ''}:${posQueue || ''}:${kitchenQueue || ''}:${includeServed || ''}:${limit || ''}`
+  const { status, onlyMine, readyPickup, waiterHistory, posQueue, kitchenQueue, includeServed, startDate, endDate, limit } = req.query
+  return `${req.user?.id || 0}:${status || ''}:${onlyMine || ''}:${readyPickup || ''}:${waiterHistory || ''}:${posQueue || ''}:${kitchenQueue || ''}:${includeServed || ''}:${startDate || ''}:${endDate || ''}:${limit || ''}`
 }
 
 function parseOrderLimit(req, fallback = 80) {
@@ -961,7 +961,7 @@ export const createPosCheckout = async (req, res) => {
       }
     }
 
-    const priced = await buildOrderItemsPayload(items, prisma)
+    const priced = await buildOrderItemsPayload(items, prisma, { allowOverrides: true })
     if (priced.error) {
       return res.status(400).json({ success: false, message: priced.error })
     }
@@ -1407,11 +1407,29 @@ export const getAllOrders = async (req, res) => {
       return res.json({ success: true, data: orders })
     }
 
-    const { status, onlyMine, readyPickup } = req.query
+    const { status, onlyMine, readyPickup, startDate, endDate } = req.query
     const isWaiterHistory = req.query.waiterHistory === 'true'
 
     const where = {}
     if (status) where.status = status
+    if (startDate || endDate) {
+      const createdAt = {}
+      if (startDate) {
+        const start = new Date(startDate)
+        if (Number.isNaN(start.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid startDate' })
+        }
+        createdAt.gte = start
+      }
+      if (endDate) {
+        const end = new Date(endDate)
+        if (Number.isNaN(end.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid endDate' })
+        }
+        createdAt.lte = end
+      }
+      where.createdAt = createdAt
+    }
 
     const userRole = req.user?.role?.toLowerCase()
     let useLightInclude = false

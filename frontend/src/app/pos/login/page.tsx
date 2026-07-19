@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useCallback, useRef } from "react";
-import { ArrowRight, Loader2, Lock, User } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { authApi } from "@/lib/api/authApi";
 import { APP_SYSTEM_NAME, APP_VERSION } from "@/lib/constants";
 import { LoginShell, loginSubmitButtonClass } from "@/components/auth/LoginShell";
 
-const PIN_LENGTH = 4;
+const PIN_LENGTH = 6;
 
 export default function PosLoginPage() {
   const { showToast } = useToast();
@@ -16,7 +16,8 @@ export default function PosLoginPage() {
   const [pin, setPin] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const pinInputRef = useRef<HTMLInputElement>(null);
+  const [showPin, setShowPin] = useState(false);
+  const pinInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const submitLogin = useCallback(
     async (user: string, pinCode: string) => {
@@ -29,8 +30,9 @@ export default function PosLoginPage() {
           username: user.trim().toLowerCase(),
           pin: pinCode,
         });
+
         showToast("Login successful! Redirecting...", "success");
-        window.location.href = "/pos-terminal";
+        window.location.replace("/pos-terminal");
       } catch (err: unknown) {
         const axiosErr = err as {
           message?: string;
@@ -42,7 +44,7 @@ export default function PosLoginPage() {
             : axiosErr.response?.data?.message || "Invalid username or PIN";
         setError(message);
         setPin("");
-        pinInputRef.current?.focus();
+        pinInputRefs.current[0]?.focus();
         showToast(message, "error");
       } finally {
         setIsLoading(false);
@@ -78,7 +80,7 @@ export default function PosLoginPage() {
               onKeyDown={e => {
                 if (e.key === "Enter" && username.trim()) {
                   e.preventDefault();
-                  pinInputRef.current?.focus();
+                  pinInputRefs.current[0]?.focus();
                 }
               }}
               placeholder="your.username"
@@ -93,28 +95,66 @@ export default function PosLoginPage() {
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="pos-pin" className="text-sm font-medium text-zinc-700">
+          <label htmlFor="pos-pin-0" className="text-sm font-medium text-zinc-700">
             PIN
           </label>
-          <div className="group relative">
-            <Lock className="absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-primary" />
-            <input
-              ref={pinInputRef}
-              id="pos-pin"
-              type="password"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={PIN_LENGTH}
-              value={pin}
-              onChange={e => {
-                setPin(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH));
+          <div className="flex w-full items-center gap-2.5">
+            <Lock className="h-5 w-5 shrink-0 text-zinc-400" />
+            <div
+              className="grid min-w-0 flex-1 grid-cols-6 gap-2"
+              onPaste={e => {
+                e.preventDefault();
+                const digits = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, PIN_LENGTH);
+                if (!digits) return;
+                setPin(digits);
                 setError("");
+                pinInputRefs.current[Math.min(digits.length, PIN_LENGTH) - 1]?.focus();
               }}
-              disabled={isLoading}
-              placeholder="••••"
-              className="auth-input"
-              required
-            />
+            >
+              {Array.from({ length: PIN_LENGTH }, (_, index) => (
+                <input
+                  key={index}
+                  ref={element => { pinInputRefs.current[index] = element; }}
+                  id={`pos-pin-${index}`}
+                  type={showPin ? "text" : "password"}
+                  inputMode="numeric"
+                  autoComplete={index === 0 ? "one-time-code" : "off"}
+                  maxLength={1}
+                  value={pin[index] || ""}
+                  onChange={e => {
+                    const digit = e.target.value.replace(/\D/g, "").slice(-1);
+                    const nextPin = digit
+                      ? `${pin.slice(0, index)}${digit}${pin.slice(index + 1)}`
+                      : `${pin.slice(0, index)}${pin.slice(index + 1)}`;
+                    setPin(nextPin.slice(0, PIN_LENGTH));
+                    setError("");
+                    if (digit && index < PIN_LENGTH - 1) pinInputRefs.current[index + 1]?.focus();
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === "Backspace" && !pin[index] && index > 0) {
+                      e.preventDefault();
+                      setPin(pin.slice(0, index - 1) + pin.slice(index));
+                      pinInputRefs.current[index - 1]?.focus();
+                    }
+                    if (e.key === "ArrowLeft" && index > 0) pinInputRefs.current[index - 1]?.focus();
+                    if (e.key === "ArrowRight" && index < PIN_LENGTH - 1) pinInputRefs.current[index + 1]?.focus();
+                  }}
+                  onFocus={e => e.currentTarget.select()}
+                  disabled={isLoading}
+                  aria-label={`PIN digit ${index + 1}`}
+                  className="h-14 min-w-0 w-full rounded-md border border-zinc-300 bg-white text-center text-xl font-bold text-zinc-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                  required
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPin(value => !value)}
+              className="flex size-10 shrink-0 items-center justify-center rounded-md text-zinc-400 transition hover:bg-zinc-100 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              aria-label={showPin ? "Hide PIN" : "Show PIN"}
+            >
+              {showPin ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+            </button>
           </div>
         </div>
 

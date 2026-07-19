@@ -23,7 +23,7 @@ function sanitizeUser(user) {
 }
 
 function isValidPosPin(pin) {
-  return typeof pin === 'string' && /^\d{4}$/.test(pin);
+  return typeof pin === 'string' && /^\d{6}$/.test(pin);
 }
 
 function isPosRole(role) {
@@ -106,7 +106,7 @@ export const createUser = async (req, res) => {
       if (!posPin || !isValidPosPin(String(posPin))) {
         return res.status(400).json({
           success: false,
-          message: 'POS PIN must be exactly 4 digits',
+          message: 'POS PIN must be exactly 6 digits',
         })
       }
 
@@ -336,7 +336,7 @@ export const updateUser = async (req, res) => {
         } else if (!isValidPosPin(String(posPin))) {
           return res.status(400).json({
             success: false,
-            message: 'POS PIN must be exactly 4 digits',
+            message: 'POS PIN must be exactly 6 digits',
           })
         } else {
           nextPosPin = await bcrypt.hash(String(posPin), 10)
@@ -348,7 +348,7 @@ export const updateUser = async (req, res) => {
       if (!nextPosPin) {
         return res.status(400).json({
           success: false,
-          message: 'POS PIN must be exactly 4 digits',
+          message: 'POS PIN must be exactly 6 digits',
         })
       }
     }

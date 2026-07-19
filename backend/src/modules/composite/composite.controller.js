@@ -544,7 +544,13 @@ export const deleteComposite = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Combo not found' })
     }
 
-    await prisma.menuitem.delete({ where: { id } })
+    // Preserve historical order lines; archive ordered combos and hard-delete unused ones.
+    const orderReferences = await prisma.orderitem.count({ where: { menuItemId: id } })
+    if (orderReferences > 0) {
+      await prisma.menuitem.update({ where: { id }, data: { isAvailable: false, isComposite: false } })
+    } else {
+      await prisma.menuitem.delete({ where: { id } })
+    }
 
     void logAudit({
       userId: req.user?.id,

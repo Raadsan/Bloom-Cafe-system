@@ -29,9 +29,9 @@ export default function LoginPage() {
 
       const userRole = res?.user?.role?.toLowerCase();
       if (userRole === "pos") {
-        window.location.href = "/pos-terminal";
+        window.location.replace("/pos-terminal");
       } else {
-        window.location.href = "/dashboard";
+        window.location.replace("/dashboard");
       }
     } catch (err: unknown) {
       const axiosErr = err as {
@@ -65,7 +65,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="admin@restaurant.com"
+              placeholder="Enter your email"
               autoComplete="email"
               disabled={isLoading}
               className="auth-input"

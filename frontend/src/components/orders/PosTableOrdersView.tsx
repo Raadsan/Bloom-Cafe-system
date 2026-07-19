@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Clock, Edit, Eye, History, Search, Trash2 } from "lucide-react";
+import { Calendar, Clock, Edit, Eye, History, RefreshCw, Search, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -58,6 +58,7 @@ import {
 } from "@/lib/dashboard-ui";
 
 type QueueTab = "pending" | "history";
+type DatePreset = "today" | "yesterday" | "week" | "last-month" | "custom";
 
 const HISTORY_STATUSES = new Set(["served", "cancelled", "completed"]);
 
@@ -119,6 +120,31 @@ function getOrderTypeLabel(order: Order) {
   return "Takeaway";
 }
 
+function formatDateInput(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().split("T")[0];
+}
+
+function getPresetRange(preset: Exclude<DatePreset, "custom">) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (preset === "today") return { startDate: formatDateInput(today), endDate: formatDateInput(today) };
+  if (preset === "yesterday") {
+    const date = new Date(today);
+    date.setDate(date.getDate() - 1);
+    return { startDate: formatDateInput(date), endDate: formatDateInput(date) };
+  }
+  if (preset === "week") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    return { startDate: formatDateInput(start), endDate: formatDateInput(today) };
+  }
+  return {
+    startDate: formatDateInput(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+    endDate: formatDateInput(new Date(today.getFullYear(), today.getMonth(), 0)),
+  };
+}
+
 export default function PosTableOrdersView() {
   const { showToast } = useToast();
   const { isAdmin, canEdit: checkEdit, canDelete: checkDelete, canView: checkView } =
@@ -136,6 +162,8 @@ export default function PosTableOrdersView() {
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [deleteOrder, setDeleteOrder] = useState<Order | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [datePreset, setDatePreset] = useState<DatePreset>("today");
+  const [dateRange, setDateRange] = useState(() => getPresetRange("today"));
 
   useEffect(() => {
     authApi.getMe().then(user => {
@@ -151,10 +179,15 @@ export default function PosTableOrdersView() {
     isAdmin || userRole === "pos" || userRole === "manager" || checkDelete("/orders");
 
   const fetchData = useCallback(async (force = false) => {
+    setLoading(true);
+    const rangeParams = {
+      startDate: new Date(`${dateRange.startDate}T00:00:00`).toISOString(),
+      endDate: new Date(`${dateRange.endDate}T23:59:59.999`).toISOString(),
+    };
     try {
       const [kitchenOrders, pickupOrders, items] = await Promise.all([
-        orderApi.getAllOrders({ kitchenQueue: true, includeServed: true }, force),
-        orderApi.getAllOrders({ posQueue: true }, force),
+        orderApi.getAllOrders({ kitchenQueue: true, includeServed: true, ...rangeParams }, force),
+        orderApi.getAllOrders({ posQueue: true, ...rangeParams }, force),
         menuItemApi.getAllMenuItems(),
       ]);
 
@@ -170,7 +203,12 @@ export default function PosTableOrdersView() {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [dateRange, showToast]);
+
+  const applyDatePreset = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset !== "custom") setDateRange(getPresetRange(preset));
+  };
 
   useEffect(() => {
     fetchData(false);
@@ -261,8 +299,59 @@ export default function PosTableOrdersView() {
 
   return (
     <div className={cn(dashboardPageClass, "h-full min-h-0 flex flex-col overflow-hidden")} style={dashboardPageStyle}>
-      <div className={cn(pageHeaderWrapperClass, "shrink-0 px-4 pt-4")}>
-        <h1 className={pageHeaderTitleClass}>Order History</h1>
+      <div className={cn(pageHeaderWrapperClass, "shrink-0 px-4 pt-4 flex flex-col md:flex-row md:items-start md:justify-between gap-4")}>
+        <div>
+          <h1 className={pageHeaderTitleClass}>Order History</h1>
+          <p className="text-[11px] text-muted-foreground uppercase tracking-widest mt-1 font-medium">
+            Pending and completed orders
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 trezo-card p-2">
+          <div className="flex items-center gap-1 p-1 rounded-md bg-muted/40 overflow-x-auto max-w-full">
+            {([['today', 'Today'], ['yesterday', 'Yesterday'], ['week', '1 Week'], ['last-month', 'Last Month'], ['custom', 'Custom']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyDatePreset(value)}
+                className={cn(
+                  "h-8 px-2.5 rounded text-[11px] font-bold whitespace-nowrap transition-colors",
+                  datePreset === value ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-background"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {datePreset === "custom" && (
+            <div className="flex items-center gap-2 px-2">
+              <Calendar className="size-3.5 text-muted-foreground" />
+              <input
+                type="date"
+                value={dateRange.startDate}
+                max={dateRange.endDate}
+                onChange={event => setDateRange(previous => ({ ...previous, startDate: event.target.value }))}
+                className="text-xs font-semibold bg-transparent outline-none border-none cursor-pointer text-foreground"
+              />
+              <span className="text-muted-foreground">to</span>
+              <input
+                type="date"
+                value={dateRange.endDate}
+                min={dateRange.startDate}
+                onChange={event => setDateRange(previous => ({ ...previous, endDate: event.target.value }))}
+                className="text-xs font-semibold bg-transparent outline-none border-none cursor-pointer text-foreground"
+              />
+            </div>
+          )}
+          <Button
+            type="button"
+            onClick={() => fetchData(true)}
+            disabled={loading}
+            className="bg-primary !text-white hover:bg-primary/90 h-9 px-4 rounded-lg text-xs font-bold gap-1.5"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            {loading ? "Loading..." : "Refresh"}
+          </Button>
+        </div>
       </div>
 
       <div className={cn(dashboardCardClass, "mx-4 mb-4 flex-1 min-h-0 flex flex-col overflow-hidden")}>

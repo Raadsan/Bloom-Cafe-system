@@ -1,5 +1,7 @@
 import prisma from '../../config/db.js'
+import jwt from 'jsonwebtoken'
 import { getCachedUser, invalidateUserCache } from '../../middlewares/authMiddleware.js'
+import { clearAuthCookies, readCookie, REFRESH_COOKIE, setAuthCookies } from '../../utils/authCookies.js'
 
 function formatAuthUser(user) {
   const { password, posPin, role, avatarUrl, ...rest } = user
@@ -30,10 +32,10 @@ import { dbUnavailableResponse } from '../../utils/dbErrors.js'
 const POS_LOGIN_ROLES = new Set(['pos', 'cashier', 'waiter', 'admin', 'manager'])
 
 function isValidPosPin(pin) {
-  return typeof pin === 'string' && /^\d{4}$/.test(pin)
+  return typeof pin === 'string' && /^\d{6}$/.test(pin)
 }
 
-// POS LOGIN — username + 4-digit PIN
+// POS LOGIN — username + 6-digit PIN
 export const posLogin = async (req, res) => {
   try {
     const username = req.body.username?.trim().toLowerCase()
@@ -42,14 +44,14 @@ export const posLogin = async (req, res) => {
     if (!username || !pin) {
       return res.status(400).json({
         success: false,
-        message: 'Username and 4-digit PIN are required',
+        message: 'Username and 6-digit PIN are required',
       })
     }
 
     if (!isValidPosPin(pin)) {
       return res.status(400).json({
         success: false,
-        message: 'PIN must be exactly 4 digits',
+        message: 'PIN must be exactly 6 digits',
       })
     }
 
@@ -88,7 +90,8 @@ export const posLogin = async (req, res) => {
       })
     }
 
-    const token = generateToken(user)
+    const token = generateToken(user, '15m', 'access', 'pos')
+    setAuthCookies(res, user, token, 'pos')
 
     prisma.auditlog
       .create({
@@ -105,7 +108,7 @@ export const posLogin = async (req, res) => {
       success: true,
       message: 'POS login successful',
       token,
-      user: formatAuthUser(user),
+      user: { ...formatAuthUser(user), authContext: 'pos' },
     })
   } catch (error) {
     console.error('POS Login Error:', error)
@@ -160,6 +163,7 @@ export const login = async (req, res) => {
     }
 
     const token = generateToken(user)
+    setAuthCookies(res, user, token)
 
     prisma.auditlog
       .create({
@@ -355,7 +359,7 @@ export const getMe = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: formatAuthUser(user)
+      data: { ...formatAuthUser(user), authContext: req.user.authContext }
     })
   } catch (error) {
     console.error('Get Me Error:', error)
@@ -403,6 +407,7 @@ export const resetPassword = async (req, res) => {
 // LOGOUT
 export const logout = async (req, res) => {
   try {
+    clearAuthCookies(res)
     if (req.user) {
       await prisma.user.update({
         where: { id: req.user.id },
@@ -549,6 +554,7 @@ export const loginWithGoogle = async (req, res) => {
       provider: 'google',
       audience,
     })
+    setAuthCookies(res, { ...result.user, role: { name: result.user.role } }, result.token)
 
     res.status(200).json({
       success: true,
@@ -577,6 +583,7 @@ export const loginWithFacebook = async (req, res) => {
       provider: 'facebook',
       audience,
     })
+    setAuthCookies(res, { ...result.user, role: { name: result.user.role } }, result.token)
 
     res.status(200).json({
       success: true,
@@ -586,5 +593,26 @@ export const loginWithFacebook = async (req, res) => {
   } catch (error) {
     console.error('Facebook Login Error:', error)
     return socialAuthErrorResponse(res, error)
+  }
+}
+
+export const refresh = async (req, res) => {
+  try {
+    const refreshToken = readCookie(req, REFRESH_COOKIE)
+    if (!refreshToken) return res.status(401).json({ success: false, message: 'Session expired' })
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET)
+    if (decoded.type !== 'refresh') throw new Error('Invalid token type')
+    const user = await prisma.user.findUnique({ where: { id: decoded.id }, include: { role: true } })
+    if (!user?.isActive) {
+      clearAuthCookies(res)
+      return res.status(401).json({ success: false, message: 'Session expired' })
+    }
+    const authContext = decoded.authContext === 'pos' ? 'pos' : 'dashboard'
+    const token = generateToken(user, '15m', 'access', authContext)
+    setAuthCookies(res, user, token, authContext)
+    return res.status(200).json({ success: true, token })
+  } catch {
+    clearAuthCookies(res)
+    return res.status(401).json({ success: false, message: 'Session expired' })
   }
 }
