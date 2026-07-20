@@ -27,6 +27,7 @@ import receiptSettingsRoutes from './modules/receiptSettings/receiptSettings.rou
 import addressRoutes from './modules/address/address.routes.js';
 import discountAdvertisementRoutes from './modules/discountAdvertisement/discountAdvertisement.routes.js';
 import compositeRoutes from './modules/composite/composite.routes.js';
+import accountingRoutes from './modules/accounting/accounting.routes.js';
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -71,6 +72,7 @@ app.use('/api/addresses', addressRoutes)
 app.use('/api/receipt-settings', receiptSettingsRoutes)
 app.use('/api/discount-advertisements', discountAdvertisementRoutes)
 app.use('/api/composites', compositeRoutes)
+app.use('/api/accounting', accountingRoutes)
 
 app.get('/', (req, res) => {
     res.send('Restaurant API running');
