@@ -32,7 +32,7 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { customerApi, Customer } from "@/lib/api/customerApi";
+import { customerApi, Customer } from "@/lib/api/restaurant/customerApi";
 import { useToast } from "@/components/ui/toast";
 import {
   dashboardPageClass,

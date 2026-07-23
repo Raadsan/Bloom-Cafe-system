@@ -2,7 +2,7 @@
 
 import React from "react";
 import { CheckCircle2, User } from "lucide-react";
-import { Customer } from "@/lib/api/customerApi";
+import { Customer } from "@/lib/api/restaurant/customerApi";
 import { cn } from "@/lib/utils";
 import PosCustomerPhoneCombobox from "@/components/pos/PosCustomerPhoneCombobox";
 

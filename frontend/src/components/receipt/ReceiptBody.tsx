@@ -2,7 +2,7 @@
 
 import QRCode from "react-qr-code";
 import { cn } from "@/lib/utils";
-import { ReceiptSettings } from "@/lib/api/receiptSettingsApi";
+import { ReceiptSettings } from "@/lib/api/restaurant/receiptSettingsApi";
 
 export interface ReceiptLineItem {
   menuItemId: number;

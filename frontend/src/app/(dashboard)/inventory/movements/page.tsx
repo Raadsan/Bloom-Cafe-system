@@ -29,8 +29,8 @@ import {
   DialogFooter 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { stockMovementApi, StockMovement, MovementType } from "@/lib/api/stockMovementApi";
-import { ingredientApi, Ingredient } from "@/lib/api/ingredientApi";
+import { stockMovementApi, StockMovement, MovementType } from "@/lib/api/restaurant/stockMovementApi";
+import { ingredientApi, Ingredient } from "@/lib/api/restaurant/ingredientApi";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
 import Link from "next/link";

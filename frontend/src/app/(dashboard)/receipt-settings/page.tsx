@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
+import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receiptSettingsApi";
 import { useToast } from "@/components/ui/toast";
 import LogoUploadField from "@/components/receipt/LogoUploadField";
 import { ReceiptBody } from "@/components/receipt/ReceiptBody";

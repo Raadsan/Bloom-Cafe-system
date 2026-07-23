@@ -14,9 +14,9 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { orderApi, Order } from "@/lib/api/orderApi";
-import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
-import { authApi } from "@/lib/api/authApi";
+import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
+import { menuItemApi, MenuItem } from "@/lib/api/restaurant/menuItemApi";
+import { authApi } from "@/lib/api/auth/authApi";
 import { useToast } from "@/components/ui/toast";
 import {
   dashboardPageClass,

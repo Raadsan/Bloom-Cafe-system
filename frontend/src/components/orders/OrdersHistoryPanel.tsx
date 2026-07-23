@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Eye, Search, Trash2 } from "lucide-react";
-import { Order, OrderStatus } from "@/lib/api/orderApi";
+import { Order, OrderStatus } from "@/lib/api/restaurant/orderApi";
 import { Button } from "@/components/ui/button";
 import {
   Table,

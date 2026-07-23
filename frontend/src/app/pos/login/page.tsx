@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef } from "react";
 import { ArrowRight, Eye, EyeOff, Loader2, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { authApi } from "@/lib/api/authApi";
+import { authApi } from "@/lib/api/auth/authApi";
 import { APP_SYSTEM_NAME, APP_VERSION } from "@/lib/constants";
 import { LoginShell, loginSubmitButtonClass } from "@/components/auth/LoginShell";
 

@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { authApi } from "@/lib/api/authApi";
-import { menuApi, Menu } from "@/lib/api/menuApi";
+import { authApi } from "@/lib/api/auth/authApi";
+import { menuApi, Menu } from "@/lib/api/restaurant/menuApi";
+import { isModuleAdmin, workspaceFromPath, workspaceHref, type WorkspaceKey } from "@/lib/workspaces";
 
 const ACCOUNT_ROUTES = new Set(["/profile", "/my-profile"]);
 const POS_ROUTES = new Set(["/pos-terminal", "/kitchen", "/ready-orders", "/my-sales", "/my-profile"]);
 
-function hasRouteAccess(menus: Menu[], pathname: string) {
+function hasRouteAccess(menus: Menu[], pathname: string, workspace: WorkspaceKey) {
   let best: { length: number; canView: boolean } | null = null;
   for (const menu of menus) {
     const entries = [menu, ...(menu.items || [])];
     for (const entry of entries) {
-      const url = entry.url;
+      const url = workspaceHref(entry.url, workspace);
       if (!url || (pathname !== url && !pathname.startsWith(`${url}/`))) continue;
       if (!best || url.length > best.length) {
         best = { length: url.length, canView: entry.isActive !== false && !!entry.permissions?.canView };
@@ -32,6 +33,7 @@ export function ProtectedRoute({
 }) {
   const pathname = usePathname();
   const [allowedPath, setAllowedPath] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     const isLogoutLocked = () => document.cookie.split(";").some(
@@ -69,26 +71,58 @@ export function ProtectedRoute({
 
     async function validate() {
       try {
+        setValidationError(null);
         const user = await authApi.getMe(true);
+        const workspace = workspaceFromPath(pathname);
+        const role = user.role?.trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const isPosSessionRoute = user.authContext === 'pos' && POS_ROUTES.has(pathname);
+        const workspaceAllowed = isModuleAdmin(user.role) ||
+          (isPosSessionRoute && ['pos', 'cashier', 'waiter', 'manager'].includes(role)) ||
+          (workspace === 'RESTAURANT' && ['restaurant', 'manager', 'pos', 'cashier', 'waiter'].includes(role)) ||
+          (workspace === 'ACCOUNTING' && ['accounting', 'accountant'].includes(role));
+        if (!workspaceAllowed) {
+          authApi.logout(loginPath);
+          return;
+        }
         // Page access always comes from this role's database menu permissions.
         // Admin is not an automatic bypass: it must also have canView assigned.
         const canEnter = (user.authContext === "pos" && POS_ROUTES.has(pathname)) ||
-          ACCOUNT_ROUTES.has(pathname) || (
-          !!user.roleId && hasRouteAccess(await menuApi.getMenusByRole(user.roleId, true), pathname)
+          ACCOUNT_ROUTES.has(pathname) || pathname === '/accounting/dashboard' || (
+          !!user.roleId && hasRouteAccess(await menuApi.getMenusByRole(user.roleId, true, workspace), pathname, workspace)
         );
         if (!canEnter) {
           authApi.logout(loginPath);
           return;
         }
         if (active) setAllowedPath(pathname);
-      } catch {
-        if (active) authApi.logout(loginPath);
+      } catch (error: unknown) {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 401) {
+          authApi.logout(loginPath);
+          return;
+        }
+        if (active) setValidationError(
+          status === 403 ? "You do not have access to this workspace." : "Unable to validate workspace access. Please retry."
+        );
       }
     }
 
     void validate();
     return () => { active = false; };
   }, [pathname, loginPath]);
+
+  if (validationError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white p-6 dark:bg-zinc-950">
+        <div className="max-w-md text-center">
+          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{validationError}</p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (allowedPath !== pathname) {
     return <div className="min-h-screen bg-white dark:bg-zinc-950" aria-label="Validating session" />;

@@ -31,7 +31,7 @@ import {
   Bar,
   Cell
 } from "recharts";
-import { Order } from "@/lib/api/orderApi";
+import { Order } from "@/lib/api/restaurant/orderApi";
 import { isToday, isThisMonth, format, subDays, subMonths } from "date-fns";
 import {
   dashboardPageClass,

@@ -11,7 +11,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { trackingApi, AuditLog } from "@/lib/api/trackingApi";
+import { trackingApi, AuditLog } from "@/lib/api/restaurant/trackingApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {

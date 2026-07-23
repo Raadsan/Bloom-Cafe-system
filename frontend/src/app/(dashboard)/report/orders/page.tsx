@@ -26,7 +26,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { reportApi } from "@/lib/api/reportApi";
+import { reportApi } from "@/lib/api/restaurant/reportApi";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";

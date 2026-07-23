@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { authApi, AuthUser } from "@/lib/api/authApi";
+import { authApi, AuthUser } from "@/lib/api/auth/authApi";
 import { useToast } from "@/components/ui/toast";
 import ProfileDetailsPanel, {
   ProfileDetailsSkeleton,

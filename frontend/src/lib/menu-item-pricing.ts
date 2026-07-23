@@ -1,4 +1,4 @@
-import { MenuItem } from "@/lib/api/menuItemApi";
+import { MenuItem } from "@/lib/api/restaurant/menuItemApi";
 
 export type MenuItemDiscountType = "percentage" | "fixed";
 

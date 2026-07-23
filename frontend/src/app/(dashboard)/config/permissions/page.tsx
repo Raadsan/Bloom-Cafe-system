@@ -11,9 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { roleApi, Role } from "@/lib/api/roleApi";
-import { menuApi, Menu } from "@/lib/api/menuApi";
-import { authApi } from "@/lib/api/authApi";
+import { roleApi, Role } from "@/lib/api/auth/roleApi";
+import { menuApi, Menu } from "@/lib/api/restaurant/menuApi";
+import { authApi } from "@/lib/api/auth/authApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {

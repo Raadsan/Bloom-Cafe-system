@@ -48,16 +48,6 @@ model expense {
   @@index([createdById])
 }
 
-model customer {
-  id        Int       @id @default(autoincrement())
-  fullName  String
-  phone     String    @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime?
-  addresses address[]
-  order     order[]
-}
-
 model receiptSettings {
   id         Int      @id @default(1)
   name       String   @default("My Restaurant")
@@ -72,7 +62,7 @@ model receiptSettings {
 
 model address {
   id         Int      @id @default(autoincrement())
-  customerId Int
+  customerId Int      @db.UnsignedInt
   name       String
   district   String
   street     String
@@ -80,7 +70,7 @@ model address {
   isDefault  Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  customer   customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer   customers @relation(fields: [customerId], references: [id], onDelete: Cascade)
   order      order[]
 
   @@index([customerId])
@@ -95,7 +85,7 @@ model ingredient {
   costPerUnit   Float           @default(0)
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
+  updatedAt     DateTime        @default(now()) @updatedAt
   menuitembom   menuitembom[]
   stockmovement stockmovement[]
 }
@@ -107,37 +97,47 @@ model menu {
   icon           String
   order          Int              @default(0)
   isActive       Boolean          @default(true)
+  moduleKey      MenuModuleKey    @default(RESTAURANT)
   createdAt      DateTime         @default(now())
-  updatedAt      DateTime @default(now()) @updatedAt
+  updatedAt      DateTime         @default(now()) @updatedAt
   roleMenuAccess roleMenuAccess[]
   submenu        submenu[]
+
+  @@index([moduleKey, isActive, order])
+}
+
+enum MenuModuleKey {
+  CORE
+  RESTAURANT
+  ACCOUNTING
+  ACCESS_CONTROL
 }
 
 model menuitem {
-  id             Int           @id @default(autoincrement())
-  name           String
-  description    String?       @db.Text
-  costPrice      Float?
-  price          Float
-  tax            Float         @default(0)
-  discountType   String?
-  discountValue  Float         @default(0)
-  imageUrl       String?       @db.LongText
-  isAvailable    Boolean       @default(true)
-  isRecommended  Boolean       @default(false)
-  isComposite    Boolean       @default(false)
-  compositePricing String      @default("fixed") // sum | fixed
-  options        Json?
-  categoryId     Int
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @default(now()) @updatedAt
-  category    category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
-  menuitembom menuitembom[]
-  orderitem   orderitem[]
+  id                           Int                            @id @default(autoincrement())
+  name                         String
+  description                  String?                        @db.Text
+  costPrice                    Float?
+  price                        Float
+  tax                          Float                          @default(0)
+  discountType                 String?
+  discountValue                Float                          @default(0)
+  imageUrl                     String?                        @db.LongText
+  isAvailable                  Boolean                        @default(true)
+  isRecommended                Boolean                        @default(false)
+  isComposite                  Boolean                        @default(false)
+  compositePricing             String                         @default("fixed") // sum | fixed
+  options                      Json?
+  categoryId                   Int
+  createdAt                    DateTime                       @default(now())
+  updatedAt                    DateTime                       @default(now()) @updatedAt
+  category                     category                       @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+  menuitembom                  menuitembom[]
+  orderitem                    orderitem[]
   discountAdvertisementProduct discountAdvertisementProduct[]
-  compositeComponents menuitemcomponent[] @relation("CompositeParent")
-  usedInComposites      menuitemcomponent[] @relation("CompositeChild")
-  cartitem              cartitem[]
+  compositeComponents          menuitemcomponent[]            @relation("CompositeParent")
+  usedInComposites             menuitemcomponent[]            @relation("CompositeChild")
+  cartitem                     cartitem[]
 
   @@index([categoryId], map: "MenuItem_categoryId_fkey")
 }
@@ -157,18 +157,18 @@ model menuitemcomponent {
 }
 
 model discountAdvertisement {
-  id              Int       @id @default(autoincrement())
+  id              Int                            @id @default(autoincrement())
   type            String
   title           String?
-  description     String?   @db.Text
-  imageUrl        String?   @db.LongText
+  description     String?                        @db.Text
+  imageUrl        String?                        @db.LongText
   url             String?
   discountPercent Float?
   startAt         DateTime?
   endAt           DateTime?
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  isActive        Boolean                        @default(true)
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
   products        discountAdvertisementProduct[]
 }
 
@@ -198,15 +198,15 @@ model menuitembom {
 }
 
 model notification {
-  id         Int      @id @default(autoincrement())
-  title      String
-  message    String
-  role       String?
-  orderId    Int?
-  isRead     Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  userId     Int?
-  customerId Int?
+  id              Int      @id @default(autoincrement())
+  title           String
+  message         String
+  role            String?
+  orderId         Int?
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  userId          Int?
+  customerId      Int?
   senderId        Int?
   senderName      String?
   senderAvatarUrl String?  @db.Text
@@ -218,35 +218,34 @@ model notification {
 }
 
 model order {
-  id            Int         @id @default(autoincrement())
-  status        String      @default("pending")
-  total         Float       @default(0)
-  taxAmount     Float       @default(0)
-  subTotal      Float       @default(0)
-  discountAmount Float      @default(0)
-  discountType  String?
-  discountValue Float       @default(0)
-  tableId       Int?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @default(now()) @updatedAt
-  customerName  String?
-  notes         String?
-  customerPhone String?
-  customerId    Int?
-  userId        Int?
-  orderType     String      @default("dine-in")
-  source        String      @default("pos")
-  addressId     Int?
-  address       address?    @relation(fields: [addressId], references: [id])
-  customer      customer?   @relation(fields: [customerId], references: [id])
-  table         table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
-  user          user?       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  orderitem     orderitem[]
+  id             Int         @id @default(autoincrement())
+  status         String      @default("pending")
+  total          Float       @default(0)
+  taxAmount      Float       @default(0)
+  subTotal       Float       @default(0)
+  discountAmount Float       @default(0)
+  discountType   String?
+  discountValue  Float       @default(0)
+  tableId        Int?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @default(now()) @updatedAt
+  customerName   String?
+  notes          String?
+  customerPhone  String?
+  customerId     Int?        @db.UnsignedInt
+  userId         Int?
+  orderType      String      @default("dine-in")
+  source         String      @default("pos")
+  addressId      Int?
+  address        address?    @relation(fields: [addressId], references: [id])
+  customer       customers?  @relation(fields: [customerId], references: [id])
+  table          table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
+  user           user?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orderitem      orderitem[]
 
-  payment       payment?
+  payment payment?
 
   @@index([addressId])
-
   @@index([tableId], map: "Order_tableId_fkey")
   @@index([customerId], map: "order_customerId_fkey")
   @@index([userId], map: "order_userId_fkey")
@@ -357,16 +356,16 @@ model submenu {
 }
 
 model table {
-  id        Int       @id @default(autoincrement())
-  number    Int       @unique
-  status    String    @default("active")
-  createdAt DateTime  @default(now())
+  id          Int       @id @default(autoincrement())
+  number      Int       @unique
+  status      String    @default("active")
+  createdAt   DateTime  @default(now())
   name        String?
   description String?   @db.Text
-  qrCode    String    @unique
-  updatedAt DateTime? @updatedAt
-  order     order[]
-  cart      cart[]
+  qrCode      String    @unique
+  updatedAt   DateTime? @updatedAt
+  order       order[]
+  cart        cart[]
 }
 
 model cart {
@@ -396,37 +395,35 @@ model cartitem {
 }
 
 model user {
-  id        Int        @id @default(autoincrement())
-  email     String     @unique
-  password  String
-  username  String?    @unique
-  posPin    String?
-  createdAt DateTime   @default(now())
-  fullName  String
-  isActive  Boolean    @default(true)
-  phone     String?    @unique
-  address   String?    @db.Text
-  dateOfBirth DateTime?
-  gender    String?
-  avatarUrl String?    @db.LongText
-  authProvider String?  @default("local")
-  googleId     String?  @unique
-  facebookId   String?  @unique
-  fcmToken  String?    @db.Text
+  id                Int            @id @default(autoincrement())
+  email             String         @unique
+  password          String
+  username          String?        @unique
+  posPin            String?
+  createdAt         DateTime       @default(now())
+  fullName          String
+  isActive          Boolean        @default(true)
+  phone             String?        @unique
+  address           String?        @db.Text
+  dateOfBirth       DateTime?
+  gender            String?
+  avatarUrl         String?        @db.LongText
+  authProvider      String?        @default("local")
+  googleId          String?        @unique
+  facebookId        String?        @unique
+  fcmToken          String?        @db.Text
   fcmTokenUpdatedAt DateTime?
-  updatedAt DateTime   @default(now()) @updatedAt
-  roleId    Int
+  updatedAt         DateTime       @default(now()) @updatedAt
+  roleId            Int
   auditlog          auditlog[]
   notification      notification[]
   sentNotifications notification[] @relation("sentNotifications")
   expense           expense[]
-  order     order[]
-  role      role       @relation(fields: [roleId], references: [id], onDelete: NoAction)
+  order             order[]
+  role              role           @relation(fields: [roleId], references: [id], onDelete: NoAction)
 
   @@index([roleId], map: "User_roleId_fkey")
 }
-
-
 
 model account_types {
   id                Int                          @id @default(autoincrement()) @db.UnsignedInt
@@ -706,6 +703,8 @@ model customers {
   is_active             Boolean                @default(true)
   created_at            DateTime               @default(now()) @db.Timestamp(0)
   updated_at            DateTime               @default(now()) @db.Timestamp(0)
+  addresses             address[]
+  order                 order[]
   customer_invoices     customer_invoices[]
   customer_receipts     customer_receipts[]
   chart_of_accounts     chart_of_accounts?     @relation(fields: [receivable_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_cust_ar")
@@ -1195,6 +1194,9 @@ enum journals_journal_type {
   cash
   bank
   general
+  opening_balance @map("Opening Balance")
+  adjustment      @map("Adjustment")
+  closing         @map("Closing")
 }
 
 enum products_product_type {

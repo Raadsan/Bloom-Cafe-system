@@ -22,8 +22,8 @@ import {
   MenuItem,
   PublicMenuCategory,
   PublicMenuData,
-} from "@/lib/api/menuItemApi";
-import { cartApi, Cart } from "@/lib/api/cartApi";
+} from "@/lib/api/restaurant/menuItemApi";
+import { cartApi, Cart } from "@/lib/api/restaurant/cartApi";
 import {
   getMenuItemEffectivePrice,
   getMenuItemDiscountPercent,

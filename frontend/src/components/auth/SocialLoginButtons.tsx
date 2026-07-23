@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { authApi } from "@/lib/api/authApi";
+import { authApi } from "@/lib/api/auth/authApi";
 import { useToast } from "@/components/ui/toast";
 
 declare global {

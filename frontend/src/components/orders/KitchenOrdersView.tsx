@@ -15,8 +15,8 @@ import {
   List,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { orderApi, Order, OrderStatus } from "@/lib/api/orderApi";
-import { MenuItem } from "@/lib/api/menuItemApi";
+import { orderApi, Order, OrderStatus } from "@/lib/api/restaurant/orderApi";
+import { MenuItem } from "@/lib/api/restaurant/menuItemApi";
 import { useToast } from "@/components/ui/toast";
 import {
   dashboardPageClass,

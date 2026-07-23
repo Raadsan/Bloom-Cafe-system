@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { authApi } from "@/lib/api/authApi";
+import { authApi } from "@/lib/api/auth/authApi";
 import WaiterReadyOrdersView from "@/components/orders/WaiterReadyOrdersView";
 
 export default function WaiterPickupPage() {

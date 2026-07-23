@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { authApi, AuthUser } from "@/lib/api/authApi";
-import { reportApi, peekDashboardInit } from "@/lib/api/reportApi";
-import { orderApi, Order, peekOrders } from "@/lib/api/orderApi";
+import { authApi, AuthUser } from "@/lib/api/auth/authApi";
+import { reportApi, peekDashboardInit } from "@/lib/api/restaurant/reportApi";
+import { orderApi, Order, peekOrders } from "@/lib/api/restaurant/orderApi";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 import WaiterDashboard from "@/components/dashboard/WaiterDashboard";
 import KitchenDashboard from "@/components/dashboard/KitchenDashboard";

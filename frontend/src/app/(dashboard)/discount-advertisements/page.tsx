@@ -31,7 +31,7 @@ import { usePermissions } from "@/context/PermissionContext";
 import {
   discountAdvertisementApi,
   DiscountAdvertisement,
-} from "@/lib/api/discountAdvertisementApi";
+} from "@/lib/api/restaurant/discountAdvertisementApi";
 import {
   dashboardPageClass,
   dashboardPageStyle,

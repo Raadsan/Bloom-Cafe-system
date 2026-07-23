@@ -10,8 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { orderApi, Order, OrderStatus } from "@/lib/api/orderApi";
-import { MenuItem } from "@/lib/api/menuItemApi";
+import { orderApi, Order, OrderStatus } from "@/lib/api/restaurant/orderApi";
+import { MenuItem } from "@/lib/api/restaurant/menuItemApi";
 import { useToast } from "@/components/ui/toast";
 import { btnCreatePage, dashboardInputClass, dashboardLabelClass } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";

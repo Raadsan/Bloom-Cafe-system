@@ -1,6 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
-import { Order } from "@/lib/api/orderApi";
-import { MenuItem } from "@/lib/api/menuItemApi";
+import { Order } from "@/lib/api/restaurant/orderApi";
+import { MenuItem } from "@/lib/api/restaurant/menuItemApi";
 
 export function getOrderTitle(order: Order) {
   const names = order.orderitem?.map(i => i.menuitem?.name).filter(Boolean) as string[];

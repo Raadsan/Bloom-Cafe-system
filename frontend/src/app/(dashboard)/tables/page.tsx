@@ -34,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { tableApi, Table as RestaurantTable, TableStatus } from "@/lib/api/tableApi";
+import { tableApi, Table as RestaurantTable, TableStatus } from "@/lib/api/restaurant/tableApi";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";
 import {

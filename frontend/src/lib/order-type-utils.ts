@@ -1,4 +1,4 @@
-import { Order } from "@/lib/api/orderApi";
+import { Order } from "@/lib/api/restaurant/orderApi";
 
 export type OrderChannel = "dine-in" | "takeaway" | "delivery";
 

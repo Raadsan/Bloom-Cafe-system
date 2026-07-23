@@ -172,3 +172,15 @@ export const authorize = (...roles) => {
     next()
   }
 }
+
+export const authorizeWorkspace = (workspace) => (req, res, next) => {
+  const role = String(req.user?.role || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  const allowed = role === 'admin' || role === 'super_admin' ||
+    (workspace === 'RESTAURANT' && ['restaurant', 'manager', 'pos', 'cashier', 'waiter'].includes(role)) ||
+    (workspace === 'ACCOUNTING' && ['accounting', 'accountant'].includes(role))
+
+  if (!allowed) {
+    return res.status(403).json({ success: false, message: `${workspace} workspace access denied` })
+  }
+  next()
+}

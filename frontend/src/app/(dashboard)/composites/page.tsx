@@ -32,13 +32,13 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
-import { Category } from "@/lib/api/categoryApi";
-import { MenuItem } from "@/lib/api/menuItemApi";
+import { Category } from "@/lib/api/restaurant/categoryApi";
+import { MenuItem } from "@/lib/api/restaurant/menuItemApi";
 import {
   compositeApi,
   CompositeMenuItem,
   CompositeComponentInput,
-} from "@/lib/api/compositeApi";
+} from "@/lib/api/restaurant/compositeApi";
 import {
   getMenuItemEffectivePrice,
   menuItemHasDiscount,

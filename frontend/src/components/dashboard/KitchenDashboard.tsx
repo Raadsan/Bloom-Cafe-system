@@ -29,7 +29,7 @@ import {
   Pie,
   Cell
 } from "recharts";
-import { Order } from "@/lib/api/orderApi";
+import { Order } from "@/lib/api/restaurant/orderApi";
 import {
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,

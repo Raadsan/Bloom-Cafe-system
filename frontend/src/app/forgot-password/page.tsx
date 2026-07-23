@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { authApi } from "@/lib/api/authApi";
+import { authApi } from "@/lib/api/auth/authApi";
 import { LoginShell, loginSubmitButtonClass } from "@/components/auth/LoginShell";
 
 type Step = "email" | "reset" | "done";

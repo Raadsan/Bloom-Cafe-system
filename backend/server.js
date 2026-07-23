@@ -19,14 +19,16 @@ import {
   ensurePickupHistoryMenuItem,
   ensureDiscountAdvertisementMenuItem,
   ensureCompositesMenuItem,
+  ensureSuppliersMenuItem,
   warmAllMenusCache,
-} from './src/modules/menu/menu.controller.js'
+} from './src/modules/restaurant/catalog/menu/menu.controller.js'
 import { initFirebase } from './src/utils/fcmService.js'
-import { warmAllMenuItemsCache } from './src/modules/menuItem/menuItem.controller.js'
-import { warmCompositesCache, warmComboFormCache } from './src/modules/composite/composite.controller.js'
-import { warmReportCaches } from './src/modules/report/report.controller.js'
-import { warmCategoryCaches } from './src/modules/category/category.controller.js'
+import { warmAllMenuItemsCache } from './src/modules/restaurant/catalog/menuItem/menuItem.controller.js'
+import { warmCompositesCache, warmComboFormCache } from './src/modules/restaurant/catalog/composite/composite.controller.js'
+import { warmReportCaches } from './src/modules/restaurant/reporting/report/report.controller.js'
+import { warmCategoryCaches } from './src/modules/restaurant/catalog/category/category.controller.js'
 import { isDbAuthError, isDbUnreachableError } from './src/utils/dbErrors.js'
+import { ensureCustomerInvoiceDefaults } from './src/modules/accounting/receivables/customerInvoices/customerInvoice.controller.js'
 
 const skipStartupWarmup =
   process.env.SKIP_STARTUP_WARMUP === 'true' || process.env.SKIP_STARTUP_WARMUP === '1'
@@ -60,13 +62,15 @@ async function runStartupWarmup() {
   await ensurePickupHistoryMenuItem()
   await ensureDiscountAdvertisementMenuItem()
   await ensureCompositesMenuItem()
+  await ensureSuppliersMenuItem()
+  await ensureCustomerInvoiceDefaults()
   await warmAllMenusCache()
   await warmAllMenuItemsCache()
   await warmCompositesCache()
   await warmComboFormCache()
   await warmCategoryCaches()
   await warmReportCaches()
-  console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions, Menu Combos)')
+  console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions, Menu Combos, Suppliers)')
 }
 
 const server = http.createServer(app)
@@ -109,4 +113,4 @@ process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.once('SIGUSR2', async () => {
   await prisma.$disconnect().catch(() => { })
   process.kill(process.pid, 'SIGUSR2')
-})
+})

@@ -2,8 +2,8 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import PosKitchenView from "@/components/orders/PosKitchenView";
-import { orderApi, Order } from "@/lib/api/orderApi";
-import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
+import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
+import { menuItemApi, MenuItem } from "@/lib/api/restaurant/menuItemApi";
 import { useToast } from "@/components/ui/toast";
 import { onDebouncedEvent, ORDERS_CHANGED, MENU_CHANGED, POS_SOFT_REFRESH } from "@/lib/live-updates";
 

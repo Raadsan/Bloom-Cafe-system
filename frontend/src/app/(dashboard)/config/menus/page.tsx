@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { menuApi, Menu, SubMenu } from "@/lib/api/menuApi";
+import { menuApi, Menu, SubMenu } from "@/lib/api/restaurant/menuApi";
+import { WORKSPACE_KEYS, type WorkspaceKey } from "@/lib/workspaces";
 import {
   Plus,
   Edit,
@@ -75,6 +76,7 @@ export default function MenuManagementPage() {
   const [reorderingId, setReorderingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [moduleFilter, setModuleFilter] = useState("all");
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [iconSearch, setIconSearch] = useState("");
@@ -111,6 +113,7 @@ export default function MenuManagementPage() {
       icon?: string;
       order?: number;
       isActive?: boolean;
+      moduleKey: WorkspaceKey;
     },
     subs: typeof menuSubmenus
   ): Menu => ({
@@ -120,6 +123,7 @@ export default function MenuManagementPage() {
     icon: payload.icon || "LayoutDashboard",
     order: payload.order ?? menus.length + 1,
     isActive: payload.isActive !== false,
+    moduleKey: payload.moduleKey,
     permissions: {
       canView: true,
       canAdd: true,
@@ -146,8 +150,8 @@ export default function MenuManagementPage() {
   });
 
   const handleSaveMenu = async () => {
-    if (!editingMenu?.title || !editingMenu?.url) {
-      showToast("Title and URL are required", "error");
+    if (!editingMenu?.title || !editingMenu?.url || !editingMenu?.moduleKey) {
+      showToast("Title, URL, and Module / Workspace are required", "error");
       return;
     }
 
@@ -159,6 +163,7 @@ export default function MenuManagementPage() {
       icon: editingMenu.icon,
       order: editingMenu.order,
       isActive: editingMenu.isActive,
+      moduleKey: editingMenu.moduleKey,
       hasSubmenus,
       submenus: menuSubmenus,
     };
@@ -285,9 +290,10 @@ export default function MenuManagementPage() {
           statusFilter === "all" ||
           (statusFilter === "active" && m.isActive !== false) ||
           (statusFilter === "inactive" && m.isActive === false);
-        return matchesSearch && matchesStatus;
+        const matchesModule = moduleFilter === 'all' || m.moduleKey === moduleFilter;
+        return matchesSearch && matchesStatus && matchesModule;
       }),
-    [sortedMenus, searchQuery, statusFilter]
+    [sortedMenus, searchQuery, statusFilter, moduleFilter]
   );
 
   const totalPages = Math.ceil(filteredMenus.length / pageSize) || 1;
@@ -298,7 +304,7 @@ export default function MenuManagementPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, pageSize]);
+  }, [searchQuery, statusFilter, moduleFilter, pageSize]);
 
   const filteredIcons = useMemo(
     () => searchLucideIconNames(iconSearch, iconSearch.trim() ? 120 : 64),
@@ -318,6 +324,7 @@ export default function MenuManagementPage() {
       icon: "LayoutDashboard",
       order: menus.length + 1,
       isActive: true,
+      moduleKey: "RESTAURANT",
     });
     setHasSubmenus(false);
     setMenuSubmenus([{ title: "", url: "", order: 1, isActive: true }]);
@@ -367,6 +374,13 @@ export default function MenuManagementPage() {
                   <option value={50}>50</option>
                 </select>
               </div>
+              <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+                <span>Module</span>
+                <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md bg-white text-sm text-zinc-600">
+                  <option value="all">All Modules</option>
+                  {WORKSPACE_KEYS.map((key) => <option key={key} value={key}>{key.replace('_', ' ')}</option>)}
+                </select>
+              </div>
 
               <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
                 <span>Filter Status</span>
@@ -412,6 +426,7 @@ export default function MenuManagementPage() {
                   <TableHead className={cn(dashboardTableHeadClass, "text-left w-20")}>Order</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Menu</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>URL</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Module</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Sub-Modules</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-center w-24")}>Status</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-right w-24")}>Actions</TableHead>
@@ -478,6 +493,12 @@ export default function MenuManagementPage() {
                         <TableCell className={dashboardTableCellClass}>
                           <span className="text-[11px] font-mono font-medium text-zinc-500">
                             {menu.url}
+                          </span>
+                        </TableCell>
+
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="rounded bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">
+                            {menu.moduleKey?.replace('_', ' ')}
                           </span>
                         </TableCell>
 
@@ -643,7 +664,17 @@ export default function MenuManagementPage() {
               </div>
 
               {/* Row 2: Order + Status */}
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-3 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-widest text-zinc-500">Module / Workspace *</label>
+                  <select value={editingMenu?.moduleKey || ''} onChange={(e) => setEditingMenu((prev) => ({ ...prev!, moduleKey: e.target.value as WorkspaceKey }))} className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg text-[14px] font-medium">
+                    <option value="" disabled>Select workspace</option>
+                    <option value="CORE">Core Modules</option>
+                    <option value="RESTAURANT">Restaurant</option>
+                    <option value="ACCOUNTING">Accounting</option>
+                    <option value="ACCESS_CONTROL">Access Control</option>
+                  </select>
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black uppercase tracking-widest text-zinc-500">
                     Display Order

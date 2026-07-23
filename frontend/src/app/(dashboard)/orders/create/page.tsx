@@ -26,12 +26,12 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { categoryApi, Category } from "@/lib/api/categoryApi";
-import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
-import { tableApi, Table as RestaurantTable } from "@/lib/api/tableApi";
-import { orderApi, Order } from "@/lib/api/orderApi";
-import { paymentApi, PaymentMethod } from "@/lib/api/paymentApi";
-import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
+import { categoryApi, Category } from "@/lib/api/restaurant/categoryApi";
+import { menuItemApi, MenuItem } from "@/lib/api/restaurant/menuItemApi";
+import { tableApi, Table as RestaurantTable } from "@/lib/api/restaurant/tableApi";
+import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
+import { paymentApi, PaymentMethod } from "@/lib/api/restaurant/paymentApi";
+import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receiptSettingsApi";
 import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";

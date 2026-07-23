@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { roleApi, Role } from "@/lib/api/roleApi";
+import { roleApi, Role } from "@/lib/api/auth/roleApi";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {

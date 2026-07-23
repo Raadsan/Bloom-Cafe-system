@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Inbox, Settings, UtensilsCrossed } from "lucide-react";
-import { notificationApi, Notification } from "@/lib/api/notificationApi";
+import { notificationApi, Notification } from "@/lib/api/restaurant/notificationApi";
 import { onDebouncedEvent, REFRESH_NOTIFICATIONS } from "@/lib/live-updates";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import NotificationListItem, {

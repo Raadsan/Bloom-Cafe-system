@@ -2,16 +2,16 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { authApi } from '@/lib/api/authApi';
+import { authApi } from '@/lib/api/auth/authApi';
 import {
   dispatchOrdersChanged,
   dispatchRefreshNotifications,
   dispatchMenuChanged,
   OrderSocketPayload,
 } from '@/lib/live-updates';
-import { clearOrdersListCache } from '@/lib/api/orderApi';
-import { menuItemApi } from '@/lib/api/menuItemApi';
-import { categoryApi } from '@/lib/api/categoryApi';
+import { clearOrdersListCache } from '@/lib/api/restaurant/orderApi';
+import { menuItemApi } from '@/lib/api/restaurant/menuItemApi';
+import { categoryApi } from '@/lib/api/restaurant/categoryApi';
 import { playOrderReadyChime } from '@/lib/order-ready-sound';
 
 interface SocketContextType {

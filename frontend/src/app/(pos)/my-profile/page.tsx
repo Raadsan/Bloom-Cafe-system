@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { authApi, AuthUser } from "@/lib/api/authApi";
+import { authApi, AuthUser } from "@/lib/api/auth/authApi";
 import { useToast } from "@/components/ui/toast";
 import ProfileDetailsPanel, {
   ProfileDetailsSkeleton,

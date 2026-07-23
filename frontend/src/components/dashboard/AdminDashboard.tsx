@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { reportApi } from "@/lib/api/reportApi";
+import { reportApi } from "@/lib/api/restaurant/reportApi";
 import {
   DollarSign,
   Users,
@@ -37,7 +37,7 @@ import {
   PieChart,
   Pie
 } from "recharts";
-import { Order } from "@/lib/api/orderApi";
+import { Order } from "@/lib/api/restaurant/orderApi";
 import {
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,

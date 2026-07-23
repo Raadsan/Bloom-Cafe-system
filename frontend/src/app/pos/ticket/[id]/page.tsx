@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
+import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receiptSettingsApi";
 import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { Loader2, AlertCircle } from "lucide-react";
 

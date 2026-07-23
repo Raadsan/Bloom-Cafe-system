@@ -45,7 +45,7 @@ import {
   DialogFooter 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ingredientApi, Ingredient } from "@/lib/api/ingredientApi";
+import { ingredientApi, Ingredient } from "@/lib/api/restaurant/ingredientApi";
 import { useToast } from "@/components/ui/toast";
 import Link from "next/link";
 

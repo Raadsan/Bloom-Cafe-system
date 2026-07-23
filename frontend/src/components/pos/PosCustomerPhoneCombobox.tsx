@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown } from "lucide-react";
-import { Customer } from "@/lib/api/customerApi";
+import { Customer } from "@/lib/api/restaurant/customerApi";
 import { cn } from "@/lib/utils";
 
 function normalizePhone(value: string) {

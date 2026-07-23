@@ -30,20 +30,20 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { categoryApi, Category } from "@/lib/api/categoryApi";
-import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/menuItemApi";
-import { compositeApi, CompositeMenuItem } from "@/lib/api/compositeApi";
+import { categoryApi, Category } from "@/lib/api/restaurant/categoryApi";
+import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/restaurant/menuItemApi";
+import { compositeApi, CompositeMenuItem } from "@/lib/api/restaurant/compositeApi";
 import {
   getMenuItemEffectivePrice,
   menuItemHasDiscount,
   getMenuItemDiscountPercent,
 } from "@/lib/menu-item-pricing";
-import { tableApi, Table } from "@/lib/api/tableApi";
-import { orderApi } from "@/lib/api/orderApi";
+import { tableApi, Table } from "@/lib/api/restaurant/tableApi";
+import { orderApi } from "@/lib/api/restaurant/orderApi";
 import api from "@/lib/api/axios";
-import { PaymentMethod } from "@/lib/api/paymentApi";
-import { customerApi, Customer } from "@/lib/api/customerApi";
-import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
+import { PaymentMethod } from "@/lib/api/restaurant/paymentApi";
+import { customerApi, Customer } from "@/lib/api/restaurant/customerApi";
+import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receiptSettingsApi";
 import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";

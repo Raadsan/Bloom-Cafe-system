@@ -34,15 +34,15 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { orderApi, Order, OrderStatus } from "@/lib/api/orderApi";
-import { tableApi, Table as RestaurantTable } from "@/lib/api/tableApi";
-import { menuItemApi, MenuItem } from "@/lib/api/menuItemApi";
-import { categoryApi, Category } from "@/lib/api/categoryApi";
-import { customerApi, Customer } from "@/lib/api/customerApi";
-import { PaymentMethod } from "@/lib/api/paymentApi";
-import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
+import { orderApi, Order, OrderStatus } from "@/lib/api/restaurant/orderApi";
+import { tableApi, Table as RestaurantTable } from "@/lib/api/restaurant/tableApi";
+import { menuItemApi, MenuItem } from "@/lib/api/restaurant/menuItemApi";
+import { categoryApi, Category } from "@/lib/api/restaurant/categoryApi";
+import { customerApi, Customer } from "@/lib/api/restaurant/customerApi";
+import { PaymentMethod } from "@/lib/api/restaurant/paymentApi";
+import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receiptSettingsApi";
 import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
-import { authApi } from "@/lib/api/authApi";
+import { authApi } from "@/lib/api/auth/authApi";
 import api from "@/lib/api/axios";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";

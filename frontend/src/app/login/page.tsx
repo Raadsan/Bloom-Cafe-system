@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { authApi } from "@/lib/api/authApi";
+import { authApi } from "@/lib/api/auth/authApi";
 import { APP_SYSTEM_NAME, APP_VERSION } from "@/lib/constants";
 import { LoginShell, loginSubmitButtonClass } from "@/components/auth/LoginShell";
 
@@ -30,6 +30,10 @@ export default function LoginPage() {
       const userRole = res?.user?.role?.toLowerCase();
       if (userRole === "pos") {
         window.location.replace("/pos-terminal");
+      } else if (["restaurant", "manager"].includes(userRole)) {
+        window.location.replace("/restaurant/dashboard");
+      } else if (["accounting", "accountant"].includes(userRole)) {
+        window.location.replace("/accounting/dashboard");
       } else {
         window.location.replace("/dashboard");
       }

@@ -13,8 +13,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { categoryApi, CategoryWithItems } from "@/lib/api/categoryApi";
-import { menuItemApi } from "@/lib/api/menuItemApi";
+import { categoryApi, CategoryWithItems } from "@/lib/api/restaurant/categoryApi";
+import { menuItemApi } from "@/lib/api/restaurant/menuItemApi";
 import { dispatchMenuChanged } from "@/lib/live-updates";
 import { useToast } from "@/components/ui/toast";
 import { usePermissions } from "@/context/PermissionContext";

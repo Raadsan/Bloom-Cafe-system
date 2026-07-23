@@ -9,7 +9,7 @@ import {
   PackageOpen,
   Search,
 } from "lucide-react";
-import { orderApi, Order } from "@/lib/api/orderApi";
+import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
 import { useToast } from "@/components/ui/toast";
 import {
   dashboardPageClass,

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { orderApi, Order } from "@/lib/api/orderApi";
+import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
 import { useToast } from "@/components/ui/toast";
 import {
   ClipboardList,

@@ -15,7 +15,7 @@ import {
   Download,
   Eye
 } from "lucide-react";
-import { expenseApi, Expense } from "@/lib/api/expenseApi";
+import { expenseApi, Expense } from "@/lib/api/restaurant/expenseApi";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";

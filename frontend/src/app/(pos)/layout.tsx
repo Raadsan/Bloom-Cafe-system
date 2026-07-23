@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { authApi, AuthUser } from "@/lib/api/authApi";
+import { authApi, AuthUser } from "@/lib/api/auth/authApi";
 import {
   LogOut,
   User as UserIcon,
@@ -19,8 +19,8 @@ import {
   Receipt,
 } from "lucide-react";
 import { dispatchPosSoftRefresh, onDebouncedEvent, ORDERS_CHANGED, POS_SOFT_REFRESH } from "@/lib/live-updates";
-import { orderApi, Order } from "@/lib/api/orderApi";
-import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/receiptSettingsApi";
+import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
+import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receiptSettingsApi";
 import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { PermissionProvider } from "@/context/PermissionContext";
 import PosHeaderNotifications from "@/components/pos/PosHeaderNotifications";
@@ -459,7 +459,7 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ProtectedRoute loginPath="/login">
+    <ProtectedRoute loginPath="/pos/login">
       <PosSearchProvider>
         <PosLayoutInner>{children}</PosLayoutInner>
       </PosSearchProvider>

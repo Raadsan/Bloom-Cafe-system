@@ -54,14 +54,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { authApi, AuthUser } from "@/lib/api/authApi";
-import { menuApi, Menu } from "@/lib/api/menuApi";
+import { authApi, AuthUser } from "@/lib/api/auth/authApi";
+import { menuApi, Menu } from "@/lib/api/restaurant/menuApi";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { getLucideIcon, searchLucideIconNames, LUCIDE_ICON_NAMES } from "@/lib/lucide-icons";
 import { STATIC_APP_LOGO } from "@/lib/branding";
+import { isModuleAdmin, workspaceFromPath, workspaceHref, type WorkspaceKey } from "@/lib/workspaces";
 
 // Helper to normalize URLs from database
 const normalizeUrl = (url: string) => {
@@ -93,6 +94,7 @@ const isNavRouteActive = (pathname: string, itemUrl: string) => {
 interface SidebarCache {
   menus: Menu[];
   roleId: number;
+  workspace: WorkspaceKey;
 }
 let _sidebarCache: SidebarCache | null = null;
 
@@ -185,6 +187,7 @@ function NavUser({ user }: { user: AuthUser | null }) {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const workspace = workspaceFromPath(pathname);
   const { state, isMobile } = useSidebar();
   
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -209,13 +212,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         setUser(currentUser);
 
         if (currentUser && currentUser.roleId) {
-          if (!forceRefresh && _sidebarCache && _sidebarCache.roleId === currentUser.roleId) {
+          if (!forceRefresh && _sidebarCache && _sidebarCache.roleId === currentUser.roleId && _sidebarCache.workspace === workspace) {
             setMenus(_sidebarCache.menus);
             setLoading(false);
             return;
           }
-          const fetchedMenus = await menuApi.getMenusByRole(currentUser.roleId, forceRefresh);
-          _sidebarCache = { menus: fetchedMenus, roleId: currentUser.roleId };
+          const fetchedMenus = await menuApi.getMenusByRole(currentUser.roleId, forceRefresh, workspace);
+          _sidebarCache = { menus: fetchedMenus, roleId: currentUser.roleId, workspace };
           setMenus(fetchedMenus);
         }
       } catch (error) {
@@ -226,7 +229,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     };
 
     initSidebar();
-  }, []);
+  }, [workspace]);
 
   useEffect(() => {
     const handleMenuUpdate = (e: Event) => {
@@ -263,20 +266,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             };
           })
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-        _sidebarCache = { menus: patched, roleId };
+        _sidebarCache = { menus: patched, roleId, workspace };
         setMenus(patched);
         return;
       }
 
-      menuApi.getMenusByRole(roleId, false).then((fetchedMenus) => {
-        _sidebarCache = { menus: fetchedMenus, roleId };
+      menuApi.getMenusByRole(roleId, false, workspace).then((fetchedMenus) => {
+        _sidebarCache = { menus: fetchedMenus, roleId, workspace };
         setMenus(fetchedMenus);
       }).catch(() => {});
     };
 
     window.addEventListener("sidebar-menu-updated", handleMenuUpdate);
     return () => window.removeEventListener("sidebar-menu-updated", handleMenuUpdate);
-  }, []);
+  }, [workspace]);
 
   // Update which menu section is open when the path changes (no API calls)
   useEffect(() => {
@@ -327,6 +330,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent className="bg-sidebar px-4 pt-8 pb-4 gap-0">
         <SidebarGroup className="p-0">
           <SidebarMenu className="gap-1.5 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-4 group-data-[collapsible=icon]:px-0">
+            {workspace !== 'CORE' && isModuleAdmin(user?.role) && (
+              <SidebarMenuItem className="w-full">
+                <SidebarMenuButton render={<Link href="/dashboard" />} className="font-semibold h-11 rounded-lg">
+                  <ChevronRight className="size-4 rotate-180" />
+                  <span className="group-data-[collapsible=icon]:hidden">Back to Modules</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             {loading ? (
               [1, 2, 3, 4, 5, 6].map((i) => (
                 <SidebarMenuItem key={i} className="w-full px-2">
@@ -339,9 +350,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 const activeSubs = (item.items || []).filter((sub) => sub.isActive !== false);
                 const hasSubmenu = activeSubs.length > 0;
                 const isOpen = openMenus[item.id];
-                const itemUrl = normalizeUrl(item.url);
+                const itemUrl = workspaceHref(normalizeUrl(item.url), workspace);
                 const isChildActive = activeSubs.some(sub => {
-                  const subUrl = normalizeUrl(sub.url);
+                  const subUrl = workspaceHref(normalizeUrl(sub.url), workspace);
                   return isNavRouteActive(pathname, subUrl);
                 });
                 const isActive = isNavRouteActive(pathname, itemUrl) || isChildActive;
@@ -369,7 +380,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         {isOpen && (
                           <SidebarMenuSub className="ml-8 border-none pl-0 mt-1 py-1 gap-1 group-data-[collapsible=icon]:hidden">
                             {activeSubs.map((sub) => {
-                              const subUrl = normalizeUrl(sub.url);
+                              const subUrl = workspaceHref(normalizeUrl(sub.url), workspace);
                               const isSubActive = isNavRouteActive(pathname, subUrl);
                               return (
                                 <SidebarMenuSubItem key={sub.id}>

@@ -19,8 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { orderApi, Order } from "@/lib/api/orderApi";
-import { MenuItem } from "@/lib/api/menuItemApi";
+import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
+import { MenuItem } from "@/lib/api/restaurant/menuItemApi";
 import { useToast } from "@/components/ui/toast";
 import { btnCreatePage } from "@/lib/dashboard-ui";
 import {

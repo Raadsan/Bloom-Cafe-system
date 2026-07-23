@@ -30,13 +30,13 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/menuItemApi";
+import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/restaurant/menuItemApi";
 import {
   getMenuItemEffectivePrice,
   menuItemHasDiscount,
   getMenuItemDiscountLabel,
 } from "@/lib/menu-item-pricing";
-import { categoryApi, Category } from "@/lib/api/categoryApi";
+import { categoryApi, Category } from "@/lib/api/restaurant/categoryApi";
 import { compressImageFile } from "@/lib/compress-image";
 import { useToast } from "@/components/ui/toast";
 import {

@@ -1,8 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { menuApi, Menu, SubMenu } from "@/lib/api/menuApi";
-import { authApi } from "@/lib/api/authApi";
+import { menuApi, Menu, SubMenu } from "@/lib/api/restaurant/menuApi";
+import { authApi } from "@/lib/api/auth/authApi";
 
 interface PermissionContextType {
   permissions: Menu[];
@@ -26,7 +26,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     try {
       const cached = authApi.getCachedUser();
       if (cached) {
-        const adminRole = cached.role?.toLowerCase?.() === 'admin';
+        const adminRole = ['admin', 'super_admin', 'super admin'].includes(cached.role?.toLowerCase?.());
         setIsAdmin(adminRole);
         if (adminRole) return;
         if (cached.roleId) {
@@ -39,7 +39,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       const user = await authApi.getMe();
       if (user) {
         // Admin bypass — full access
-        const adminRole = user.role?.toLowerCase?.() === 'admin';
+        const adminRole = ['admin', 'super_admin', 'super admin'].includes(user.role?.toLowerCase?.());
         setIsAdmin(adminRole);
 
         if (!adminRole && user.roleId) {

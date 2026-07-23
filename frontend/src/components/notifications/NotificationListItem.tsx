@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Bell, CheckCircle, Package, AlertTriangle } from "lucide-react";
-import { Notification } from "@/lib/api/notificationApi";
+import { Notification } from "@/lib/api/restaurant/notificationApi";
 import { formatRelativeTimeShort } from "@/lib/format-relative-time";
 import { cn } from "@/lib/utils";
 

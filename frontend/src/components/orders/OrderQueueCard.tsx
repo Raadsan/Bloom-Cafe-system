@@ -3,7 +3,7 @@
 import React from "react";
 import { Clock, MapPin, Phone, User, Loader2, CheckCircle2, Flame, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Order, OrderStatus } from "@/lib/api/orderApi";
+import { Order, OrderStatus } from "@/lib/api/restaurant/orderApi";
 import { btnCreatePage } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 

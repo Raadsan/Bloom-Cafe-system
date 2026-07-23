@@ -21,8 +21,8 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { userApi, User } from "@/lib/api/userApi";
-import { roleApi, Role } from "@/lib/api/roleApi";
+import { userApi, User } from "@/lib/api/auth/userApi";
+import { roleApi, Role } from "@/lib/api/auth/roleApi";
 import { useToast } from "@/components/ui/toast";
 import {
   dashboardPageClass,
