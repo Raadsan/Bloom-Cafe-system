@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { menuApi, Menu, SubMenu } from "@/lib/api/restaurant/menuApi";
+import type { WorkspaceKey } from "@/lib/workspaces";
 import { authApi } from "@/lib/api/auth/authApi";
 
 interface PermissionContextType {
@@ -17,6 +18,17 @@ interface PermissionContextType {
 
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
 
+function getModuleKeyForRole(roleName?: string): WorkspaceKey {
+  const norm = (roleName || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (["restaurant", "manager", "pos", "cashier", "waiter"].includes(norm)) {
+    return "RESTAURANT";
+  }
+  if (["accounting", "accountant"].includes(norm)) {
+    return "ACCOUNTING";
+  }
+  return "CORE";
+}
+
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
   const [permissions, setPermissions] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,11 +38,13 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     try {
       const cached = authApi.getCachedUser();
       if (cached) {
-        const adminRole = ['admin', 'super_admin', 'super admin'].includes(cached.role?.toLowerCase?.());
+        const roleName = String(cached.role || "");
+        const adminRole = ["admin", "super_admin", "super admin"].includes(roleName.toLowerCase());
         setIsAdmin(adminRole);
         if (adminRole) return;
         if (cached.roleId) {
-          const menus = await menuApi.getMenusByRole(cached.roleId);
+          const moduleKey = getModuleKeyForRole(roleName);
+          const menus = await menuApi.getMenusByRole(cached.roleId, false, moduleKey);
           setPermissions(menus || []);
           return;
         }
@@ -38,12 +52,13 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
 
       const user = await authApi.getMe();
       if (user) {
-        // Admin bypass — full access
-        const adminRole = ['admin', 'super_admin', 'super admin'].includes(user.role?.toLowerCase?.());
+        const roleName = String(user.role || "");
+        const adminRole = ["admin", "super_admin", "super admin"].includes(roleName.toLowerCase());
         setIsAdmin(adminRole);
 
         if (!adminRole && user.roleId) {
-          const menus = await menuApi.getMenusByRole(user.roleId);
+          const moduleKey = getModuleKeyForRole(roleName);
+          const menus = await menuApi.getMenusByRole(user.roleId, false, moduleKey);
           setPermissions(menus || []);
         }
       }

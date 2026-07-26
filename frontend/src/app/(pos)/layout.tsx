@@ -158,10 +158,12 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
         orderApi.getAllOrders({ limit: 5, includeServed: true }, true),
         receiptSettingsApi.getSettings(),
       ]);
-      // Sort by most recent first, take top 5
-      const sorted = [...orders].sort((a, b) =>
-        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-      ).slice(0, 5);
+      // Sort by most recent first, filter out held (not yet served), take top 5
+      const sorted = [...orders]
+        .filter(o => o.status !== 'held')
+        .sort((a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        ).slice(0, 5);
       setRecentOrders(sorted);
       setReceiptSettings(settings);
     } catch {

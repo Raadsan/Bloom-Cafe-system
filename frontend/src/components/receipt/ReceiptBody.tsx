@@ -90,7 +90,12 @@ export function ReceiptBody({
   className?: string;
 }) {
   // QR points to public ticket page for this order
-  const frontendBase = "https://bloom.raadsantech.so";
+  const frontendBase =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_FRONTEND_URL ||
+    (typeof window !== "undefined"
+      ? window.location.origin
+      : "http://localhost:2000");
   const ticketUrl = `${frontendBase}/pos/ticket/${data.orderId}`;
 
   const dateStr = new Date(data.createdAt).toLocaleDateString("en-US", {

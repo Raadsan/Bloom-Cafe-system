@@ -18,6 +18,7 @@ const normalizeRoleName = (value = '') => value.trim().toLowerCase().replace(/[\
 function canRoleAccessModule(roleName, moduleKey) {
   const role = normalizeRoleName(roleName);
   if (role === 'admin' || role === 'super_admin') return true;
+  if (moduleKey === 'CORE') return true;
   if (role === 'accounting' || role === 'accountant') return moduleKey === 'ACCOUNTING';
   if (['restaurant', 'manager', 'pos', 'cashier', 'waiter'].includes(role)) {
     return moduleKey === 'RESTAURANT';

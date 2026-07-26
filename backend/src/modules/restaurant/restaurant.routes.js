@@ -18,6 +18,8 @@ import reviewRoutes from './engagement/review/review.routes.js'
 import stockMovementRoutes from './inventory/stockMovement/stockMovement.routes.js'
 import tableRoutes from './operations/table/table.routes.js'
 import trackingRoutes from './operations/tracking/tracking.routes.js'
+import { getAll as getAllPaymentMethods } from '../accounting/configuration/paymentMethods/paymentMethod.controller.js'
+import { protect } from '../../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
@@ -40,5 +42,8 @@ router.use('/reviews', reviewRoutes)
 router.use('/stock-movements', stockMovementRoutes)
 router.use('/tables', tableRoutes)
 router.use('/tracking', trackingRoutes)
+
+// Payment methods — accessible to all authenticated users (including POS)
+router.get('/payment-methods', protect, getAllPaymentMethods)
 
 export default router

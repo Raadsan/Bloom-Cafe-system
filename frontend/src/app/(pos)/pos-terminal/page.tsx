@@ -100,13 +100,25 @@ function findCustomerByPhone(phone: string, customers: Customer[]) {
   );
 }
 
-type PosPaymentMethod = Extract<PaymentMethod, "evc_plus" | "edahab" | "premier_wallet">;
+interface DbPaymentMethod {
+  id: number;
+  name: string;
+  code: string;
+  payment_type?: string;
+  is_active?: boolean;
+}
+
+function getPaymentMethodIcon(code: string, name: string) {
+  const str = (code + " " + name).toLowerCase();
+  if (str.includes("edahab") || str.includes("mobile") || str.includes("evc") || str.includes("zaad") || str.includes("sahal")) return Smartphone;
+  if (str.includes("wallet") || str.includes("premier")) return Wallet;
+  return Store;
+}
 
 const POS_PAYMENT_METHODS: {
-  id: PosPaymentMethod;
+  id: string;
   name: string;
   icon?: any;
-  useLogoImage?: boolean;
   providerName: string;
 }[] = [
   { id: "evc_plus", name: "Merchant", icon: Store, providerName: "Merchant" },
@@ -228,7 +240,20 @@ export default function PosTerminalPage() {
   const [pickupTime, setPickupTime] = useState("");
   const [deliveryStreet, setDeliveryStreet] = useState("");
   const [deliveryDistrict, setDeliveryDistrict] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>("evc_plus");
+  const [dbPaymentMethods, setDbPaymentMethods] = useState<DbPaymentMethod[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<string>("evc_plus");
+
+  const paymentMethodsList = useMemo(() => {
+    if (dbPaymentMethods.length > 0) {
+      return dbPaymentMethods.map(m => ({
+        id: m.code || String(m.id),
+        name: m.name,
+        icon: getPaymentMethodIcon(m.code || "", m.name),
+        providerName: m.name,
+      }));
+    }
+    return POS_PAYMENT_METHODS;
+  }, [dbPaymentMethods]);
   const [paymentPhone, setPaymentPhone] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [heldCount, setHeldCount] = useState(0);
@@ -386,12 +411,18 @@ export default function PosTerminalPage() {
 
   const ensureOrderDialogData = useCallback(async () => {
     try {
-      const [tbls, custs] = await Promise.all([
+      const [tbls, custs, pmRes] = await Promise.allSettled([
         tableApi.getAllTables(),
         customerApi.getPosCustomers(),
+        api.get("/payment-methods"),
       ]);
-      setTables(tbls);
-      setCustomers(custs);
+      if (tbls.status === "fulfilled") setTables(tbls.value);
+      if (custs.status === "fulfilled") setCustomers(custs.value);
+      if (pmRes.status === "fulfilled" && pmRes.value.data?.data) {
+        const methods: DbPaymentMethod[] = pmRes.value.data.data;
+        const active = methods.filter(m => m.is_active !== false);
+        if (active.length > 0) setDbPaymentMethods(active);
+      }
     } catch {
       // non-blocking — dialog can still open
     }
@@ -1050,7 +1081,14 @@ export default function PosTerminalPage() {
     }
   };
 
-  const selectedPaymentMethod = POS_PAYMENT_METHODS.find(m => m.id === paymentMethod)!;
+  const selectedPaymentMethod =
+    paymentMethodsList.find(m => m.id === paymentMethod) ||
+    paymentMethodsList[0] || {
+      id: "evc_plus",
+      name: "Merchant",
+      icon: Store,
+      providerName: "Merchant",
+    };
 
   const handleOpenPayment = () => {
     if (cart.length === 0) {
@@ -1466,20 +1504,6 @@ export default function PosTerminalPage() {
             )}
           </div>
 
-          {orderType === "dine-in" && (
-            <div className="border-t border-border/40 pt-3 space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <UtensilsCrossed className="size-3.5 text-primary" />
-                <label htmlFor="pos-table" className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Assign Table</label>
-              </div>
-              <select id="pos-table" value={selectedTable ?? ""} onChange={e => setSelectedTable(e.target.value ? Number(e.target.value) : null)} className="w-full h-10 px-3 rounded-lg border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
-                <option value="">Select a table</option>
-                {activeTables.map(table => (
-                  <option key={table.id} value={table.id}>Table {table.number}{table.name ? ` - ${table.name}` : ""}</option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2 min-h-0">
@@ -1878,8 +1902,31 @@ export default function PosTerminalPage() {
               </div>
             </div>
 
+            {/* 2b. Table Selection — only for Dine-in, shown right below Customer */}
+            {orderType === "dine-in" && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-zinc-500 uppercase block tracking-wide flex items-center gap-1.5">
+                  <UtensilsCrossed className="size-3.5" />
+                  Assign Table
+                </label>
+                <select
+                  id="checkout-pos-table"
+                  value={selectedTable ?? ""}
+                  onChange={e => setSelectedTable(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full h-11 px-3 rounded-xl border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                >
+                  <option value="">Select a table</option>
+                  {activeTables.map(table => (
+                    <option key={table.id} value={table.id}>
+                      Table {table.number}{table.name ? ` — ${table.name}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* 3. Dine-in / Delivery Details */}
-            {/* Table selection moved to sidebar - omitted from checkout dialog */}
+            {/* Table selection moved to popup form below Customer */}
 
             {orderType === "delivery" && (
               <div className="space-y-3 border-t border-zinc-100 pt-4">
@@ -1903,7 +1950,7 @@ export default function PosTerminalPage() {
                   Payment Method
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {POS_PAYMENT_METHODS.map(method => {
+                  {paymentMethodsList.map(method => {
                     return (
                       <button
                         key={method.id}

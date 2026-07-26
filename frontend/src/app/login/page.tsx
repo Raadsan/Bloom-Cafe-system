@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, MonitorSmartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { authApi } from "@/lib/api/auth/authApi";
@@ -16,6 +17,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
   const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -141,6 +143,21 @@ export default function LoginPage() {
             </>
           )}
         </Button>
+
+        <div className="relative flex items-center gap-3 my-1">
+          <div className="flex-1 border-t border-zinc-200" />
+          <span className="text-[11px] text-zinc-400 font-medium shrink-0">or</span>
+          <div className="flex-1 border-t border-zinc-200" />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => router.push("/pos/login")}
+          className="flex w-full items-center justify-center gap-2 h-11 rounded-md border-2 border-primary/20 bg-primary/5 text-primary font-semibold text-sm hover:bg-primary/10 hover:border-primary/40 transition-all"
+        >
+          <MonitorSmartphone className="h-4 w-4" />
+          POS Login
+        </button>
 
         <p className="text-center text-xs leading-relaxed text-zinc-400">
           {APP_SYSTEM_NAME}
