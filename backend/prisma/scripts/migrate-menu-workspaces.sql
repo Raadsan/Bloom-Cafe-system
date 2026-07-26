@@ -28,10 +28,13 @@ INSERT INTO `menu` (`title`, `url`, `icon`, `order`, `isActive`, `moduleKey`, `c
 SELECT 'Restaurant', '/restaurant/dashboard', 'Store', 2, TRUE, 'CORE', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM `menu` WHERE `moduleKey` = 'CORE' AND `url` = '/restaurant/dashboard');
 INSERT INTO `menu` (`title`, `url`, `icon`, `order`, `isActive`, `moduleKey`, `createdAt`, `updatedAt`)
-SELECT 'Accounting', '/accounting/dashboard', 'Landmark', 3, TRUE, 'CORE', NOW(), NOW()
+SELECT 'POS', '/pos-terminal', 'MonitorSmartphone', 3, TRUE, 'CORE', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM `menu` WHERE `moduleKey` = 'CORE' AND `url` = '/pos-terminal');
+INSERT INTO `menu` (`title`, `url`, `icon`, `order`, `isActive`, `moduleKey`, `createdAt`, `updatedAt`)
+SELECT 'Accounting', '/accounting/dashboard', 'Landmark', 4, TRUE, 'CORE', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM `menu` WHERE `moduleKey` = 'CORE' AND `url` = '/accounting/dashboard');
 INSERT INTO `menu` (`title`, `url`, `icon`, `order`, `isActive`, `moduleKey`, `createdAt`, `updatedAt`)
-SELECT 'Access Control', '/access-control/users', 'ShieldCheck', 4, TRUE, 'CORE', NOW(), NOW()
+SELECT 'Access Control', '/access-control/users', 'ShieldCheck', 5, TRUE, 'CORE', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM `menu` WHERE `moduleKey` = 'CORE' AND `url` = '/access-control/users');
 
 -- Grant existing admin roles full access to the additive CORE entries.
@@ -40,7 +43,7 @@ SELECT r.id, m.id, TRUE, TRUE, TRUE, TRUE, NOW(), NOW()
 FROM `role` r CROSS JOIN `menu` m
 LEFT JOIN `roleMenuAccess` a ON a.roleId = r.id AND a.menuId = m.id
 WHERE LOWER(REPLACE(r.name, ' ', '_')) IN ('admin', 'super_admin')
-  AND m.moduleKey IN ('CORE', 'ACCESS_CONTROL') AND a.id IS NULL;
+  AND m.moduleKey IN ('CORE', 'RESTAURANT', 'ACCOUNTING', 'ACCESS_CONTROL') AND a.id IS NULL;
 
 CREATE INDEX `menu_moduleKey_isActive_order_idx`
   ON `menu` (`moduleKey`, `isActive`, `order`);

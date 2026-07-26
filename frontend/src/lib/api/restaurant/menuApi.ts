@@ -148,6 +148,10 @@ export const menuApi = {
     menuApi.setAllMenusCache(next);
     return next;
   },
+  getRolePermissions: async (roleId: number): Promise<Menu[]> => {
+    const res = await api.get(`/menus/permissions/${roleId}`);
+    return res.data.data || [];
+  },
 
   getMenusByRole: async (roleId: number, forceRefresh = false, moduleKey: WorkspaceKey = 'CORE'): Promise<Menu[]> => {
     const cacheKey = `${roleId}:${moduleKey}`;

@@ -42,7 +42,13 @@ function getCachedRoleMenus(roleId) {
 
 export function clearRoleMenusCache(roleId) {
   if (roleId !== undefined && roleId !== null) {
-    roleMenusCache.delete(Number(roleId));
+    const normalizedRoleId = String(Number(roleId));
+    for (const key of roleMenusCache.keys()) {
+      const cacheKey = String(key);
+      if (cacheKey === normalizedRoleId || cacheKey.startsWith(`${normalizedRoleId}:`)) {
+        roleMenusCache.delete(key);
+      }
+    }
   } else {
     roleMenusCache.clear();
   }

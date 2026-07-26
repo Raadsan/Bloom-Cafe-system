@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { accountingDashboardApi, type AccountingDashboardData } from '@/lib/api/accounting/accountingDashboardApi';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -169,7 +170,21 @@ function ChartCard({ title, period, onPeriodChange, children }: { title: string;
 
 export default function AccountingDashboardPage() {
   const [period, setPeriod] = useState('This Month');
+  const [summary, setSummary] = useState<AccountingDashboardData | null>(null);
   const data = periodData[period as keyof typeof periodData];
+  const liveStats = [
+    { ...stats[0], value: summary ? `$${summary.totalRevenue.toLocaleString()}` : 'Loading...' },
+    { ...stats[1], value: summary ? `$${summary.expenses.toLocaleString()}` : 'Loading...' },
+    { ...stats[2], value: summary ? `$${summary.netProfit.toLocaleString()}` : 'Loading...', trend: (summary?.netProfit || 0) >= 0 ? 'up' as const : 'down' as const },
+    { ...stats[3], value: summary ? `$${summary.cashBalance.toLocaleString()}` : 'Loading...', trend: (summary?.cashBalance || 0) >= 0 ? 'up' as const : 'down' as const },
+    { ...stats[4], value: summary ? `$${summary.bankBalance.toLocaleString()}` : 'Loading...', trend: (summary?.bankBalance || 0) >= 0 ? 'up' as const : 'down' as const },
+  ];
+
+  useEffect(() => {
+    accountingDashboardApi.getSummary().then(setSummary).catch((error) => {
+      console.error('Failed to load accounting dashboard', error);
+    });
+  }, []);
 
   return (
     <main className="dashboard-scope min-h-full bg-background p-4 sm:p-6 lg:p-8">
@@ -183,7 +198,7 @@ export default function AccountingDashboardPage() {
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-        {stats.map((stat) => <StatCard key={stat.label} stat={stat} />)}
+        {liveStats.map((stat) => <StatCard key={stat.label} stat={stat} />)}
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-12">

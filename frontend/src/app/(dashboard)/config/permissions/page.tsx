@@ -150,7 +150,7 @@ export default function PermissionsPage() {
     try {
       setPermsLoading(true);
       setPermissionsDirty(false);
-      const roleMenus = await menuApi.getMenusByRole(roleId);
+      const roleMenus = await menuApi.getRolePermissions(roleId);
       const newPerms: typeof permissions = {};
       
       sortedAllMenus.forEach(m => {
@@ -453,9 +453,14 @@ export default function PermissionsPage() {
                         <span className="text-[13px] font-bold text-primary">{currentRow}</span>
                       </TableCell>
                       <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-medium text-zinc-800 uppercase tracking-tight">
-                          {menu.title}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-medium text-zinc-800 uppercase tracking-tight">
+                            {menu.title}
+                          </span>
+                          <span className="rounded bg-primary/8 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                            {menu.moduleKey}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className={cn(dashboardTableCellClass, "text-center")}>
                         <Checkbox

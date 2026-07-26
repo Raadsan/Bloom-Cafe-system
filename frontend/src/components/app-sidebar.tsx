@@ -188,8 +188,6 @@ function NavUser({ user }: { user: AuthUser | null }) {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const workspace = workspaceFromPath(pathname);
-  const { state, isMobile } = useSidebar();
-  
   const [user, setUser] = useState<AuthUser | null>(null);
   // Pre-populate from module cache for instant render — no loading flash on navigation
   const [menus, setMenus] = useState<Menu[]>(_sidebarCache?.menus ?? []);

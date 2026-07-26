@@ -33,7 +33,6 @@ export function ProtectedRoute({
 }) {
   const pathname = usePathname();
   const [allowedPath, setAllowedPath] = useState<string | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     const isLogoutLocked = () => document.cookie.split(";").some(
@@ -71,24 +70,48 @@ export function ProtectedRoute({
 
     async function validate() {
       try {
-        setValidationError(null);
-        // Login already stores the authenticated user. Reuse it here so every
-        // protected navigation does not block the whole application on /auth/me.
-        // API requests still enforce the server-side session and return 401 when
-        // it is no longer valid.
-        const user = await authApi.getMe();
+        // Browser profiles keep cookies and localStorage independently. Always
+        // reconcile the cached user with the server session before authorizing a
+        // workspace, otherwise an old auth_user can be checked against a
+        // different session cookie and produce a misleading 403.
+        const user = await authApi.getMe(true);
         const workspace = workspaceFromPath(pathname);
         const role = user.role?.trim().toLowerCase().replace(/[\s-]+/g, '_');
         const isPosSessionRoute = user.authContext === 'pos' && POS_ROUTES.has(pathname);
         const assignedMenus = user.roleId && !isPosSessionRoute && !ACCOUNT_ROUTES.has(pathname)
           ? await menuApi.getMenusByRole(user.roleId, false, workspace)
           : [];
+        const roleHome = (() => {
+          if (role === 'accountant' || role === 'accounting') return '/accounting/dashboard';
+          if (['restaurant', 'manager'].includes(role)) return '/restaurant/dashboard';
+          if (['pos', 'cashier', 'waiter'].includes(role)) return '/pos-terminal';
+          if (workspace === 'CORE') {
+            const moduleEntry = assignedMenus.find((menu) =>
+              ['/restaurant/dashboard', '/accounting/dashboard', '/access-control/users', '/pos-terminal'].includes(menu.url)
+            );
+            if (moduleEntry) return moduleEntry.url;
+          }
+          return '/dashboard';
+        })();
+        const redirectDeniedRoute = () => {
+          const isWorkspaceRole = ['accountant', 'accounting', 'restaurant', 'manager', 'pos', 'cashier', 'waiter'].includes(role);
+          const destination = roleHome !== pathname
+            ? roleHome
+            : !isWorkspaceRole && pathname !== '/dashboard'
+              ? '/dashboard'
+              : null;
+          if (destination) {
+            window.location.replace(destination);
+          } else {
+            authApi.logout(loginPath);
+          }
+        };
         const workspaceAllowed = isModuleAdmin(user.role) || assignedMenus.length > 0 ||
           (isPosSessionRoute && ['pos', 'cashier', 'waiter', 'manager'].includes(role)) ||
           (workspace === 'RESTAURANT' && ['restaurant', 'manager', 'pos', 'cashier', 'waiter'].includes(role)) ||
           (workspace === 'ACCOUNTING' && ['accounting', 'accountant'].includes(role));
         if (!workspaceAllowed) {
-          authApi.logout(loginPath);
+          redirectDeniedRoute();
           return;
         }
         // Page access always comes from this role's database menu permissions.
@@ -100,7 +123,7 @@ export function ProtectedRoute({
           !!user.roleId && hasRouteAccess(assignedMenus, pathname, workspace)
         );
         if (!canEnter) {
-          authApi.logout(loginPath);
+          redirectDeniedRoute();
           return;
         }
         if (active) setAllowedPath(pathname);
@@ -110,9 +133,14 @@ export function ProtectedRoute({
           authApi.logout(loginPath);
           return;
         }
-        if (active) setValidationError(
-          status === 403 ? "You do not have access to this workspace." : "Unable to validate workspace access. Please retry."
-        );
+        if (status === 403) {
+          if (pathname !== "/dashboard") window.location.replace("/dashboard");
+          return;
+        }
+        // Network/server errors do not invalidate an existing authenticated
+        // session. Keep the persistent shell mounted and let server-protected
+        // API requests continue enforcing authorization.
+        if (active) setAllowedPath((current) => current ?? pathname);
       }
     }
 
@@ -120,20 +148,11 @@ export function ProtectedRoute({
     return () => { active = false; };
   }, [pathname, loginPath]);
 
-  if (validationError) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-white p-6 dark:bg-zinc-950">
-        <div className="max-w-md text-center">
-          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{validationError}</p>
-          <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white">
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (allowedPath !== pathname) {
+  // Show the full-page session loader only on the first protected render.
+  // Once the session has been validated, keep the persistent layout mounted
+  // while a new workspace route is checked so the sidebar and header do not
+  // disappear during client-side dashboard switching.
+  if (allowedPath === null) {
     return (
       <div
         className="flex min-h-screen items-center justify-center bg-white dark:bg-zinc-950"

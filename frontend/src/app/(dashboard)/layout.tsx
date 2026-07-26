@@ -23,6 +23,8 @@ import { PermissionProvider } from "@/context/PermissionContext";
 import { pageHeaderBarTitleClass } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { DashboardSwitcher } from "@/components/dashboard/DashboardSwitcher";
+import { isModuleAdmin } from "@/lib/workspaces";
 import {
   onDebouncedEvent,
   REFRESH_NOTIFICATIONS,
@@ -32,7 +34,7 @@ import {
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => authApi.getCachedUser());
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -67,9 +69,6 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const cached = authApi.getCachedUser();
-    if (cached) setUser(cached);
-
     const fetchUser = async () => {
       try {
         const currentUser = await authApi.getMe();
@@ -334,6 +333,11 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           <main className="dashboard-scope flex-1 overflow-auto">
             <div className="py-4 px-2 md:px-3 lg:px-4">
               <div className="w-full mx-auto">
+                {isModuleAdmin(user?.role) && (
+                  <div className="mb-4 px-2">
+                    <DashboardSwitcher />
+                  </div>
+                )}
                 {children}
               </div>
             </div>

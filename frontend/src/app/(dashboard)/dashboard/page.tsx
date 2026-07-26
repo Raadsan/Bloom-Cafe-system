@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { authApi, AuthUser } from "@/lib/api/auth/authApi";
 import { reportApi, peekDashboardInit } from "@/lib/api/restaurant/reportApi";
 import { orderApi, Order, peekOrders } from "@/lib/api/restaurant/orderApi";
@@ -37,6 +38,7 @@ function DashboardSkeleton() {
 }
 
 export default function DashboardPage() {
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
   const [weeklyData, setWeeklyData] = useState<WeeklyPoint[] | null>(null);
@@ -140,6 +142,7 @@ export default function DashboardPage() {
       data={data}
       recentOrders={recentOrders}
       weeklyData={weeklyData}
+      dashboardMode={pathname.startsWith("/restaurant/") ? "restaurant" : "main"}
     />
   );
 }

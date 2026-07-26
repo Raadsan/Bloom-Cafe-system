@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { reportApi } from "@/lib/api/restaurant/reportApi";
+import { accountingDashboardApi, type AccountingDashboardData } from "@/lib/api/accounting/accountingDashboardApi";
 import {
   DollarSign,
   Users,
@@ -11,7 +13,10 @@ import {
   MoreHorizontal,
   Search,
   Filter,
-  Calendar
+  Landmark,
+  ReceiptText,
+  WalletCards,
+  Banknote
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,18 +97,20 @@ export default function AdminDashboard({
   data,
   recentOrders,
   weeklyData: weeklyDataProp,
+  dashboardMode = "restaurant",
 }: {
   data: DashboardData | null;
   recentOrders: Order[];
   weeklyData?: WeeklyPoint[] | null;
+  dashboardMode?: "main" | "restaurant";
 }) {
-  const [weeklyData, setWeeklyData] = useState<WeeklyPoint[]>(
-    weeklyDataProp?.length ? weeklyDataProp : EMPTY_WEEKLY_DATA
-  );
+  const router = useRouter();
+  const [fetchedWeeklyData, setFetchedWeeklyData] = useState<WeeklyPoint[]>(EMPTY_WEEKLY_DATA);
+  const [accountingData, setAccountingData] = useState<AccountingDashboardData | null>(null);
+  const weeklyData = weeklyDataProp?.length ? weeklyDataProp : fetchedWeeklyData;
 
   useEffect(() => {
     if (weeklyDataProp?.length) {
-      setWeeklyData(weeklyDataProp);
       return;
     }
 
@@ -111,13 +118,20 @@ export default function AdminDashboard({
       .getWeeklyAnalytics()
       .then((res) => {
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          setWeeklyData(res.data);
+          setFetchedWeeklyData(res.data);
         }
       })
       .catch(() => {
-        setWeeklyData(EMPTY_WEEKLY_DATA);
+        setFetchedWeeklyData(EMPTY_WEEKLY_DATA);
       });
   }, [weeklyDataProp]);
+
+  useEffect(() => {
+    if (dashboardMode !== "main") return;
+    accountingDashboardApi.getSummary().then(setAccountingData).catch((error) => {
+      console.error("Failed to load accounting dashboard summary", error);
+    });
+  }, [dashboardMode]);
 
   const statCards = [
     {
@@ -161,8 +175,86 @@ export default function AdminDashboard({
     <div className={cn(dashboardPageClass, "space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700")} style={dashboardPageStyle}>
 
       {/* Header Section */}
-      <div className={pageHeaderWrapperClass}>
-        <h1 className={pageHeaderTitleClass}>Admin Dashboard</h1>
+      <div className={cn(pageHeaderWrapperClass, "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between")}>
+        <div>
+          <h1 className={pageHeaderTitleClass}>
+            {dashboardMode === "main" ? "Main Dashboard" : "Restaurant Dashboard"}
+          </h1>
+        </div>
+      </div>
+
+      {dashboardMode === "main" && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Accounting</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => router.push("/accounting/dashboard")}>
+              Open Accounting <ArrowUpRight className="ml-1 size-3.5" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+            {[
+              { label: "Total Revenue", value: accountingData?.totalRevenue, change: "Live", trendUp: true, icon: DollarSign, line: "M1 27 L17 27 L29 22 L41 25 L53 6 L70 27" },
+              { label: "Expenses", value: accountingData?.expenses, change: "Live", trendUp: false, icon: ReceiptText, line: "M1 27 L18 27 L27 7 L36 26 L45 4 L54 10 L70 28" },
+              { label: "Net Profit", value: accountingData?.netProfit, change: "Live", trendUp: (accountingData?.netProfit || 0) >= 0, icon: Banknote, line: "M1 27 L17 27 L29 22 L41 25 L53 6 L70 27" },
+              { label: "Cash Balance", value: accountingData?.cashBalance, change: "Live", trendUp: (accountingData?.cashBalance || 0) >= 0, icon: WalletCards, line: "M1 27 L17 27 L29 22 L41 25 L53 6 L70 27" },
+              { label: "Bank Balance", value: accountingData?.bankBalance, change: "Live", trendUp: (accountingData?.bankBalance || 0) >= 0, icon: Landmark, line: "M1 27 L17 27 L29 22 L41 25 L53 6 L70 27" },
+            ].map((item, index) => (
+              <article key={item.label} className="group rounded-2xl border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className={cn(
+                      "flex size-9 shrink-0 items-center justify-center rounded-full",
+                      index === 1 ? "bg-rose-50 text-rose-500 dark:bg-rose-500/10" : "bg-primary/8 text-primary"
+                    )}>
+                      <item.icon className="size-4" />
+                    </span>
+                    <p className="truncate text-xs font-medium text-muted-foreground">{item.label}</p>
+                  </div>
+                  <MoreHorizontal className="size-4 shrink-0 text-muted-foreground" />
+                </div>
+                <div className="mt-5 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[1.35rem] font-bold tracking-tight tabular-nums">
+                      {item.value === undefined ? "Loading..." : `$${item.value.toLocaleString()}`}
+                    </p>
+                    <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                      {item.trendUp
+                        ? <ArrowUpRight className="size-3 text-emerald-600" />
+                        : <ArrowDownRight className="size-3 text-rose-500" />}
+                      <span className={item.trendUp ? "font-semibold text-emerald-600" : "font-semibold text-rose-500"}>
+                        {item.change}
+                      </span>
+                      <span>database</span>
+                    </div>
+                  </div>
+                  <svg viewBox="0 0 72 32" className="h-8 w-[72px] shrink-0 overflow-visible" aria-hidden="true">
+                    <path
+                      d={item.line}
+                      fill="none"
+                      stroke={item.trendUp ? "var(--primary)" : "#f05268"}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          {dashboardMode === "main" && <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Restaurant</p>}
+        </div>
+        {dashboardMode === "main" && (
+          <Button variant="outline" size="sm" onClick={() => router.push("/restaurant/dashboard")}>
+            Open Restaurant <ArrowUpRight className="ml-1 size-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* Stat Cards Grid */}
