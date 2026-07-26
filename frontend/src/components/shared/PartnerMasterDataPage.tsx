@@ -2,11 +2,13 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Edit3, Plus, RefreshCw, Search, Trash2, Users } from 'lucide-react';
+import { Edit3, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { createAccountingCrudApi, type AccountingRecord } from '@/lib/api/accounting/accountingCrud';
 import { useToast } from '@/components/ui/toast';
 import { usePermissions } from '@/context/PermissionContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import { actionBtnDelete, actionBtnEdit, btnCreatePage, dashboardStatusBadgeClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Kind = 'customer' | 'vendor';
 type Record = AccountingRecord & { name?: string; fullName?: string; phone?: string; email?: string; address?: string; is_active?: boolean };
@@ -70,18 +72,18 @@ export default function PartnerMasterDataPage({ kind, restaurantLabel = false }:
     try { await api.remove(row.id); showToast(`${singular[0].toUpperCase()}${singular.slice(1)} deleted successfully`, 'success'); await revalidate(); }
     catch (error) { showToast(message(error), 'error'); }
   }
+  const columns: DashboardTableColumn<Record>[] = [
+    { key: 'id', header: 'ID', cell: (row) => <span className="font-bold text-primary">#{row.id}</span> },
+    { key: 'name', header: 'Name', cell: (row) => <span className="font-medium">{row.name || row.fullName}</span> },
+    { key: 'phone', header: 'Phone', cell: (row) => row.phone || '—' },
+    { key: 'email', header: 'Email', cell: (row) => row.email || '—' },
+    { key: 'status', header: 'Status', align: 'center', cell: (row) => <span className={`${dashboardStatusBadgeClass} ${row.is_active === false ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'}`}>{row.is_active === false ? 'Inactive' : 'Active'}</span> },
+    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1">{canEdit && <button onClick={() => beginEdit(row)} aria-label="Edit" className={actionBtnEdit}><Edit3 className="size-4" /></button>}{canDelete && <button onClick={() => void remove(row)} aria-label="Delete" className={actionBtnDelete}><Trash2 className="size-4" /></button>}</div> },
+  ];
 
   return <main className="dashboard-scope space-y-5 p-4 sm:p-6 lg:p-8">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-      <div><h1 className="text-3xl font-bold">{title}</h1></div>
-      {canAdd && <button onClick={beginCreate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white"><Plus className="size-4" /> Add {singular}</button>}
-    </div>
-    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <div className="flex items-center gap-3 border-b p-4"><div className="relative max-w-sm flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${plural}...`} className="h-10 w-full rounded-xl border bg-background pl-9 pr-3 text-sm" /></div><button onClick={() => void revalidate()} aria-label="Refresh" className="rounded-lg border p-2"><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /></button></div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr><th className="px-5 py-3">ID</th><th className="px-4 py-3">Name</th><th className="px-4 py-3">Phone</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr></thead>
-      <tbody className="divide-y">{!loading && filtered.map((row) => <tr key={row.id}><td className="px-5 py-3 font-semibold text-primary">#{row.id}</td><td className="px-4 py-3 font-medium">{row.name || row.fullName}</td><td className="px-4 py-3">{row.phone || '—'}</td><td className="px-4 py-3">{row.email || '—'}</td><td className="px-4 py-3">{row.is_active === false ? 'Inactive' : 'Active'}</td><td className="px-5 py-3"><div className="flex justify-end gap-1">{canEdit && <button onClick={() => beginEdit(row)} aria-label="Edit" className="rounded-lg p-2 hover:bg-muted"><Edit3 className="size-4" /></button>}{canDelete && <button onClick={() => void remove(row)} aria-label="Delete" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50"><Trash2 className="size-4" /></button>}</div></td></tr>)}</tbody></table>
-      {!loading && filtered.length === 0 && <div className="flex flex-col items-center py-14 text-muted-foreground"><Users className="size-8" /><p className="mt-2 text-sm">No {plural} found.</p></div>}</div>
-    </section>
+    <div className={pageHeaderWrapperClass}><h1 className={pageHeaderTitleClass}>{title}</h1></div>
+    <DashboardDataTable rows={filtered} columns={columns} loading={loading} searchValue={query} onSearchChange={setQuery} searchPlaceholder={`Search ${plural}...`} emptyText={`No ${plural} found`} minWidth="800px" action={canAdd ? <button onClick={beginCreate} className={btnCreatePage}><Plus className="size-4" /> Add {singular}</button> : undefined} filters={<button onClick={() => void revalidate()} aria-label="Refresh" className="flex size-[42px] items-center justify-center rounded-md border"><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /></button>} />
     <Dialog open={open} onOpenChange={(value) => !saving && setOpen(value)}><DialogContent><DialogHeader><DialogTitle>{selected ? 'Edit' : 'Add'} {singular}</DialogTitle><DialogDescription>This record is immediately available in both workspaces.</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-4">
       <label className="block text-sm font-medium">Name *<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 h-10 w-full rounded-lg border px-3" /></label>
       <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium">Phone<input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1 h-10 w-full rounded-lg border px-3" /></label><label className="text-sm font-medium">Email<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="mt-1 h-10 w-full rounded-lg border px-3" /></label></div>

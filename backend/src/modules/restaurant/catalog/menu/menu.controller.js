@@ -170,7 +170,13 @@ export const getResolvedMenus = async (req, res) => {
     const roleId = Number(req.user?.roleId ?? req.user?.role?.id);
     const roleName = req.user?.role?.name ?? req.user?.role ?? '';
     if (!roleId) return res.status(401).json({ success: false, message: 'Authentication required' });
-    if (!canRoleAccessModule(roleName, moduleKey)) {
+    const hasAssignedWorkspaceAccess = canRoleAccessModule(roleName, moduleKey) || Boolean(
+      await prisma.roleMenuAccess.findFirst({
+        where: { roleId, canView: true, menu: { moduleKey, isActive: true } },
+        select: { id: true },
+      })
+    );
+    if (!hasAssignedWorkspaceAccess) {
       return res.status(403).json({ success: false, message: 'Workspace access denied' });
     }
 

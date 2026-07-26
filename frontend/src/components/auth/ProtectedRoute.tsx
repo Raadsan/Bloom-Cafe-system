@@ -72,11 +72,18 @@ export function ProtectedRoute({
     async function validate() {
       try {
         setValidationError(null);
-        const user = await authApi.getMe(true);
+        // Login already stores the authenticated user. Reuse it here so every
+        // protected navigation does not block the whole application on /auth/me.
+        // API requests still enforce the server-side session and return 401 when
+        // it is no longer valid.
+        const user = await authApi.getMe();
         const workspace = workspaceFromPath(pathname);
         const role = user.role?.trim().toLowerCase().replace(/[\s-]+/g, '_');
         const isPosSessionRoute = user.authContext === 'pos' && POS_ROUTES.has(pathname);
-        const workspaceAllowed = isModuleAdmin(user.role) ||
+        const assignedMenus = user.roleId && !isPosSessionRoute && !ACCOUNT_ROUTES.has(pathname)
+          ? await menuApi.getMenusByRole(user.roleId, false, workspace)
+          : [];
+        const workspaceAllowed = isModuleAdmin(user.role) || assignedMenus.length > 0 ||
           (isPosSessionRoute && ['pos', 'cashier', 'waiter', 'manager'].includes(role)) ||
           (workspace === 'RESTAURANT' && ['restaurant', 'manager', 'pos', 'cashier', 'waiter'].includes(role)) ||
           (workspace === 'ACCOUNTING' && ['accounting', 'accountant'].includes(role));
@@ -88,7 +95,9 @@ export function ProtectedRoute({
         // Admin is not an automatic bypass: it must also have canView assigned.
         const canEnter = (user.authContext === "pos" && POS_ROUTES.has(pathname)) ||
           ACCOUNT_ROUTES.has(pathname) || pathname === '/accounting/dashboard' || (
-          !!user.roleId && hasRouteAccess(await menuApi.getMenusByRole(user.roleId, true, workspace), pathname, workspace)
+          // Menu permissions have a short-lived cache and are also enforced by
+          // the backend. Avoid forcing the same remote query on every route.
+          !!user.roleId && hasRouteAccess(assignedMenus, pathname, workspace)
         );
         if (!canEnter) {
           authApi.logout(loginPath);
@@ -125,7 +134,20 @@ export function ProtectedRoute({
   }
 
   if (allowedPath !== pathname) {
-    return <div className="min-h-screen bg-white dark:bg-zinc-950" aria-label="Validating session" />;
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center bg-white dark:bg-zinc-950"
+        aria-label="Validating session"
+        aria-live="polite"
+      >
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="h-9 w-9 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+            Loading your workspace...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return children;

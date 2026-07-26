@@ -1,10 +1,11 @@
 import express from 'express'
-import { getAll, getById, create, update, remove } from './vendorPayment.controller.js'
+import { getAll, getById, create, update, remove, post } from './vendorPayment.controller.js'
 import { protect } from '../../../../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
 router.use(protect)
+router.post('/:id/post', post)
 
 router.route('/')
     .get(getAll)

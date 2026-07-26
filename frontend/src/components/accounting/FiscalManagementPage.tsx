@@ -8,6 +8,8 @@ import { fiscalPeriodApi } from '@/lib/api/accounting/ledger/fiscalPeriodApi';
 import { companyApi } from '@/lib/api/accounting/configuration/companyApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import { actionBtnDelete, actionBtnEdit, btnCreatePage, dashboardSelectClass } from '@/lib/dashboard-ui';
 
 type Row = { id: number; [key: string]: unknown };
 type Kind = 'fiscal-years' | 'fiscal-periods';
@@ -129,6 +131,15 @@ export default function FiscalManagementPage({ kind }: { kind: Kind }) {
     } catch (error) { showToast(errorMessage(error), 'error'); }
     finally { setSaving(false); }
   }
+  const columns: DashboardTableColumn<Row>[] = [
+    { key: 'name', header: isYears ? 'Fiscal Year' : 'Period', cell: (row) => <div><p className="font-semibold">{String(row.name)}</p>{!isYears && <p className="text-[10px] text-muted-foreground">Period {String(row.period_number).padStart(2, '0')}</p>}</div> },
+    { key: 'relation', header: isYears ? 'Company' : 'Fiscal Year', cell: (row) => isYears ? companyMap.get(Number(row.company_id)) || '—' : String(yearMap.get(Number(row.fiscal_year_id))?.name || '—') },
+    { key: 'start', header: 'Start Date', cell: (row) => prettyDate(row.start_date) },
+    { key: 'end', header: 'End Date', cell: (row) => prettyDate(row.end_date) },
+    ...(!isYears ? [{ key: 'type', header: 'Type', cell: (row: Row) => row.is_closing_period ? 'Closing' : 'Regular' } as DashboardTableColumn<Row>] : []),
+    { key: 'state', header: 'State', align: 'center', cell: (row) => <StateBadge state={String(row.state)} /> },
+    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1"><button onClick={() => openEdit(row)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button onClick={() => { setSelected(row); setDeleteOpen(true); }} className={actionBtnDelete}><Trash2 className="size-4" /></button></div> },
+  ];
 
   return (
     <main className="dashboard-scope space-y-5 p-4 sm:p-6 lg:p-8">
@@ -144,7 +155,8 @@ export default function FiscalManagementPage({ kind }: { kind: Kind }) {
         {!isYears && <Summary label="Closing Periods" value={closingCount} hint="Year-end adjustment periods" />}
       </div>
 
-      <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <DashboardDataTable rows={filtered} columns={columns} loading={loading} searchValue={query} onSearchChange={setQuery} searchPlaceholder={`Search ${isYears ? 'fiscal years' : 'periods'}...`} emptyText={`No ${isYears ? 'fiscal years' : 'periods'} found`} minWidth="900px" action={<button onClick={openCreate} disabled={isYears ? !companies.length : !years.length} className={btnCreatePage}><Plus className="size-4" /> Add {isYears ? 'Fiscal Year' : 'Period'}</button>} filters={<><select value={relationFilter} onChange={(event) => setRelationFilter(event.target.value)} className={dashboardSelectClass}><option value="all">All {isYears ? 'companies' : 'fiscal years'}</option>{(isYears ? companies : years).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select><select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} className={dashboardSelectClass}><option value="all">All states</option><option value="open">Open</option><option value="closed">Closed</option></select><button onClick={() => void loadData()} disabled={loading} className="flex size-[42px] items-center justify-center rounded-md border"><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /></button></>} />
+      <section className="hidden">
         <div className="grid gap-3 border-b p-4 lg:grid-cols-[minmax(240px,1fr)_200px_150px_auto]">
           <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${isYears ? 'fiscal years' : 'periods'}...`} className="h-10 w-full rounded-xl border bg-background pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10" /></div>
           <select value={relationFilter} onChange={(event) => setRelationFilter(event.target.value)} className="h-10 rounded-xl border bg-background px-3 text-xs outline-none focus:border-primary"><option value="all">All {isYears ? 'companies' : 'fiscal years'}</option>{(isYears ? companies : years).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select>

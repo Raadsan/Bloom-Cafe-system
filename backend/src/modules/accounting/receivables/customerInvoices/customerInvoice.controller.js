@@ -265,7 +265,7 @@ async function allocateInvoiceNumber(tx, journal) {
 
 export const getAll = async (req, res) => {
   try {
-    const data = await prisma.customer_invoices.findMany({ include: invoiceInclude, orderBy: { created_at: 'desc' } })
+    const data = await prisma.customer_invoices.findMany({ where: { document_type: 'invoice' }, include: invoiceInclude, orderBy: { created_at: 'desc' } })
     res.json({ success: true, data })
   } catch (error) { fail(res, error, 'Failed to fetch customer invoices') }
 }

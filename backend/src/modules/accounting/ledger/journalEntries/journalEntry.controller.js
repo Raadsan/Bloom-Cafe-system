@@ -87,7 +87,7 @@ export const post = async (req, res) => {
             if (entry.state !== 'draft') throw new JournalEntryError(409, 'This journal entry has already been posted or is no longer available for posting')
             if (entry.journal_items.length < 2) throw new JournalEntryError(400, 'A journal entry requires at least two lines')
             if (!entry.companies?.is_active) throw new JournalEntryError(400, 'The company is inactive or invalid')
-            if (!entry.journals?.is_active || !['general', 'adjustment'].includes(entry.journals.journal_type)) throw new JournalEntryError(400, 'This journal is not an active manual journal')
+            if (!entry.journals?.is_active || !['general', 'adjustment', 'cash', 'bank'].includes(entry.journals.journal_type)) throw new JournalEntryError(400, 'This journal is not an active manual journal')
             if (!entry.fiscal_periods || entry.fiscal_periods.state !== 'open') throw new JournalEntryError(400, 'The fiscal period is closed or invalid')
             if (entry.fiscal_periods.fiscal_years.state !== 'open') throw new JournalEntryError(400, 'The fiscal year is closed')
             if (entry.fiscal_periods.fiscal_years.company_id !== entry.company_id) throw new JournalEntryError(400, 'The fiscal period does not belong to this company')

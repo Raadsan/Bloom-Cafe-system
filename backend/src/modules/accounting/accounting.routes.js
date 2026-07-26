@@ -18,10 +18,12 @@ import bankAccountsRoutes from './banking/bankAccounts/bankAccount.routes.js'
 import journalEntriesRoutes from './ledger/journalEntries/journalEntry.routes.js'
 import customerInvoicesRoutes from './receivables/customerInvoices/customerInvoice.routes.js'
 import customerReceiptsRoutes from './receivables/customerReceipts/customerReceipt.routes.js'
+import creditNotesRoutes from './receivables/creditNotes/creditNote.routes.js'
 import vendorBillsRoutes from './payables/vendorBills/vendorBill.routes.js'
 import vendorPaymentsRoutes from './payables/vendorPayments/vendorPayment.routes.js'
 import reportsRoutes from './reports/accountingReport.routes.js'
 import sharedRoutes from './shared/shared.routes.js'
+import posOrderAccountingRoutes from './services/posOrderAccounting.routes.js'
 import { protect, authorizeWorkspace } from '../../middlewares/authMiddleware.js'
 
 const router = express.Router()
@@ -47,9 +49,11 @@ router.use('/bank-accounts', bankAccountsRoutes)
 router.use('/journal-entries', journalEntriesRoutes)
 router.use('/customer-invoices', customerInvoicesRoutes)
 router.use('/customer-receipts', customerReceiptsRoutes)
+router.use('/credit-notes', creditNotesRoutes)
 router.use('/vendor-bills', vendorBillsRoutes)
 router.use('/vendor-payments', vendorPaymentsRoutes)
 router.use('/reports', reportsRoutes)
 router.use('/shared', sharedRoutes)
+router.use('/pos-orders', posOrderAccountingRoutes)
 
 export default router

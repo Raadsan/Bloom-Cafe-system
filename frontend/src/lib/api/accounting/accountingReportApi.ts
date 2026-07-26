@@ -42,4 +42,16 @@ export const accountingReportApi = {
     });
     return response.data.data;
   },
+
+  getCashFlow: async (filters: AccountingReportFilters) => {
+    const response = await api.get('/accounting/reports/cash-flow', { params: reportParams(filters) });
+    return response.data.data;
+  },
+
+  getJournalReport: async (filters: AccountingReportFilters & { journalId?: number }) => {
+    const response = await api.get('/accounting/reports/journal-report', {
+      params: { ...reportParams(filters), journal_id: filters.journalId },
+    });
+    return response.data.data;
+  },
 };

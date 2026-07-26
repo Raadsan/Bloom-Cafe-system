@@ -7,9 +7,9 @@ const accountingMenus = [
   {
     title: 'Configuration', url: '/configuration', icon: 'Settings2', order: 2,
     items: [
+      ['Companies', '/configuration/companies'],
       ['Account Types', '/configuration/account-types'],
       ['Currencies', '/configuration/currencies'],
-      ['Companies', '/configuration/companies'],
       ['Payment Methods', '/configuration/payment-methods'],
       ['Payment Terms', '/configuration/payment-terms'],
       ['Taxes', '/configuration/taxes'],
@@ -22,20 +22,20 @@ const accountingMenus = [
     items: [['Fiscal Years', '/fiscal-years'], ['Fiscal Periods', '/fiscal-periods']],
   },
   {
-    title: 'General Ledger', url: '/ledger', icon: 'BookOpen', order: 5,
+    title: 'Ledger', url: '/ledger', icon: 'BookOpen', order: 5,
     items: [['Journals', '/journals'], ['Journal Entries', '/journal-entries']],
   },
   {
     title: 'Receivables', url: '/receivables', icon: 'ArrowDownToLine', order: 6,
-    items: [['Customers', '/customers'], ['Customer Invoices', '/customer-invoices'], ['Customer Receipts', '/customer-receipts']],
+    items: [['Customers', '/customers'], ['Customer Invoices', '/customer-invoices'], ['Customer Receipts', '/customer-receipts'], ['Credit Notes', '/credit-notes']],
   },
   {
     title: 'Payables', url: '/payables', icon: 'ArrowUpFromLine', order: 7,
-    items: [['Vendors', '/vendors'], ['Vendor Bills', '/vendor-bills'], ['Vendor Payments', '/vendor-payments']],
+    items: [['Vendors', '/vendors'], ['Vendor Bills', '/vendor-bills'], ['Vendor Payments', '/vendor-payments'], ['Vendor Refunds', '/vendor-refunds']],
   },
   {
     title: 'Banking', url: '/banking', icon: 'Landmark', order: 8,
-    items: [['Banks', '/banks'], ['Bank Accounts', '/bank-accounts']],
+    items: [['Banks', '/banks'], ['Bank Accounts', '/bank-accounts'], ['Cash Transactions', '/cash-transactions']],
   },
   { title: 'Products', url: '/products', icon: 'Package', order: 9 },
   {
@@ -45,6 +45,8 @@ const accountingMenus = [
       ['Trial Balance', '/reports/trial-balance'],
       ['Profit & Loss', '/reports/profit-and-loss'],
       ['Balance Sheet', '/reports/balance-sheet'],
+      ['Cash Flow', '/reports/cash-flow'],
+      ['Journal Report', '/reports/journal-report'],
     ],
   },
 ]

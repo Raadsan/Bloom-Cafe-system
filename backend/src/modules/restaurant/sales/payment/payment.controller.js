@@ -4,6 +4,7 @@ import { notifyNewOrder } from '../../../../utils/orderNotifications.js'
 import { sendWaafiPayment, normalizeWaafiPhone } from '../../../../utils/waafiPayment.js'
 import { clearOrderListCache } from '../order/order.controller.js'
 import { upsertCustomerByPhone } from '../../../shared/customers/customer.service.js'
+import { processCompletedPOSOrderSafely } from '../../../accounting/services/posOrderAccounting.service.js'
 
 // GET AVAILABLE PAYMENT METHODS
 export const getPaymentMethods = async (req, res) => {
@@ -148,6 +149,8 @@ export const processWaafiPayment = async (req, res) => {
         data:    updatedPayment
       })
     }
+
+    await processCompletedPOSOrderSafely(orderId, 'Waafi payment confirmation')
 
     // ── 5. NOTIFICATIONS ────────────────────────────────────────────────────
     await prisma.notification.create({
@@ -312,6 +315,8 @@ export const processCheckoutPayment = async (req, res) => {
         paidAt:      new Date()
       }
     })
+
+    await processCompletedPOSOrderSafely(order.id, 'mobile checkout payment')
 
     // 5. UPDATE TABLE STATUS
     if (order.tableId) {
@@ -484,6 +489,10 @@ export const confirmPublicPayment = async (req, res) => {
       }
     })
 
+    if (status === 'paid') {
+      await processCompletedPOSOrderSafely(payment.orderId, 'public payment confirmation')
+    }
+
     res.json({ success: true, data: updatedPayment })
 
   } catch (error) {
@@ -551,6 +560,8 @@ export const createPayment = async (req, res) => {
           })
         : Promise.resolve(),
     ])
+
+    await processCompletedPOSOrderSafely(order.id, 'staff POS payment')
 
     emitPaymentSuccess(payment.order)
     res.json({ success: true, data: payment })
@@ -637,6 +648,10 @@ export const updatePaymentStatus = async (req, res) => {
         paidAt: req.body.status === 'paid' ? new Date() : null
       }
     })
+
+    if (req.body.status === 'paid') {
+      await processCompletedPOSOrderSafely(payment.orderId, 'payment status update')
+    }
 
     res.json({ success: true, data: payment })
 

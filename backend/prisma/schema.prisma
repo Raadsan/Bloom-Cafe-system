@@ -219,6 +219,9 @@ model notification {
 
 model order {
   id             Int         @id @default(autoincrement())
+  orderNumber    String?     @unique @db.VarChar(32)
+  companyId      Int?        @db.UnsignedInt
+  currencyId     Int?        @db.UnsignedInt
   status         String      @default("pending")
   total          Float       @default(0)
   taxAmount      Float       @default(0)
@@ -236,9 +239,16 @@ model order {
   userId         Int?
   orderType      String      @default("dine-in")
   source         String      @default("pos")
+  accountingStatus String    @default("pending") @db.VarChar(16)
+  journalEntryId Int?        @unique @db.UnsignedInt
+  accountedAt    DateTime?
+  accountingError String?    @db.Text
   addressId      Int?
   address        address?    @relation(fields: [addressId], references: [id])
   customer       customers?  @relation(fields: [customerId], references: [id])
+  company        companies?  @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  currency       currencies? @relation(fields: [currencyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  journalEntry   journal_entries? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   table          table?      @relation(fields: [tableId], references: [id], onDelete: NoAction)
   user           user?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   orderitem      orderitem[]
@@ -251,6 +261,9 @@ model order {
   @@index([userId], map: "order_userId_fkey")
   @@index([userId, status])
   @@index([status, createdAt])
+  @@index([companyId])
+  @@index([currencyId])
+  @@index([accountingStatus])
 }
 
 model orderitem {
@@ -538,6 +551,7 @@ model companies {
   fiscal_years      fiscal_years[]
   journal_entries   journal_entries[]
   journals          journals[]
+  order             order[]
   vendor_bills      vendor_bills[]
   vendor_payments   vendor_payments[]
   vendors           vendors[]
@@ -562,6 +576,7 @@ model currencies {
   customers         customers[]
   journal_items     journal_items[]
   journals          journals[]
+  order             order[]
   vendor_bills      vendor_bills[]
   vendor_payments   vendor_payments[]
   vendors           vendors[]
@@ -781,8 +796,10 @@ model journal_entries {
   journal_items         journal_items[]
   vendor_bills          vendor_bills[]
   vendor_payments       vendor_payments[]
+  order                 order?
 
   @@unique([company_id, entry_number], map: "uq_je_company_number")
+  @@unique([source_type, source_id], map: "uq_je_source")
   @@index([fiscal_period_id], map: "fk_je_period")
   @@index([reversed_entry_id], map: "fk_je_reversed")
   @@index([entry_date], map: "idx_je_date")
@@ -1236,6 +1253,7 @@ enum journal_entries_source_type {
   customer_receipt
   vendor_bill
   vendor_payment
+  pos_order
 }
 
 enum customer_receipts_state {

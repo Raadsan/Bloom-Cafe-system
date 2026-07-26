@@ -1,52 +1,278 @@
 import { PrismaClient } from '@prisma/client'
+import { logAudit } from '../../../../utils/auditHelper.js'
 
 const prisma = new PrismaClient()
-
-export const getAll = async (req, res) => {
-    try {
-        const data = await prisma.vendor_bills.findMany()
-        res.status(200).json({ success: true, data })
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message })
-    }
+const include = {
+  vendors: { select: { id: true, name: true, phone: true, email: true, vendor_code: true, company_id: true } },
+  currencies: { select: { id: true, code: true, symbol: true } },
+  payment_terms: { select: { id: true, name: true } },
+  fiscal_periods: { select: { id: true, name: true, start_date: true, end_date: true, state: true } },
+  journal_entries: { select: { id: true, entry_number: true, state: true } },
+  vendor_bill_lines: {
+    orderBy: { sequence: 'asc' },
+    include: {
+      products: { select: { id: true, name: true, sku: true } },
+      taxes: { select: { id: true, name: true, rate_percent: true, price_includes_tax: true } },
+      chart_of_accounts: { select: { id: true, code: true, name: true } },
+    },
+  },
 }
 
+const parseId = (value) => {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+const parseDate = (value) => {
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+const inputError = (message) => Object.assign(new Error(message), { status: 400 })
+const fail = (res, error, fallback) => {
+  console.error(fallback, error)
+  return res.status(error.status || (error.code === 'P2025' ? 404 : 500))
+    .json({ success: false, message: error.message || fallback })
+}
+
+async function prepareBill(input, documentType = 'bill') {
+  const vendorId = parseId(input.vendor_id)
+  const billDate = parseDate(input.bill_date)
+  const lines = Array.isArray(input.lines) ? input.lines : []
+  if (!vendorId || !billDate) throw inputError('Vendor and bill date are required')
+  if (!lines.length) throw inputError('Add at least one bill line')
+  const reversedBillId = documentType === 'refund' ? parseId(input.reversed_bill_id) : null
+
+  const vendor = await prisma.vendors.findUnique({ where: { id: vendorId } })
+  if (!vendor || !vendor.is_active) throw inputError('Active vendor not found')
+  const [company, journal, paymentTerm, fiscalPeriod] = await Promise.all([
+    prisma.companies.findUnique({ where: { id: vendor.company_id } }),
+    prisma.journals.findFirst({ where: { company_id: vendor.company_id, code: 'BILL', is_active: true } }),
+    parseId(input.payment_term_id) ? prisma.payment_terms.findUnique({ where: { id: parseId(input.payment_term_id) }, include: { payment_term_lines: true } }) : null,
+    prisma.fiscal_periods.findFirst({
+      where: { state: 'open', fiscal_years: { company_id: vendor.company_id, state: 'open' }, start_date: { lte: billDate }, end_date: { gte: billDate } },
+      orderBy: { period_number: 'asc' },
+    }),
+  ])
+  if (!company?.is_active) throw inputError('Vendor company is inactive or missing')
+  if (!journal || journal.journal_type !== 'purchase') throw inputError('Active Vendor Bills journal (BILL) was not found')
+  if (!fiscalPeriod) throw inputError('No open fiscal period covers the bill date')
+
+  const currencyId = parseId(input.currency_id) || company.currency_id
+  const [currency, payableAccount] = await Promise.all([
+    prisma.currencies.findUnique({ where: { id: currencyId } }),
+    prisma.chart_of_accounts.findFirst({
+      where: {
+        company_id: vendor.company_id, is_active: true,
+        OR: [{ code: '2100' }, ...(vendor.payable_account_id ? [{ id: vendor.payable_account_id }] : []), ...(journal.default_credit_account_id ? [{ id: journal.default_credit_account_id }] : [])],
+      },
+      orderBy: { code: 'asc' },
+    }),
+  ])
+  if (!currency?.is_active) throw inputError('Bill currency is inactive or missing')
+  if (!payableAccount) throw inputError('Accounts Payable account 2100 was not found')
+  if (reversedBillId) {
+    const original = await prisma.vendor_bills.findFirst({ where: { id: reversedBillId, document_type: 'bill', vendor_id: vendorId, state: 'posted' } })
+    if (!original) throw inputError('Original posted vendor bill was not found for this vendor')
+  }
+
+  const productIds = [...new Set(lines.map((line) => parseId(line.product_id)).filter(Boolean))]
+  const taxIds = [...new Set(lines.map((line) => parseId(line.tax_id)).filter(Boolean))]
+  const [products, taxes, accounts] = await Promise.all([
+    prisma.products.findMany({ where: { id: { in: productIds } } }),
+    prisma.taxes.findMany({ where: { id: { in: taxIds } } }),
+    prisma.chart_of_accounts.findMany({ where: { company_id: vendor.company_id, is_active: true } }),
+  ])
+  const productMap = new Map(products.map((row) => [row.id, row]))
+  const taxMap = new Map(taxes.map((row) => [row.id, row]))
+  const accountMap = new Map(accounts.map((row) => [row.id, row]))
+  let amountUntaxed = 0
+  let amountTax = 0
+  const preparedLines = lines.map((line, index) => {
+    const productId = parseId(line.product_id)
+    const product = productId ? productMap.get(productId) : null
+    const taxId = parseId(line.tax_id)
+    const tax = taxId ? taxMap.get(taxId) : null
+    const expenseAccountId = parseId(line.expense_account_id) || product?.expense_account_id
+    const quantity = Number(line.quantity)
+    const unitPrice = Number(line.unit_price)
+    const discount = Number(line.discount_percent || 0)
+    const description = String(line.description || product?.name || '').trim()
+    if (!description) throw inputError(`Line ${index + 1}: description is required`)
+    if (!Number.isFinite(quantity) || quantity <= 0) throw inputError(`Line ${index + 1}: quantity must be greater than zero`)
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw inputError(`Line ${index + 1}: unit price cannot be negative`)
+    if (!Number.isFinite(discount) || discount < 0 || discount > 100) throw inputError(`Line ${index + 1}: discount must be between 0 and 100`)
+    if (!expenseAccountId || !accountMap.has(expenseAccountId)) throw inputError(`Line ${index + 1}: a valid company expense account is required`)
+    if (taxId && !tax) throw inputError(`Line ${index + 1}: tax not found`)
+    const discounted = quantity * unitPrice * (1 - discount / 100)
+    const rate = tax ? Number(tax.rate_percent) / 100 : 0
+    const untaxed = tax?.price_includes_tax && rate ? discounted / (1 + rate) : discounted
+    const taxAmount = tax ? (tax.price_includes_tax ? discounted - untaxed : untaxed * rate) : 0
+    amountUntaxed += Math.round(untaxed * 100) / 100
+    amountTax += Math.round(taxAmount * 100) / 100
+    return { sequence: (index + 1) * 10, product_id: productId, description, quantity, unit_price: unitPrice, discount_percent: discount, tax_id: taxId, expense_account_id: expenseAccountId, subtotal: Math.round(untaxed * 100) / 100 }
+  })
+  amountUntaxed = Math.round(amountUntaxed * 100) / 100
+  amountTax = Math.round(amountTax * 100) / 100
+  const amountTotal = Math.round((amountUntaxed + amountTax) * 100) / 100
+  const dueDays = paymentTerm?.payment_term_lines?.length ? Math.max(...paymentTerm.payment_term_lines.map((line) => Number(line.due_days || 0))) : 0
+  const dueDate = new Date(billDate)
+  dueDate.setUTCDate(dueDate.getUTCDate() + dueDays)
+  const exchangeRate = currencyId === company.currency_id ? 1 : Number(input.exchange_rate)
+  if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw inputError('A positive exchange rate is required')
+  return {
+    header: {
+      company_id: vendor.company_id, document_type: documentType, vendor_id: vendorId,
+      vendor_reference: String(input.vendor_reference || '').trim() || null, journal_id: journal.id,
+      fiscal_period_id: fiscalPeriod.id, bill_date: billDate, received_date: parseDate(input.received_date) || billDate,
+      due_date: dueDate, payment_term_id: paymentTerm?.id || null, currency_id: currencyId,
+      exchange_rate: exchangeRate, payable_account_id: payableAccount.id, reversed_bill_id: reversedBillId, state: 'draft',
+      payment_state: 'not_paid', amount_untaxed: amountUntaxed, amount_tax: amountTax,
+      amount_total: amountTotal, amount_due: amountTotal, notes: String(input.notes || '').trim() || null,
+    },
+    lines: preparedLines,
+  }
+}
+
+async function allocateNumber(tx, journal, prefix = journal.code) {
+  for (;;) {
+    const updated = await tx.journals.update({ where: { id: journal.id }, data: { next_sequence: { increment: 1 } }, select: { next_sequence: true } })
+    const number = `${prefix}${String(updated.next_sequence - 1).padStart(4, '0')}`
+    const exists = await tx.vendor_bills.findFirst({ where: { company_id: journal.company_id, bill_number: number }, select: { id: true } })
+    if (!exists) return number
+  }
+}
+
+export const getAll = async (_req, res) => {
+  try { res.json({ success: true, data: await prisma.vendor_bills.findMany({ where: { document_type: 'bill' }, include, orderBy: { created_at: 'desc' } }) }) }
+  catch (error) { fail(res, error, 'Failed to fetch vendor bills') }
+}
 export const getById = async (req, res) => {
-    try {
-        const { id } = req.params
-        const data = await prisma.vendor_bills.findUnique({ where: { id: parseInt(id) } })
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' })
-        res.status(200).json({ success: true, data })
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message })
-    }
+  const billId = parseId(req.params.id)
+  if (!billId) return res.status(400).json({ success: false, message: 'Invalid bill id' })
+  try {
+    const data = await prisma.vendor_bills.findUnique({ where: { id: billId }, include })
+    if (!data) return res.status(404).json({ success: false, message: 'Vendor bill not found' })
+    res.json({ success: true, data })
+  } catch (error) { fail(res, error, 'Failed to fetch vendor bill') }
 }
-
 export const create = async (req, res) => {
-    try {
-        const data = await prisma.vendor_bills.create({ data: req.body })
-        res.status(201).json({ success: true, data })
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message })
-    }
+  try {
+    const prepared = await prepareBill(req.body)
+    const data = await prisma.$transaction(async (tx) => {
+      const journal = await tx.journals.findUnique({ where: { id: prepared.header.journal_id } })
+      const billNumber = await allocateNumber(tx, journal)
+      return tx.vendor_bills.create({ data: { ...prepared.header, bill_number: billNumber, vendor_bill_lines: { create: prepared.lines } }, include })
+    }, { maxWait: 10000, timeout: 30000 })
+    await logAudit({ userId: req.user?.id, action: 'Created', entity: 'VendorBill', entityId: data.id, description: `Prepared draft vendor bill "${data.bill_number}"` })
+    res.status(201).json({ success: true, message: 'Draft vendor bill prepared successfully', data })
+  } catch (error) { fail(res, error, 'Failed to prepare vendor bill') }
 }
-
 export const update = async (req, res) => {
-    try {
-        const { id } = req.params
-        const data = await prisma.vendor_bills.update({ where: { id: parseInt(id) }, data: req.body })
-        res.status(200).json({ success: true, data })
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message })
-    }
+  const billId = parseId(req.params.id)
+  if (!billId) return res.status(400).json({ success: false, message: 'Invalid bill id' })
+  try {
+    const existing = await prisma.vendor_bills.findUnique({ where: { id: billId } })
+    if (!existing) return res.status(404).json({ success: false, message: 'Vendor bill not found' })
+    if (existing.state !== 'draft') throw inputError('Only draft vendor bills can be edited')
+    const prepared = await prepareBill(req.body)
+    const data = await prisma.$transaction(async (tx) => {
+      await tx.vendor_bill_lines.deleteMany({ where: { bill_id: billId } })
+      return tx.vendor_bills.update({ where: { id: billId }, data: { ...prepared.header, bill_number: existing.bill_number, vendor_bill_lines: { create: prepared.lines }, updated_at: new Date() }, include })
+    }, { maxWait: 10000, timeout: 30000 })
+    await logAudit({ userId: req.user?.id, action: 'Updated', entity: 'VendorBill', entityId: data.id, description: `Updated draft vendor bill "${data.bill_number}"` })
+    res.json({ success: true, message: 'Draft vendor bill updated successfully', data })
+  } catch (error) { fail(res, error, 'Failed to update vendor bill') }
+}
+export const remove = async (req, res) => {
+  const billId = parseId(req.params.id)
+  if (!billId) return res.status(400).json({ success: false, message: 'Invalid bill id' })
+  try {
+    const existing = await prisma.vendor_bills.findUnique({ where: { id: billId } })
+    if (!existing) return res.status(404).json({ success: false, message: 'Vendor bill not found' })
+    if (existing.state !== 'draft') throw inputError('Only draft vendor bills can be deleted')
+    await prisma.vendor_bills.delete({ where: { id: billId } })
+    await logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'VendorBill', entityId: billId, description: `Deleted draft vendor bill "${existing.bill_number}"` })
+    res.json({ success: true, message: 'Draft vendor bill deleted successfully' })
+  } catch (error) { fail(res, error, 'Failed to delete vendor bill') }
 }
 
-export const remove = async (req, res) => {
-    try {
-        const { id } = req.params
-        await prisma.vendor_bills.delete({ where: { id: parseInt(id) } })
-        res.status(200).json({ success: true, message: 'Deleted successfully' })
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message })
-    }
+export const post = async (req, res) => {
+  const billId = parseId(req.params.id)
+  if (!billId) return res.status(400).json({ success: false, message: 'Invalid bill id' })
+  try {
+    const data = await prisma.$transaction(async (tx) => {
+      const bill = await tx.vendor_bills.findUnique({ where: { id: billId }, include: { fiscal_periods: { include: { fiscal_years: true } } } })
+      if (!bill) throw inputError('Vendor bill not found')
+      if (bill.state !== 'draft') throw inputError('Only draft vendor bills can be posted')
+      if (!bill.fiscal_periods || bill.fiscal_periods.state !== 'open' || bill.fiscal_periods.fiscal_years.state !== 'open') throw inputError('Bill fiscal period is closed or invalid')
+      const postedAt = new Date()
+      await tx.vendor_bills.update({ where: { id: billId }, data: { state: 'posted', posted_at: postedAt, updated_at: postedAt } })
+      return tx.vendor_bills.findUnique({ where: { id: billId }, include })
+    }, { maxWait: 10000, timeout: 30000 })
+    await logAudit({ userId: req.user?.id, action: 'Posted', entity: 'VendorBill', entityId: billId, description: `Posted vendor bill "${data.bill_number}"` })
+    res.json({ success: true, message: 'Vendor bill posted successfully', data })
+  } catch (error) { fail(res, error, 'Failed to post vendor bill') }
+}
+
+export const getRefunds = async (_req, res) => {
+  try { res.json({ success: true, data: await prisma.vendor_bills.findMany({ where: { document_type: 'refund' }, include, orderBy: { created_at: 'desc' } }) }) }
+  catch (error) { fail(res, error, 'Failed to fetch vendor refunds') }
+}
+export const createRefund = async (req, res) => {
+  try {
+    const prepared = await prepareBill(req.body, 'refund')
+    const data = await prisma.$transaction(async (tx) => {
+      const journal = await tx.journals.findUnique({ where: { id: prepared.header.journal_id } })
+      const billNumber = await allocateNumber(tx, journal, 'REF')
+      return tx.vendor_bills.create({ data: { ...prepared.header, bill_number: billNumber, vendor_bill_lines: { create: prepared.lines } }, include })
+    }, { maxWait: 10000, timeout: 30000 })
+    await logAudit({ userId: req.user?.id, action: 'Created', entity: 'VendorRefund', entityId: data.id, description: `Prepared vendor refund "${data.bill_number}"` })
+    res.status(201).json({ success: true, message: 'Draft vendor refund prepared successfully', data })
+  } catch (error) { fail(res, error, 'Failed to prepare vendor refund') }
+}
+export const updateRefund = async (req, res) => {
+  const refundId = parseId(req.params.id)
+  if (!refundId) return res.status(400).json({ success: false, message: 'Invalid refund id' })
+  try {
+    const existing = await prisma.vendor_bills.findFirst({ where: { id: refundId, document_type: 'refund' } })
+    if (!existing) return res.status(404).json({ success: false, message: 'Vendor refund not found' })
+    if (existing.state !== 'draft') throw inputError('Only draft refunds can be edited')
+    const prepared = await prepareBill(req.body, 'refund')
+    const data = await prisma.$transaction(async (tx) => {
+      await tx.vendor_bill_lines.deleteMany({ where: { bill_id: refundId } })
+      return tx.vendor_bills.update({ where: { id: refundId }, data: { ...prepared.header, bill_number: existing.bill_number, vendor_bill_lines: { create: prepared.lines }, updated_at: new Date() }, include })
+    }, { maxWait: 10000, timeout: 30000 })
+    res.json({ success: true, message: 'Draft vendor refund updated successfully', data })
+  } catch (error) { fail(res, error, 'Failed to update vendor refund') }
+}
+export const removeRefund = async (req, res) => {
+  const refundId = parseId(req.params.id)
+  if (!refundId) return res.status(400).json({ success: false, message: 'Invalid refund id' })
+  try {
+    const refund = await prisma.vendor_bills.findFirst({ where: { id: refundId, document_type: 'refund' } })
+    if (!refund) return res.status(404).json({ success: false, message: 'Vendor refund not found' })
+    if (refund.state !== 'draft') throw inputError('Only draft refunds can be deleted')
+    await prisma.vendor_bills.delete({ where: { id: refundId } })
+    res.json({ success: true, message: 'Draft vendor refund deleted successfully' })
+  } catch (error) { fail(res, error, 'Failed to delete vendor refund') }
+}
+export const postRefund = async (req, res) => {
+  const refundId = parseId(req.params.id)
+  if (!refundId) return res.status(400).json({ success: false, message: 'Invalid refund id' })
+  try {
+    const data = await prisma.$transaction(async (tx) => {
+      const refund = await tx.vendor_bills.findFirst({ where: { id: refundId, document_type: 'refund' } })
+      if (!refund || refund.state !== 'draft') throw inputError('Draft vendor refund not found')
+      if (refund.reversed_bill_id) {
+        const original = await tx.vendor_bills.findUnique({ where: { id: refund.reversed_bill_id } })
+        if (!original || original.state !== 'posted') throw inputError('Original posted bill is missing')
+        const amountDue = Math.max(0, Number(original.amount_due) - Number(refund.amount_total))
+        await tx.vendor_bills.update({ where: { id: original.id }, data: { amount_due: amountDue, payment_state: amountDue <= 0.005 ? 'reversed' : amountDue < Number(original.amount_total) ? 'partial' : original.payment_state, updated_at: new Date() } })
+      }
+      const postedAt = new Date()
+      await tx.vendor_bills.update({ where: { id: refundId }, data: { state: 'posted', payment_state: 'reversed', amount_due: 0, posted_at: postedAt, updated_at: postedAt } })
+      return tx.vendor_bills.findUnique({ where: { id: refundId }, include })
+    }, { maxWait: 10000, timeout: 30000 })
+    await logAudit({ userId: req.user?.id, action: 'Posted', entity: 'VendorRefund', entityId: refundId, description: `Posted vendor refund "${data.bill_number}"` })
+    res.json({ success: true, message: 'Vendor refund posted successfully', data })
+  } catch (error) { fail(res, error, 'Failed to post vendor refund') }
 }

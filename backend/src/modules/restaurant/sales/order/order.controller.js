@@ -748,6 +748,7 @@ import { clearTablesCache } from '../../operations/table/table.controller.js'
 import { clearReportCache } from '../../reporting/report/report.controller.js'
 import { buildOrderItemsPayload } from '../../../../utils/compositeMenuHelper.js'
 import { upsertCustomerByPhone } from '../../../shared/customers/customer.service.js'
+import { processCompletedPOSOrderSafely } from '../../../accounting/services/posOrderAccounting.service.js'
 
 const MOBILE_WALLET_METHODS = ['evc_plus', 'edahab', 'premier_wallet', 'waafi']
 
@@ -1046,6 +1047,8 @@ export const createPosCheckout = async (req, res) => {
       },
     })
 
+    await processCompletedPOSOrderSafely(order.id, 'POS checkout payment')
+
     clearOrderListCache()
     emitPaymentSuccess(order)
 
@@ -1156,6 +1159,10 @@ export const updateOrderStatus = async (req, res) => {
         orderitem: { include: { menuitem: true } }
       }
     })
+
+    if (status === 'completed') {
+      await processCompletedPOSOrderSafely(updatedOrder.id, 'order completion')
+    }
 
     /*
     await prisma.orderStatusHistory.create({

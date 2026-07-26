@@ -173,11 +173,27 @@ export const authorize = (...roles) => {
   }
 }
 
-export const authorizeWorkspace = (workspace) => (req, res, next) => {
+export const authorizeWorkspace = (workspace) => async (req, res, next) => {
   const role = String(req.user?.role || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
-  const allowed = role === 'admin' || role === 'super_admin' ||
+  let allowed = role === 'admin' || role === 'super_admin' ||
     (workspace === 'RESTAURANT' && ['restaurant', 'manager', 'pos', 'cashier', 'waiter'].includes(role)) ||
     (workspace === 'ACCOUNTING' && ['accounting', 'accountant'].includes(role))
+
+  if (!allowed && req.user?.roleId) {
+    try {
+      allowed = Boolean(await prisma.roleMenuAccess.findFirst({
+        where: {
+          roleId: req.user.roleId,
+          canView: true,
+          menu: { moduleKey: workspace, isActive: true },
+        },
+        select: { id: true },
+      }))
+    } catch (error) {
+      console.error('Workspace permission check error:', error)
+      return res.status(500).json({ success: false, message: 'Unable to validate workspace access' })
+    }
+  }
 
   if (!allowed) {
     return res.status(403).json({ success: false, message: `${workspace} workspace access denied` })

@@ -6,6 +6,12 @@ import GeneralLedgerPage from '@/components/accounting/GeneralLedgerPage';
 import PartnerMasterDataPage from '@/components/shared/PartnerMasterDataPage';
 import CustomerInvoicesPage from '@/components/accounting/CustomerInvoicesPage';
 import CustomerReceiptsPage from '@/components/accounting/CustomerReceiptsPage';
+import CreditNotesPage from '@/components/accounting/CreditNotesPage';
+import VendorBillsPage from '@/components/accounting/VendorBillsPage';
+import VendorPaymentsPage from '@/components/accounting/VendorPaymentsPage';
+import BankingSetupPage from '@/components/accounting/BankingSetupPage';
+import CashTransactionsPage from '@/components/accounting/CashTransactionsPage';
+import FinancialReportsPage, { type FinancialReportKind } from '@/components/accounting/FinancialReportsPage';
 
 const CONFIGURATION_SECTIONS = new Set([
   'account-types', 'currencies', 'companies', 'payment-methods',
@@ -32,19 +38,24 @@ const TITLES: Record<string, string> = {
   customers: 'Customers',
   'customer-invoices': 'Customer Invoices',
   'customer-receipts': 'Customer Receipts',
+  'credit-notes': 'Credit Notes',
   payables: 'Payables',
   vendors: 'Vendors',
   'vendor-bills': 'Vendor Bills',
   'vendor-payments': 'Vendor Payments',
+  'vendor-refunds': 'Vendor Refunds',
   banking: 'Banking',
   banks: 'Banks',
   'bank-accounts': 'Bank Accounts',
+  'cash-transactions': 'Cash Transactions',
   products: 'Products',
   reports: 'Financial Reports',
   'general-ledger': 'General Ledger Report',
   'trial-balance': 'Trial Balance',
   'profit-and-loss': 'Profit & Loss',
   'balance-sheet': 'Balance Sheet',
+  'cash-flow': 'Cash Flow',
+  'journal-report': 'Journal Report',
 };
 
 export default async function AccountingSectionPage({
@@ -86,6 +97,38 @@ export default async function AccountingSectionPage({
 
   if (key === 'customer-receipts') {
     return <CustomerReceiptsPage />;
+  }
+
+  if (key === 'credit-notes') {
+    return <CreditNotesPage />;
+  }
+
+  if (key === 'vendor-bills') {
+    return <VendorBillsPage />;
+  }
+
+  if (key === 'vendor-payments') {
+    return <VendorPaymentsPage />;
+  }
+
+  if (key === 'vendor-refunds') {
+    return <VendorBillsPage kind="refund" />;
+  }
+
+  if (key === 'banks') {
+    return <BankingSetupPage kind="banks" />;
+  }
+
+  if (key === 'bank-accounts') {
+    return <BankingSetupPage kind="accounts" />;
+  }
+
+  if (key === 'cash-transactions') {
+    return <CashTransactionsPage />;
+  }
+
+  if (['general-ledger', 'trial-balance', 'profit-and-loss', 'balance-sheet', 'cash-flow', 'journal-report'].includes(key)) {
+    return <FinancialReportsPage kind={key as FinancialReportKind} />;
   }
 
   return (

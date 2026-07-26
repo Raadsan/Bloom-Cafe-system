@@ -9,6 +9,8 @@ import { companyApi } from '@/lib/api/accounting/configuration/companyApi';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import { actionBtnDelete, actionBtnEdit, btnCreatePage, dashboardSelectClass, dashboardStatusBadgeClass } from '@/lib/dashboard-ui';
 
 type RecordRow = { id: number; [key: string]: unknown };
 type FormState = {
@@ -131,6 +133,15 @@ export default function ChartOfAccountsPage() {
   }
 
   const eligibleParents = accounts.filter((account) => account.id !== selected?.id && String(account.company_id) === form.company_id);
+  const columns: DashboardTableColumn<RecordRow>[] = [
+    { key: 'select', header: <input type="checkbox" aria-label="Select all accounts" checked={filtered.length > 0 && filtered.every((account) => selectedIds.has(account.id))} onChange={(event) => setSelectedIds(event.target.checked ? new Set(filtered.map((account) => account.id)) : new Set())} className="size-4 accent-primary" />, cell: (account) => <input type="checkbox" aria-label={`Select ${String(account.name)}`} checked={selectedIds.has(account.id)} onChange={(event) => setSelectedIds((current) => { const next = new Set(current); if (event.target.checked) next.add(account.id); else next.delete(account.id); return next; })} className="size-4 accent-primary" /> },
+    { key: 'code', header: 'Code', cell: (account) => <span className="font-mono font-bold text-primary">{String(account.code)}</span> },
+    { key: 'name', header: 'Name', cell: (account) => { const parent = accountMap.get(Number(account.parent_id)); return <div className="flex items-center gap-2">{parent && <ChevronRight className="size-3.5 text-muted-foreground" />}<div><p className="font-medium">{String(account.name)}</p>{parent && <p className="text-[10px] text-muted-foreground">Under {String(parent.name)}</p>}</div></div>; } },
+    { key: 'type', header: 'Type', cell: (account) => { const type = typeMap.get(Number(account.account_type_id)); return <div><p className="font-medium">{String(type?.name || 'Unknown')}</p><p className="text-[10px] text-muted-foreground">{humanize(type?.internal_group)}</p></div>; } },
+    { key: 'company', header: 'Company', cell: (account) => String(companyMap.get(Number(account.company_id))?.name || '—') },
+    { key: 'status', header: 'Status', align: 'center', cell: (account) => <span className={`${dashboardStatusBadgeClass} ${account.is_active ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>{account.is_active ? 'Active' : 'Inactive'}</span> },
+    { key: 'actions', header: 'Actions', align: 'right', cell: (account) => <div className="flex justify-end gap-1"><button onClick={() => editAccount(account)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button onClick={() => { setSelected(account); setDeleteOpen(true); }} className={actionBtnDelete}><Trash2 className="size-4" /></button></div> },
+  ];
 
   return (
     <main className="dashboard-scope space-y-5 p-4 sm:p-6 lg:p-8">
@@ -150,7 +161,8 @@ export default function ChartOfAccountsPage() {
         ].map(([label, value, hint], index) => <article key={String(label)} className="rounded-2xl border bg-card p-4 shadow-sm"><div className="flex items-center justify-between"><span className="text-xs font-medium text-muted-foreground">{label}</span><span className="flex size-8 items-center justify-center rounded-xl bg-primary/8 text-primary">{index === 0 ? <BookOpen className="size-4" /> : <WalletCards className="size-4" />}</span></div><p className="mt-3 text-2xl font-bold tabular-nums">{value}</p><p className="mt-1 text-[10px] text-muted-foreground">{hint}</p></article>)}
       </div>
 
-      <section className="flex overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <DashboardDataTable rows={filtered} columns={columns} loading={loading} searchValue={query} onSearchChange={setQuery} searchPlaceholder="Search code, account name, or type..." emptyText="No accounts found" minWidth="1000px" action={<button onClick={createAccount} disabled={!companies.length || !accountTypes.length} className={btnCreatePage}><Plus className="size-4" /> Add Account</button>} filters={<><select value={codeFilter} onChange={(event) => setCodeFilter(event.target.value)} className={dashboardSelectClass}><option value="all">All codes</option>{['1', '2', '3', '4', '5'].map((digit) => <option key={digit} value={digit}>Code {digit}</option>)}</select><FilterSelect label="All account types" value={typeFilter} onChange={setTypeFilter} options={accountTypes.map((row) => ({ value: String(row.id), label: String(row.name) }))} /><FilterSelect label="All companies" value={companyFilter} onChange={setCompanyFilter} options={companies.map((row) => ({ value: String(row.id), label: String(row.name) }))} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={dashboardSelectClass}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select><button onClick={() => void loadData()} disabled={loading} className="flex size-[42px] items-center justify-center rounded-md border"><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /></button></>} />
+      <section className="hidden">
         <aside className="w-[72px] shrink-0 border-r bg-muted/10 p-2">
           <div className="mb-2 flex h-9 items-center justify-center border-b text-muted-foreground"><ChevronLeft className="size-4" /></div>
           <nav aria-label="Filter by account code" className="space-y-1">

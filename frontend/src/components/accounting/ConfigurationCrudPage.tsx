@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Check, Edit3, Plus, RefreshCw, Search, Settings2, Trash2 } from 'lucide-react';
+import { Check, Edit3, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import { createAccountingCrudApi, type AccountingRecord } from '@/lib/api/accounting/accountingCrud';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
 import { accountingProductCategoryApi } from '@/lib/api/accounting/configuration/productCategoryApi';
@@ -10,6 +10,8 @@ import { useToast } from '@/components/ui/toast';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import { actionBtnDelete, actionBtnEdit, btnCreatePage, dashboardStatusBadgeClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Value = string | number | boolean | null;
 type Row = AccountingRecord & Record<string, unknown>;
@@ -223,42 +225,27 @@ export default function ConfigurationCrudPage({ section }: { section: string }) 
     } catch (error) { showToast(errorMessage(error), 'error'); }
     finally { setSaving(false); }
   }
+  const columns: DashboardTableColumn<Row>[] = [
+    { key: 'id', header: 'ID', cell: (row) => <span className="font-bold text-primary">#{row.id}</span> },
+    ...config.columns.map((column): DashboardTableColumn<Row> => ({
+      key: column,
+      header: humanize(column.replace('_id', '')),
+      cell: (row) => column === 'is_active'
+        ? <span className={`${dashboardStatusBadgeClass} ${row[column] ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>{row[column] ? <span className="inline-flex items-center gap-1"><Check className="size-3" /> Active</span> : 'Inactive'}</span>
+        : <span className="block max-w-[240px] truncate">{displayValue(column, row[column], relations)}</span>,
+    })),
+    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1"><button onClick={() => openEdit(row)} aria-label={`Edit ${config.singular}`} className={actionBtnEdit}><Edit3 className="size-4" /></button><button onClick={() => { setSelected(row); setDeleteOpen(true); }} aria-label={`Delete ${config.singular}`} className={actionBtnDelete}><Trash2 className="size-4" /></button></div> },
+  ];
 
   return (
     <main className="dashboard-scope space-y-5 p-4 sm:p-6 lg:p-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
+      <div className={pageHeaderWrapperClass}>
           <div className="flex items-center gap-2 text-primary"><Settings2 className="size-4" /><span className="text-xs font-semibold uppercase tracking-[0.16em]">Configuration</span></div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{config.title}</h1>
+          <h1 className={pageHeaderTitleClass}>{config.title}</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{config.description}</p>
-        </div>
-        <button onClick={openCreate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90">
-          <Plus className="size-4" /> Add {humanize(config.singular)}
-        </button>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <div className="flex flex-col justify-between gap-3 border-b p-4 sm:flex-row sm:items-center">
-          <div className="relative w-full sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${config.title.toLowerCase()}...`} className="h-10 w-full rounded-xl border bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10" />
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">{filtered.length} {filtered.length === 1 ? 'record' : 'records'}</span>
-            <button onClick={() => void loadRows()} disabled={loading} aria-label="Refresh records" className="rounded-lg border p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /></button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-xs">
-            <thead className="bg-muted/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="w-16 px-5 py-3 font-semibold">ID</th>{config.columns.map((column) => <th key={column} className="px-4 py-3 font-semibold">{humanize(column.replace('_id', ''))}</th>)}<th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead>
-            <tbody className="divide-y">
-              {loading ? Array.from({ length: 4 }, (_, index) => <tr key={index}>{Array.from({ length: config.columns.length + 2 }, (__, cell) => <td key={cell} className="px-4 py-4"><div className="h-4 animate-pulse rounded bg-muted" /></td>)}</tr>) :
-                filtered.map((row) => <tr key={row.id} className="transition hover:bg-muted/30"><td className="px-5 py-3.5 font-semibold text-primary">#{row.id}</td>{config.columns.map((column) => <td key={column} className="max-w-[240px] truncate px-4 py-3.5">{column === 'is_active' ? <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${row[column] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'}`}>{row[column] ? <Check className="size-3" /> : null}{displayValue(column, row[column], relations)}</span> : displayValue(column, row[column], relations)}</td>)}<td className="px-5 py-3.5"><div className="flex justify-end gap-1"><button onClick={() => openEdit(row)} aria-label={`Edit ${config.singular}`} className="rounded-lg p-2 text-muted-foreground hover:bg-primary/10 hover:text-primary"><Edit3 className="size-4" /></button><button onClick={() => { setSelected(row); setDeleteOpen(true); }} aria-label={`Delete ${config.singular}`} className="rounded-lg p-2 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><Trash2 className="size-4" /></button></div></td></tr>)}
-            </tbody>
-          </table>
-          {!loading && filtered.length === 0 && <div className="flex flex-col items-center px-6 py-16 text-center"><div className="flex size-12 items-center justify-center rounded-2xl bg-primary/8 text-primary"><Settings2 className="size-5" /></div><h3 className="mt-4 text-sm font-semibold">No {config.title.toLowerCase()} found</h3><p className="mt-1 text-xs text-muted-foreground">{query ? 'Try a different search term.' : `Add your first ${config.singular} to get started.`}</p></div>}
-        </div>
-      </section>
+      <DashboardDataTable rows={filtered} columns={columns} loading={loading} searchValue={query} onSearchChange={setQuery} searchPlaceholder={`Search ${config.title.toLowerCase()}...`} emptyText={`No ${config.title.toLowerCase()} found`} minWidth="900px" action={<button onClick={openCreate} className={btnCreatePage}><Plus className="size-4" /> Add {humanize(config.singular)}</button>} filters={<button onClick={() => void loadRows()} disabled={loading} aria-label="Refresh records" className="flex size-[42px] items-center justify-center rounded-md border"><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /></button>} />
 
       <Dialog open={formOpen} onOpenChange={(open) => !saving && setFormOpen(open)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">

@@ -8,6 +8,7 @@
     "build": "prisma generate",
     "postinstall": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "test:pos-accounting": "node --test test/posOrderAccounting.test.js",
     "server": "nodemon server.js --ignore 'client/'",
     "client": "npm run dev --prefix ../frontend",
     "dev": "concurrently \"npm run server\" \"npm run client\"",

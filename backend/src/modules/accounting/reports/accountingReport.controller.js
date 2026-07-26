@@ -3,14 +3,13 @@ import prisma from '../../../config/db.js';
 /**
  * Helper to get the correct fiscal period or date range for reports
  */
-const getDateFilter = (startDate, endDate, periodId) => {
+const getEntryFilter = (startDate, endDate, periodId) => {
   const filter = {};
-  if (periodId) {
-    filter.fiscal_period_id = parseInt(periodId);
-  } else if (startDate || endDate) {
-    filter.journal_entries = { entry_date: {} };
-    if (startDate) filter.journal_entries.entry_date.gte = new Date(startDate);
-    if (endDate) filter.journal_entries.entry_date.lte = new Date(endDate);
+  if (periodId) filter.fiscal_period_id = parseInt(periodId);
+  if (!periodId && (startDate || endDate)) {
+    filter.entry_date = {};
+    if (startDate) filter.entry_date.gte = new Date(startDate);
+    if (endDate) filter.entry_date.lte = new Date(endDate);
   }
   return filter;
 };
@@ -22,13 +21,11 @@ export const getGeneralLedger = async (req, res) => {
     if (!company_id) return res.status(400).json({ success: false, message: 'company_id is required' });
 
     const where = {
-      journal_entries: { company_id: parseInt(company_id), state: 'posted' }
+      journal_entries: { company_id: parseInt(company_id), state: 'posted', ...getEntryFilter(start_date, end_date, period_id) }
     };
     
     if (account_id) where.account_id = parseInt(account_id);
     
-    Object.assign(where, getDateFilter(start_date, end_date, period_id));
-
     const items = await prisma.journal_items.findMany({
       where,
       orderBy: [
@@ -56,10 +53,8 @@ export const getTrialBalance = async (req, res) => {
     if (!company_id) return res.status(400).json({ success: false, message: 'company_id is required' });
 
     const where = {
-      journal_entries: { company_id: parseInt(company_id), state: 'posted' }
+      journal_entries: { company_id: parseInt(company_id), state: 'posted', ...getEntryFilter(start_date, end_date, period_id) }
     };
-    Object.assign(where, getDateFilter(start_date, end_date, period_id));
-
     const result = await prisma.journal_items.groupBy({
       by: ['account_id'],
       where,
@@ -108,11 +103,9 @@ export const getProfitAndLoss = async (req, res) => {
     if (!company_id) return res.status(400).json({ success: false, message: 'company_id is required' });
 
     const where = {
-      journal_entries: { company_id: parseInt(company_id), state: 'posted' },
+      journal_entries: { company_id: parseInt(company_id), state: 'posted', ...getEntryFilter(start_date, end_date, period_id) },
       chart_of_accounts: { account_types: { internal_group: { in: ['income', 'expense'] } } }
     };
-    Object.assign(where, getDateFilter(start_date, end_date, period_id));
-
     const result = await prisma.journal_items.groupBy({
       by: ['account_id'],
       where,
@@ -165,6 +158,75 @@ export const getProfitAndLoss = async (req, res) => {
     });
   } catch (error) {
     console.error('P&L Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET Cash Flow (direct movement of configured cash and bank GL accounts)
+export const getCashFlow = async (req, res) => {
+  try {
+    const { company_id, start_date, end_date, period_id } = req.query;
+    if (!company_id) return res.status(400).json({ success: false, message: 'company_id is required' });
+    const companyId = parseInt(company_id);
+    const bankAccounts = await prisma.bank_accounts.findMany({
+      where: { company_id: companyId, is_active: true, gl_account_id: { not: null } },
+      select: { id: true, account_name: true, account_number: true, gl_account_id: true, currencies: { select: { code: true } } },
+    });
+    const accountIds = [...new Set(bankAccounts.map((row) => row.gl_account_id).filter(Boolean))];
+    if (!accountIds.length) return res.json({ success: true, data: { accounts: [], opening_balance: 0, inflows: 0, outflows: 0, net_change: 0, closing_balance: 0 } });
+
+    const periodWhere = { account_id: { in: accountIds }, journal_entries: { company_id: companyId, state: 'posted', ...getEntryFilter(start_date, end_date, period_id) } };
+    const [periodGroups, openingGroups] = await Promise.all([
+      prisma.journal_items.groupBy({ by: ['account_id'], where: periodWhere, _sum: { debit: true, credit: true } }),
+      start_date && !period_id ? prisma.journal_items.groupBy({
+        by: ['account_id'],
+        where: { account_id: { in: accountIds }, journal_entries: { company_id: companyId, state: 'posted', entry_date: { lt: new Date(start_date) } } },
+        _sum: { debit: true, credit: true },
+      }) : Promise.resolve([]),
+    ]);
+    let openingBalance = 0; let inflows = 0; let outflows = 0;
+    const accounts = bankAccounts.map((bank) => {
+      const period = periodGroups.find((row) => row.account_id === bank.gl_account_id);
+      const opening = openingGroups.find((row) => row.account_id === bank.gl_account_id);
+      const openingAmount = Number(opening?._sum.debit || 0) - Number(opening?._sum.credit || 0);
+      const received = Number(period?._sum.debit || 0);
+      const paid = Number(period?._sum.credit || 0);
+      openingBalance += openingAmount; inflows += received; outflows += paid;
+      return { bank_account_id: bank.id, account_name: bank.account_name, account_number: bank.account_number, currency: bank.currencies.code, opening_balance: openingAmount, inflows: received, outflows: paid, net_change: received - paid, closing_balance: openingAmount + received - paid };
+    });
+    res.json({ success: true, data: { accounts, opening_balance: openingBalance, inflows, outflows, net_change: inflows - outflows, closing_balance: openingBalance + inflows - outflows } });
+  } catch (error) {
+    console.error('Cash Flow Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET Journal Report
+export const getJournalReport = async (req, res) => {
+  try {
+    const { company_id, start_date, end_date, period_id, journal_id } = req.query;
+    if (!company_id) return res.status(400).json({ success: false, message: 'company_id is required' });
+    const where = { company_id: parseInt(company_id), state: 'posted', ...getEntryFilter(start_date, end_date, period_id) };
+    if (journal_id) where.journal_id = parseInt(journal_id);
+    const entries = await prisma.journal_entries.findMany({
+      where,
+      orderBy: [{ entry_date: 'asc' }, { id: 'asc' }],
+      include: {
+        journals: { select: { id: true, code: true, name: true } },
+        journal_items: {
+          orderBy: { sequence: 'asc' },
+          include: { chart_of_accounts: { select: { code: true, name: true } } },
+        },
+      },
+    });
+    const data = entries.map((entry) => ({
+      ...entry,
+      total_debit: entry.journal_items.reduce((sum, line) => sum + Number(line.debit), 0),
+      total_credit: entry.journal_items.reduce((sum, line) => sum + Number(line.credit), 0),
+    }));
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Journal Report Error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -10,6 +10,7 @@ export type CustomerInvoiceLine = {
   income_account_id: number;
   subtotal?: number;
   products?: { id: number; name: string; sku?: string };
+  taxes?: { id: number; name: string; rate_percent: number; price_includes_tax: boolean };
 };
 export type CustomerInvoice = AccountingRecord & {
   invoice_number?: string;

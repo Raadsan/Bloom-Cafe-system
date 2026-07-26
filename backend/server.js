@@ -14,8 +14,6 @@ import prisma from './src/config/db.js'
 import {
   deactivateRoomsMenuItem,
   deactivateSystemSettingsMenuItem,
-  ensureCreateOrderMenuItem,
-  ensurePickupOrdersMenuItem,
   ensurePickupHistoryMenuItem,
   ensureDiscountAdvertisementMenuItem,
   ensureCompositesMenuItem,
@@ -57,8 +55,6 @@ async function verifyDatabase() {
 async function runStartupWarmup() {
   await deactivateRoomsMenuItem()
   await deactivateSystemSettingsMenuItem()
-  await ensureCreateOrderMenuItem()
-  await ensurePickupOrdersMenuItem()
   await ensurePickupHistoryMenuItem()
   await ensureDiscountAdvertisementMenuItem()
   await ensureCompositesMenuItem()

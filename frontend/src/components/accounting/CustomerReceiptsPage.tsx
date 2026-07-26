@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Edit3, Eye, Plus, Printer, RefreshCw, Search, Send, Trash2 } from 'lucide-react';
+import { Edit3, Eye, Plus, Printer, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { customerReceiptApi, type CustomerReceipt } from '@/lib/api/accounting/receivables/customerReceiptApi';
 import { customerInvoiceApi, type CustomerInvoice } from '@/lib/api/accounting/receivables/customerInvoiceApi';
 import { accountingCustomerApi } from '@/lib/api/accounting/receivables/customerApi';
@@ -12,6 +12,8 @@ import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
 import { accountingJournalApi } from '@/lib/api/accounting/ledger/journalApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import { actionBtnDelete, actionBtnEdit, actionBtnView, btnCreatePage, dashboardSelectClass, dashboardStatusBadgeClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Row = { id: number; [key: string]: unknown };
 type Allocation = { invoice_id: number; allocated_amount: number };
@@ -172,31 +174,25 @@ export default function CustomerReceiptsPage() {
     await edit(receipt, true);
     window.setTimeout(() => window.print(), 150);
   }
+  const columns: DashboardTableColumn<CustomerReceipt>[] = [
+    { key: 'number', header: 'Receipt', cell: (row) => <span className="font-bold text-primary">{row.receipt_number || `#${row.id}`}</span> },
+    { key: 'date', header: 'Date', cell: (row) => dateValue(row.receipt_date) },
+    { key: 'customer', header: 'Customer', cell: (row) => row.customers?.name || '—' },
+    { key: 'method', header: 'Method', cell: (row) => row.payment_methods?.name || '—' },
+    { key: 'journal', header: 'Journal', cell: (row) => row.journals?.name || '—' },
+    { key: 'account', header: 'Cash/Bank Account', cell: (row) => row.journal_entries?.journal_items?.[0]?.chart_of_accounts ? `${row.journal_entries.journal_items[0].chart_of_accounts.code} — ${row.journal_entries.journal_items[0].chart_of_accounts.name}` : '—' },
+    { key: 'currency', header: 'Currency', cell: (row) => row.currencies?.code || '—' },
+    { key: 'amount', header: 'Amount', align: 'right', cell: (row) => <span className="font-semibold">{money(row.amount)}</span> },
+    { key: 'allocated', header: 'Allocated', align: 'right', cell: (row) => money(Number(row.amount) - Number(row.unallocated_amount)) },
+    { key: 'status', header: 'Status', align: 'center', cell: (row) => <span className={`${dashboardStatusBadgeClass} ${row.state === 'posted' ? 'bg-emerald-600 text-white' : row.state === 'cancelled' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white'}`}>{row.state}</span> },
+    { key: 'reference', header: 'Reference', cell: (row) => row.reference || '—' },
+    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1"><button title="View" onClick={() => void edit(row, true)} className={actionBtnView}><Eye className="size-4" /></button>{row.state === 'draft' && <><button title="Edit" onClick={() => void edit(row)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button title="Post" onClick={() => void post(row)} className={actionBtnView}><Send className="size-4" /></button><button title="Delete" onClick={() => void remove(row)} className={actionBtnDelete}><Trash2 className="size-4" /></button></>}{row.state === 'posted' && <button title="Print" onClick={() => void printReceipt(row)} className={actionBtnView}><Printer className="size-4" /></button>}</div> },
+  ];
 
   return (
     <div className="p-6 md:p-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><p className="text-xs font-bold uppercase tracking-[.2em] text-primary">Receivables</p><h1 className="text-3xl font-bold">Customer Receipts</h1><p className="mt-1 text-sm text-muted-foreground">Record customer payments and allocate them to posted invoices.</p></div>
-        <button onClick={newReceipt} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"><Plus className="size-4" /> New receipt</button>
-      </div>
-      <div className="mt-6 overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <div className="flex flex-wrap gap-3 border-b p-4">
-          <label className="flex min-w-64 flex-1 items-center gap-2 rounded-xl border px-3"><Search className="size-4 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search receipts..." className="h-10 w-full bg-transparent text-sm outline-none" /></label>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-xl border bg-background px-3 text-sm"><option value="all">All statuses</option><option value="draft">Draft</option><option value="posted">Posted</option><option value="cancelled">Cancelled</option></select>
-          <select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} className="rounded-xl border bg-background px-3 text-sm"><option value="all">All customers</option>{customers.map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select>
-          <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className="rounded-xl border bg-background px-3 text-sm"><option value="all">All methods</option>{methods.map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select>
-          <select value={journalFilter} onChange={(e) => setJournalFilter(e.target.value)} className="rounded-xl border bg-background px-3 text-sm"><option value="all">All journals</option>{journals.map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select>
-          <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)} className="rounded-xl border bg-background px-3 text-sm"><option value="all">All currencies</option>{currencies.map((row) => <option key={row.id} value={row.id}>{String(row.code)}</option>)}</select>
-          <input aria-label="Date from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-xl border bg-background px-3 text-sm" />
-          <input aria-label="Date to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-xl border bg-background px-3 text-sm" />
-          <button onClick={() => void load()} className="rounded-xl border p-3"><RefreshCw className="size-4" /></button>
-        </div>
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr><th className="p-4">Receipt</th><th className="p-4">Date</th><th className="p-4">Customer</th><th className="p-4">Method</th><th className="p-4">Journal</th><th className="p-4">Cash/Bank account</th><th className="p-4">Currency</th><th className="p-4">Amount</th><th className="p-4">Allocated</th><th className="p-4">Status</th><th className="p-4">Reference</th><th className="p-4 text-right">Actions</th></tr></thead>
-          <tbody>{loading ? <tr><td colSpan={12} className="p-10 text-center text-muted-foreground">Loading receipts…</td></tr> : filtered.length === 0 ? <tr><td colSpan={12} className="p-10 text-center text-muted-foreground">No customer receipts found.</td></tr> : filtered.map((receipt) => <tr key={receipt.id} className="border-t">
-            <td className="p-4 font-semibold text-primary">{receipt.receipt_number || `#${receipt.id}`}</td><td className="p-4">{dateValue(receipt.receipt_date)}</td><td className="p-4">{receipt.customers?.name}</td><td className="p-4">{receipt.payment_methods?.name}</td><td className="p-4">{receipt.journals?.name}</td><td className="p-4">{receipt.journal_entries?.journal_items?.[0]?.chart_of_accounts ? `${receipt.journal_entries.journal_items[0].chart_of_accounts.code} — ${receipt.journal_entries.journal_items[0].chart_of_accounts.name}` : '—'}</td><td className="p-4">{receipt.currencies?.code}</td><td className="p-4 font-medium">{money(receipt.amount)}</td><td className="p-4">{money(Number(receipt.amount) - Number(receipt.unallocated_amount))}</td><td className="p-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${receipt.state === 'posted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{receipt.state}</span></td><td className="p-4">{receipt.reference || '—'}</td>
-            <td className="p-4"><div className="flex justify-end gap-1"><button title="View" onClick={() => void edit(receipt, true)} className="p-2"><Eye className="size-4" /></button>{receipt.state === 'draft' && <><button title="Edit" onClick={() => void edit(receipt)} className="p-2"><Edit3 className="size-4" /></button><button title="Post" onClick={() => void post(receipt)} className="p-2 text-emerald-600"><Send className="size-4" /></button><button title="Delete" onClick={() => void remove(receipt)} className="p-2 text-destructive"><Trash2 className="size-4" /></button></>}{receipt.state === 'posted' && <button title="Print" onClick={() => void printReceipt(receipt)} className="p-2"><Printer className="size-4" /></button>}</div></td>
-          </tr>)}</tbody></table></div>
-      </div>
+      <div className={pageHeaderWrapperClass}><p className="text-xs font-bold uppercase tracking-[.2em] text-primary">Receivables</p><h1 className={pageHeaderTitleClass}>Customer Receipts</h1><p className="mt-1 text-sm text-muted-foreground">Record customer payments and allocate them to posted invoices.</p></div>
+      <DashboardDataTable rows={filtered} columns={columns} loading={loading} searchValue={query} onSearchChange={setQuery} searchPlaceholder="Search receipts..." emptyText="No customer receipts found" minWidth="1500px" action={<button onClick={newReceipt} className={btnCreatePage}><Plus className="size-4" /> New receipt</button>} filters={<><select value={status} onChange={(e) => setStatus(e.target.value)} className={dashboardSelectClass}><option value="all">All statuses</option><option value="draft">Draft</option><option value="posted">Posted</option><option value="cancelled">Cancelled</option></select><select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} className={dashboardSelectClass}><option value="all">All customers</option>{customers.map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select><select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className={dashboardSelectClass}><option value="all">All methods</option>{methods.map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select><select value={journalFilter} onChange={(e) => setJournalFilter(e.target.value)} className={dashboardSelectClass}><option value="all">All journals</option>{journals.map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select><select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)} className={dashboardSelectClass}><option value="all">All currencies</option>{currencies.map((row) => <option key={row.id} value={row.id}>{String(row.code)}</option>)}</select><input aria-label="Date from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={dashboardSelectClass} /><input aria-label="Date to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={dashboardSelectClass} /><button onClick={() => void load()} className="flex size-[42px] items-center justify-center rounded-md border"><RefreshCw className="size-4" /></button></>} />
 
       <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto"><DialogHeader><DialogTitle>{viewOnly ? 'Customer receipt' : selected ? 'Edit draft receipt' : 'New customer receipt'}</DialogTitle><DialogDescription>Save as draft, review allocations, then post when the payment is confirmed.</DialogDescription></DialogHeader>
         <form onSubmit={save} className="space-y-5">
