@@ -15,7 +15,11 @@ import {
   MoreVertical,
   ChevronDown,
   X,
-  Star
+  Star,
+  Upload,
+  CheckCircle2,
+  Layers,
+  RefreshCw,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -89,6 +93,14 @@ export default function MenuPage() {
   const [formDiscountType, setFormDiscountType] = useState<"" | "percentage" | "fixed">("");
   const [formDiscountValue, setFormDiscountValue] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Bulk image states
+  const [isBulkImageOpen, setIsBulkImageOpen] = useState(false);
+  // Map of itemId -> draft imageUrl (only tracks changed ones)
+  const [bulkDrafts, setBulkDrafts] = useState<Record<number, string>>({});
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkActiveId, setBulkActiveId] = useState<number | null>(null);
+  const [bulkUrlInput, setBulkUrlInput] = useState("");
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -344,6 +356,20 @@ export default function MenuPage() {
               className="h-[42px] px-4 rounded-md font-medium text-sm"
             >
               <Link href="/composites">Menu Combos</Link>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulkDrafts({});
+                setBulkActiveId(null);
+                setBulkUrlInput("");
+                setIsBulkImageOpen(true);
+              }}
+              className="h-[42px] px-4 rounded-md font-medium text-sm flex items-center gap-2 border-primary/30 text-primary hover:bg-primary/5"
+            >
+              <Layers className="size-4" />
+              Bulk Images
             </Button>
 
             <Button
@@ -904,6 +930,268 @@ export default function MenuPage() {
               Yes, Delete Item
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* BULK IMAGE MANAGER MODAL */}
+      <Dialog open={isBulkImageOpen} onOpenChange={(open) => { if (!open) setIsBulkImageOpen(false); }}>
+        <DialogContent className="sm:max-w-[980px] max-h-[92vh] bg-white dark:bg-[#161616] border-none p-0 gap-0 overflow-hidden rounded-2xl shadow-2xl flex flex-col">
+          {/* Header */}
+          <div className="shrink-0 px-6 py-4 border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/40 dark:bg-[#1a1a1a] flex items-center justify-between gap-4">
+            <div>
+              <DialogTitle className="text-lg font-semibold text-[#1e293b] dark:text-white flex items-center gap-2">
+                <Layers className="size-5 text-primary" />
+                Bulk Image Manager
+              </DialogTitle>
+              <DialogDescription className="text-zinc-500 dark:text-zinc-400 text-xs mt-0.5">
+                Click any card to assign or upload an image. Save all changes at once.
+              </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-zinc-400 shrink-0">
+              <span className="font-semibold text-primary">
+                {Object.keys(bulkDrafts).length}
+              </span>
+              {Object.keys(bulkDrafts).length === 1 ? "change" : "changes"} pending
+            </div>
+          </div>
+
+          {/* Grid */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-5">
+            {items.filter(i => !i.isComposite).length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-zinc-400 gap-2">
+                <UtensilsCrossed className="size-10 opacity-30" />
+                <p className="text-sm">No menu items found</p>
+              </div>
+            ) : (
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" }}>
+                {items.filter(i => !i.isComposite).map((item) => {
+                  const draftImg = bulkDrafts[item.id];
+                  const currentImg = draftImg !== undefined ? draftImg : (item.imageUrl || "");
+                  const hasChange = draftImg !== undefined;
+                  const isActive = bulkActiveId === item.id;
+                  const cat = categories.find(c => c.id === item.categoryId);
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setBulkActiveId(item.id);
+                        setBulkUrlInput(currentImg);
+                      }}
+                      className={cn(
+                        "relative rounded-xl border-2 overflow-hidden cursor-pointer transition-all group",
+                        isActive
+                          ? "border-primary ring-2 ring-primary/20 shadow-lg"
+                          : hasChange
+                            ? "border-emerald-400 shadow-md"
+                            : "border-zinc-100 hover:border-primary/30 hover:shadow-md"
+                      )}
+                    >
+                      {/* Image area */}
+                      <div className="relative w-full aspect-square bg-zinc-100 overflow-hidden">
+                        {currentImg ? (
+                          <img
+                            src={currentImg}
+                            alt={item.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-zinc-300">
+                            <ImageIcon className="size-7" />
+                            <span className="text-[10px] text-zinc-400 font-medium">No image</span>
+                          </div>
+                        )}
+
+                        {/* Hover overlay */}
+                        <div className={cn(
+                          "absolute inset-0 flex flex-col items-center justify-center gap-1 transition-opacity",
+                          isActive ? "opacity-100 bg-primary/20" : "opacity-0 group-hover:opacity-100 bg-black/30"
+                        )}>
+                          <Upload className="size-5 text-white drop-shadow" />
+                          <span className="text-[10px] text-white font-bold drop-shadow">Edit image</span>
+                        </div>
+
+                        {/* Changed badge */}
+                        {hasChange && (
+                          <div className="absolute top-1.5 right-1.5">
+                            <CheckCircle2 className="size-4 text-emerald-500 fill-white drop-shadow" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Label */}
+                      <div className="px-2 py-1.5 bg-white dark:bg-[#161616]">
+                        <p className="text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 truncate leading-tight">{item.name}</p>
+                        <p className="text-[10px] text-zinc-400 truncate mt-0.5">{cat?.name || "—"}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom editor panel — shows when a card is active */}
+          {bulkActiveId !== null && (() => {
+            const activeItem = items.find(i => i.id === bulkActiveId);
+            if (!activeItem) return null;
+            const draftImg = bulkDrafts[activeItem.id];
+            const currentImg = draftImg !== undefined ? draftImg : (activeItem.imageUrl || "");
+
+            return (
+              <div className="shrink-0 border-t border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/60 dark:bg-[#1a1a1a] px-5 py-4">
+                <div className="flex items-center gap-4">
+                  {/* Preview */}
+                  <div className="w-14 h-14 rounded-lg overflow-hidden border border-zinc-200 dark:border-[#2a2a2a] bg-white dark:bg-[#161616] shrink-0 flex items-center justify-center">
+                    {currentImg ? (
+                      <img src={currentImg} alt={activeItem.name} className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <ImageIcon className="size-6 text-zinc-300" />
+                    )}
+                  </div>
+
+                  {/* Name */}
+                  <div className="shrink-0">
+                    <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{activeItem.name}</p>
+                    <p className="text-xs text-zinc-400">{categories.find(c => c.id === activeItem.categoryId)?.name || ""}</p>
+                  </div>
+
+                  {/* URL input */}
+                  <input
+                    type="text"
+                    value={bulkUrlInput}
+                    onChange={(e) => {
+                      setBulkUrlInput(e.target.value);
+                      setBulkDrafts(prev => ({ ...prev, [bulkActiveId]: e.target.value }));
+                    }}
+                    placeholder="Paste image URL..."
+                    className="flex-1 px-3 py-2 bg-white dark:bg-[#161616] border border-zinc-200 dark:border-[#2a2a2a] rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm font-medium dark:text-white placeholder:text-zinc-400"
+                  />
+
+                  {/* Upload file */}
+                  <label className="cursor-pointer shrink-0">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (!file.type.startsWith("image/")) { showToast("Please select an image file", "error"); return; }
+                        if (file.size > 5 * 1024 * 1024) { showToast("Image must be under 5MB", "error"); return; }
+                        try {
+                          const compressed = await compressImageFile(file);
+                          setBulkUrlInput(compressed);
+                          setBulkDrafts(prev => ({ ...prev, [bulkActiveId]: compressed }));
+                        } catch { showToast("Failed to process image", "error"); }
+                        e.target.value = "";
+                      }}
+                    />
+                    <span className="inline-flex h-9 px-4 items-center rounded-lg bg-primary/10 text-primary text-xs font-semibold border border-primary/20 hover:bg-primary/15 transition-colors gap-1.5">
+                      <Upload className="size-3.5" />
+                      Upload
+                    </span>
+                  </label>
+
+                  {/* Clear */}
+                  {currentImg && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBulkUrlInput("");
+                        setBulkDrafts(prev => ({ ...prev, [bulkActiveId]: "" }));
+                      }}
+                      className="shrink-0 size-9 rounded-lg border border-zinc-200 dark:border-[#2a2a2a] flex items-center justify-center text-zinc-400 hover:text-rose-500 hover:border-rose-200 transition-colors"
+                      title="Remove image"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  )}
+
+                  {/* Dismiss active */}
+                  <button
+                    type="button"
+                    onClick={() => setBulkActiveId(null)}
+                    className="shrink-0 size-9 rounded-lg border border-zinc-200 dark:border-[#2a2a2a] flex items-center justify-center text-zinc-400 hover:text-zinc-700 transition-colors"
+                    title="Close editor"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Footer */}
+          <div className="shrink-0 px-6 py-4 bg-zinc-50/50 dark:bg-[#1a1a1a] border-t border-zinc-100 dark:border-[#2a2a2a] flex items-center justify-between gap-4">
+            <p className="text-xs text-zinc-400">
+              {Object.keys(bulkDrafts).length > 0
+                ? `${Object.keys(bulkDrafts).length} item${Object.keys(bulkDrafts).length === 1 ? '' : 's'} will be updated`
+                : "No changes yet — click a card to assign an image"}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => { setBulkDrafts({}); setBulkActiveId(null); setBulkUrlInput(""); }}
+                disabled={Object.keys(bulkDrafts).length === 0 || bulkSaving}
+                className="h-9 px-4 text-sm font-medium rounded-lg"
+              >
+                Reset changes
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsBulkImageOpen(false)}
+                disabled={bulkSaving}
+                className="h-9 px-5 text-sm font-medium rounded-lg"
+              >
+                Close
+              </Button>
+              <Button
+                onClick={async () => {
+                  const entries = Object.entries(bulkDrafts);
+                  if (entries.length === 0) { setIsBulkImageOpen(false); return; }
+                  setBulkSaving(true);
+                  let successCount = 0;
+                  let failCount = 0;
+                  await Promise.allSettled(
+                    entries.map(async ([idStr, imageUrl]) => {
+                      const id = Number(idStr);
+                      try {
+                        const updated = await menuItemApi.updateMenuItem(id, { imageUrl: imageUrl || undefined });
+                        setItems(prev => prev.map(i => i.id === id ? { ...i, imageUrl: updated.imageUrl } : i));
+                        successCount++;
+                      } catch {
+                        failCount++;
+                      }
+                    })
+                  );
+                  menuItemApi.clearPosMenuCache();
+                  dispatchMenuChanged({ action: "update" });
+                  setBulkSaving(false);
+                  setBulkDrafts({});
+                  setBulkActiveId(null);
+                  setBulkUrlInput("");
+                  if (failCount === 0) {
+                    showToast(`${successCount} image${successCount === 1 ? '' : 's'} saved successfully`, "success");
+                    setIsBulkImageOpen(false);
+                  } else {
+                    showToast(`${successCount} saved, ${failCount} failed`, "error");
+                  }
+                }}
+                disabled={Object.keys(bulkDrafts).length === 0 || bulkSaving}
+                className="h-9 px-6 bg-primary !text-white hover:bg-primary/90 rounded-lg text-sm font-semibold border-none gap-2 flex items-center"
+              >
+                {bulkSaving ? (
+                  <><RefreshCw className="size-3.5 animate-spin" /> Saving...</>
+                ) : (
+                  <><CheckCircle2 className="size-3.5" /> Save {Object.keys(bulkDrafts).length > 0 ? `${Object.keys(bulkDrafts).length} ` : ""}images</>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
