@@ -106,7 +106,9 @@ function PeriodSelect({ value, onChange }: { value: string; onChange: (value: st
   );
 }
 
-function StatCard({ stat }: { stat: (typeof stats)[number] }) {
+type LiveStat = Omit<(typeof stats)[number], 'value' | 'trend'> & { value: string; trend: 'up' | 'down' };
+
+function StatCard({ stat }: { stat: LiveStat }) {
   const Icon = stat.icon;
   const positive = stat.trend === 'up';
   const colors = stat.tone === 'rose'
