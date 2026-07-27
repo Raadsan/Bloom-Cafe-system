@@ -1,17 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { 
   Search, 
   Plus, 
   Edit, 
   Trash2, 
-  Package, 
-  Filter,
-  ChevronDown,
-  History,
-  Eye
+  History
 } from "lucide-react";
 import { usePermissions } from "@/context/PermissionContext";
 import {
@@ -19,14 +15,11 @@ import {
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderWrapperClass,
-  actionBtnView,
   actionBtnEdit,
   actionBtnDelete,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
   dashboardTableHeadClass,
-  dashboardStatusBadgeClass,
-  getStockStatusBadgeClass,
 } from "@/lib/dashboard-ui";
 import { 
   Table, 
@@ -39,7 +32,6 @@ import {
 import { 
   Dialog, 
   DialogContent, 
-  DialogHeader, 
   DialogTitle, 
   DialogDescription, 
   DialogFooter 
@@ -60,7 +52,6 @@ export default function InventoryPage() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [saving, setSaving] = useState(false);
 
   // Pagination states
@@ -76,11 +67,9 @@ export default function InventoryPage() {
   // Form states
   const [formName, setFormName] = useState("");
   const [formUnit, setFormUnit] = useState("");
-  const [formStock, setFormStock] = useState<number>(0);
-  const [formMinLevel, setFormMinLevel] = useState<number>(0);
   const [formCost, setFormCost] = useState<number>(0);
 
-  const fetchIngredients = async () => {
+  const fetchIngredients = useCallback(async () => {
     try {
       setLoading(true);
       const data = await ingredientApi.getAllIngredients();
@@ -91,26 +80,19 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
-    fetchIngredients();
-  }, []);
+    const timer = window.setTimeout(() => void fetchIngredients(), 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchIngredients]);
 
   const filteredIngredients = useMemo(() => {
     return ingredients.filter((ing) => {
       const matchesSearch = ing.name.toLowerCase().includes(search.toLowerCase());
-      const isLow = ing.stockQuantity <= ing.minStockLevel;
-      const isOut = ing.stockQuantity <= 0;
-      
-      let matchesStatus = true;
-      if (statusFilter === "low") matchesStatus = isLow && !isOut;
-      if (statusFilter === "out") matchesStatus = isOut;
-      if (statusFilter === "normal") matchesStatus = !isLow;
-
-      return matchesSearch && matchesStatus;
+      return matchesSearch;
     });
-  }, [ingredients, search, statusFilter]);
+  }, [ingredients, search]);
 
   const totalPages = Math.ceil(filteredIngredients.length / pageSize);
   const paginatedIngredients = useMemo(() => {
@@ -118,15 +100,9 @@ export default function InventoryPage() {
     return filteredIngredients.slice(start, start + pageSize);
   }, [filteredIngredients, currentPage, pageSize]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, statusFilter, pageSize]);
-
   const openAddModal = () => {
     setFormName("");
     setFormUnit("");
-    setFormStock(0);
-    setFormMinLevel(0);
     setFormCost(0);
     setIsAddOpen(true);
   };
@@ -135,8 +111,6 @@ export default function InventoryPage() {
     setSelectedIngredient(ing);
     setFormName(ing.name);
     setFormUnit(ing.unit);
-    setFormStock(ing.stockQuantity);
-    setFormMinLevel(ing.minStockLevel);
     setFormCost(ing.costPerUnit || 0);
     setIsEditOpen(true);
   };
@@ -158,8 +132,6 @@ export default function InventoryPage() {
         await ingredientApi.updateIngredient(selectedIngredient.id, {
           name: formName,
           unit: formUnit,
-          stockQuantity: formStock,
-          minStockLevel: formMinLevel,
           costPerUnit: formCost
         });
         showToast("Ingredient updated successfully", "success");
@@ -167,8 +139,8 @@ export default function InventoryPage() {
         await ingredientApi.createIngredient({
           name: formName,
           unit: formUnit,
-          stockQuantity: formStock,
-          minStockLevel: formMinLevel,
+          stockQuantity: 0,
+          minStockLevel: 0,
           costPerUnit: formCost
         });
         showToast("Ingredient added successfully", "success");
@@ -215,7 +187,7 @@ export default function InventoryPage() {
               <span>Show</span>
               <select 
                 value={pageSize} 
-                onChange={(e) => setPageSize(Number(e.target.value))}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
                 className="w-24 px-3 py-1.5 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer shadow-sm"
               >
                 <option value={10}>10</option>
@@ -233,7 +205,7 @@ export default function InventoryPage() {
               <input 
                 type="text" 
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
                 placeholder="Search..." 
                 className="w-full pl-10 pr-4 py-2.5 text-[13px] bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/20 transition-all placeholder:text-zinc-400 shadow-sm" 
               />
@@ -258,11 +230,9 @@ export default function InventoryPage() {
             <Table className="w-full">
               <TableHeader className={dashboardTableHeaderClass}>
                 <TableRow className={dashboardTableHeadRowClass}>
-                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
-                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Ingredient</TableHead>
-                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Qty & Unit</TableHead>
-                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Min Level</TableHead>
-                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Status</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Name</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Unit</TableHead>
+                  <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Cost</TableHead>
                   <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -270,7 +240,7 @@ export default function InventoryPage() {
               {loading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i} className="h-14 animate-pulse">
-                    {[...Array(6)].map((_, j) => (
+                    {[...Array(4)].map((_, j) => (
                       <TableCell key={j} className="px-6 py-4">
                         <div className="h-4 bg-zinc-100 rounded w-full"></div>
                       </TableCell>
@@ -279,42 +249,19 @@ export default function InventoryPage() {
                 ))
               ) : paginatedIngredients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="px-6 py-10 text-center text-zinc-500">
+                  <TableCell colSpan={4} className="px-6 py-10 text-center text-zinc-500">
                     No ingredients found
                   </TableCell>
                 </TableRow>
               ) : (
                 paginatedIngredients.map((ing) => {
-                  const isOut = ing.stockQuantity <= 0;
-                  const isLow = ing.stockQuantity <= ing.minStockLevel;
-
                   return (
                     <TableRow key={ing.id} className="border-zinc-100 hover:bg-zinc-50/50 transition-colors">
-                      <TableCell className="px-6 py-3 text-sm text-zinc-500 font-normal">{ing.id}</TableCell>
                       <TableCell className="px-6 py-3 text-sm text-zinc-700">{ing.name}</TableCell>
-                      <TableCell className="px-6 py-3 text-sm text-zinc-700 text-right">
-                        {ing.stockQuantity} <span className="text-[11px] text-zinc-400 uppercase">{ing.unit}</span>
-                      </TableCell>
-                      <TableCell className="px-6 py-3 text-sm text-zinc-400">
-                        {ing.minStockLevel} <span className="text-[11px] uppercase">{ing.unit}</span>
-                      </TableCell>
-                      <TableCell className="px-6 py-3 text-right">
-                        <span className={cn(
-                          dashboardStatusBadgeClass,
-                          getStockStatusBadgeClass(isOut ? "out" : isLow ? "low" : "in")
-                        )}>
-                          {isOut ? "Out of Stock" : isLow ? "Low Stock" : "In Stock"}
-                        </span>
-                      </TableCell>
+                      <TableCell className="px-6 py-3 text-sm text-zinc-700">{ing.unit}</TableCell>
+                      <TableCell className="px-6 py-3 text-sm text-zinc-700 text-right">£{Number(ing.costPerUnit || 0).toFixed(2)}</TableCell>
                       <TableCell className="px-6 py-3 text-right">
                         <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className={actionBtnView}
-                          >
-                            <Eye className="size-4" />
-                          </Button>
                           {canEdit && (
                             <Button 
                               variant="ghost" 
@@ -382,13 +329,13 @@ export default function InventoryPage() {
               {isEditOpen ? "Update Ingredient" : "Add New Ingredient"}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground mt-1">
-              {isEditOpen ? "Update the stock levels and details for this ingredient." : "Register a new ingredient to your inventory tracking system."}
+              {isEditOpen ? "Update the ingredient details." : "Add an ingredient for use in purchases."}
             </DialogDescription>
           </div>
           
           <div className="p-6 grid grid-cols-2 gap-5">
             <div className="col-span-2 space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Ingredient Name *</label>
+              <label className="text-sm font-bold text-[#1E293B]">Name *</label>
               <input
                 type="text"
                 value={formName}
@@ -399,7 +346,7 @@ export default function InventoryPage() {
             </div>
             
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Measurement Unit *</label>
+              <label className="text-sm font-bold text-[#1E293B]">Unit *</label>
               <input
                 type="text"
                 value={formUnit}
@@ -410,29 +357,12 @@ export default function InventoryPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Current Stock</label>
+              <label className="text-sm font-bold text-[#1E293B]">Cost *</label>
               <input
+                required
                 type="number"
-                value={formStock}
-                onChange={(e) => setFormStock(Number(e.target.value))}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Min. Level (Alert)</label>
-              <input
-                type="number"
-                value={formMinLevel}
-                onChange={(e) => setFormMinLevel(Number(e.target.value))}
-                className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1E293B]">Cost per Unit</label>
-              <input
-                type="number"
+                min="0"
+                step="0.01"
                 value={formCost}
                 onChange={(e) => setFormCost(Number(e.target.value))}
                 className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
@@ -461,7 +391,7 @@ export default function InventoryPage() {
             </div>
             <h3 className="text-xl font-bold text-foreground mb-2">Delete Item?</h3>
             <p className="text-sm text-muted-foreground">
-              Are you sure you want to delete <span className="font-bold text-foreground">"{selectedIngredient?.name}"</span> from inventory? 
+              Are you sure you want to delete <span className="font-bold text-foreground">&quot;{selectedIngredient?.name}&quot;</span> from inventory?
               This action cannot be undone.
             </p>
           </div>
