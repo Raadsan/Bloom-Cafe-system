@@ -8,6 +8,8 @@ let pickupHistoryMenuEnsured = false;
 let discountAdvertisementMenuEnsured = false;
 let compositesMenuEnsured = false;
 let suppliersMenuEnsured = false;
+let purchasesMenuEnsured = false;
+let ingredientsMenuEnsured = false;
 
 const roleMenusCache = new Map();
 const ROLE_MENUS_CACHE_TTL = 5 * 60 * 1000;
@@ -936,6 +938,92 @@ export async function ensureSuppliersMenuItem() {
     suppliersMenuEnsured = true;
   } catch (error) {
     console.error('ensureSuppliersMenuItem error:', error);
+  }
+}
+
+/** Adds Purchases directly after Suppliers without resetting existing menu permissions. */
+export async function ensurePurchasesMenuItem() {
+  if (purchasesMenuEnsured) return;
+  try {
+    let purchasesMenu = await prisma.menu.findFirst({
+      where: { OR: [{ url: '/purchases' }, { title: 'Purchases' }] },
+    });
+    const suppliersMenu = await prisma.menu.findFirst({ where: { url: '/suppliers' } });
+    const order = (suppliersMenu?.order || 0) + 1;
+
+    if (purchasesMenu) {
+      purchasesMenu = await prisma.menu.update({
+        where: { id: purchasesMenu.id },
+        data: { title: 'Purchases', url: '/purchases', icon: 'ShoppingCart', moduleKey: 'RESTAURANT', isActive: true, order },
+      });
+    } else {
+      await prisma.menu.updateMany({
+        where: { moduleKey: 'RESTAURANT', order: { gte: order } },
+        data: { order: { increment: 1 } },
+      });
+      purchasesMenu = await prisma.menu.create({
+        data: { title: 'Purchases', url: '/purchases', icon: 'ShoppingCart', order, moduleKey: 'RESTAURANT', isActive: true },
+      });
+    }
+
+    const roles = await prisma.role.findMany({
+      where: { OR: [{ name: { contains: 'admin' } }, { name: { contains: 'Admin' } }, { name: { contains: 'manager' } }, { name: { contains: 'Manager' } }] },
+    });
+    for (const role of roles) {
+      await prisma.roleMenuAccess.upsert({
+        where: { roleId_menuId: { roleId: role.id, menuId: purchasesMenu.id } },
+        update: { canView: true },
+        create: { roleId: role.id, menuId: purchasesMenu.id, canView: true, canAdd: true, canEdit: true, canDelete: true },
+      });
+    }
+    clearRoleMenusCache();
+    clearAuthCaches();
+    purchasesMenuEnsured = true;
+  } catch (error) {
+    console.error('ensurePurchasesMenuItem error:', error);
+  }
+}
+
+/** Makes the ingredient stock page available directly after Categories. */
+export async function ensureIngredientsMenuItem() {
+  if (ingredientsMenuEnsured) return;
+  try {
+    let ingredientsMenu = await prisma.menu.findFirst({
+      where: { OR: [{ url: '/inventory' }, { title: 'Ingredients' }, { title: 'Inventory & Stock' }] },
+    });
+    const categoriesMenu = await prisma.menu.findFirst({ where: { url: '/categories' } });
+    const order = (categoriesMenu?.order || 0) + 1;
+
+    if (ingredientsMenu) {
+      ingredientsMenu = await prisma.menu.update({
+        where: { id: ingredientsMenu.id },
+        data: { title: 'Ingredients', url: '/inventory', icon: 'Package', moduleKey: 'RESTAURANT', isActive: true, order },
+      });
+    } else {
+      await prisma.menu.updateMany({
+        where: { moduleKey: 'RESTAURANT', order: { gte: order } },
+        data: { order: { increment: 1 } },
+      });
+      ingredientsMenu = await prisma.menu.create({
+        data: { title: 'Ingredients', url: '/inventory', icon: 'Package', order, moduleKey: 'RESTAURANT', isActive: true },
+      });
+    }
+
+    const roles = await prisma.role.findMany({
+      where: { OR: [{ name: { contains: 'admin' } }, { name: { contains: 'Admin' } }, { name: { contains: 'manager' } }, { name: { contains: 'Manager' } }] },
+    });
+    for (const role of roles) {
+      await prisma.roleMenuAccess.upsert({
+        where: { roleId_menuId: { roleId: role.id, menuId: ingredientsMenu.id } },
+        update: { canView: true },
+        create: { roleId: role.id, menuId: ingredientsMenu.id, canView: true, canAdd: true, canEdit: true, canDelete: true },
+      });
+    }
+    clearRoleMenusCache();
+    clearAuthCaches();
+    ingredientsMenuEnsured = true;
+  } catch (error) {
+    console.error('ensureIngredientsMenuItem error:', error);
   }
 }
 

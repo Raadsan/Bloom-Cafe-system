@@ -203,7 +203,7 @@ export default function InventoryPage() {
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       <div className={pageHeaderWrapperClass}>
-        <h1 className={pageHeaderTitleClass}>Current Stock</h1>
+        <h1 className={pageHeaderTitleClass}>Ingredients</h1>
       </div>
 
       {/* Main Container */}

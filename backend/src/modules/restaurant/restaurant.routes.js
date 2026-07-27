@@ -12,6 +12,7 @@ import menuItemRoutes from './catalog/menuItem/menuItem.routes.js'
 import notificationRoutes from './engagement/notification/notification.routes.js'
 import orderRoutes from './sales/order/order.routes.js'
 import paymentRoutes from './sales/payment/payment.routes.js'
+import purchaseRoutes from './inventory/purchase/purchase.routes.js'
 import receiptSettingsRoutes from './operations/receiptSettings/receiptSettings.routes.js'
 import reportRoutes from './reporting/report/report.routes.js'
 import reviewRoutes from './engagement/review/review.routes.js'
@@ -36,6 +37,7 @@ router.use('/menu-items', menuItemRoutes)
 router.use('/notifications', notificationRoutes)
 router.use('/orders', orderRoutes)
 router.use('/payments', paymentRoutes)
+router.use('/purchases', purchaseRoutes)
 router.use('/receipt-settings', receiptSettingsRoutes)
 router.use('/reports', reportRoutes)
 router.use('/reviews', reviewRoutes)

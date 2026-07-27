@@ -18,6 +18,8 @@ import {
   ensureDiscountAdvertisementMenuItem,
   ensureCompositesMenuItem,
   ensureSuppliersMenuItem,
+  ensurePurchasesMenuItem,
+  ensureIngredientsMenuItem,
   warmAllMenusCache,
 } from './src/modules/restaurant/catalog/menu/menu.controller.js'
 import { initFirebase } from './src/utils/fcmService.js'
@@ -59,6 +61,8 @@ async function runStartupWarmup() {
   await ensureDiscountAdvertisementMenuItem()
   await ensureCompositesMenuItem()
   await ensureSuppliersMenuItem()
+  await ensurePurchasesMenuItem()
+  await ensureIngredientsMenuItem()
   await ensureCustomerInvoiceDefaults()
   await warmAllMenusCache()
   await warmAllMenuItemsCache()
@@ -66,7 +70,7 @@ async function runStartupWarmup() {
   await warmComboFormCache()
   await warmCategoryCaches()
   await warmReportCaches()
-  console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions, Menu Combos, Suppliers)')
+  console.log('✅ Sidebar menus ensured (Create Order, Ready Pickup, Pickup History, Promotions, Menu Combos, Suppliers, Purchases, Ingredients)')
 }
 
 const server = http.createServer(app)

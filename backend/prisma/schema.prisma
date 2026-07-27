@@ -88,6 +88,7 @@ model ingredient {
   updatedAt     DateTime        @default(now()) @updatedAt
   menuitembom   menuitembom[]
   stockmovement stockmovement[]
+  purchaseline  purchaseline[]
 }
 
 model menu {
@@ -347,10 +348,44 @@ model stockmovement {
   type         String
   quantity     Float
   note         String?
+  purchaseId   Int?
   createdAt    DateTime   @default(now())
   ingredient   ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  purchase     purchase?  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([ingredientId], map: "stockmovement_ingredientId_fkey")
+  @@index([purchaseId])
+}
+
+model purchase {
+  id             Int             @id @default(autoincrement())
+  purchaseNumber String          @unique
+  supplierId     Int             @db.UnsignedInt
+  purchaseDate   DateTime        @db.Date
+  totalAmount    Float           @default(0)
+  notes          String?         @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  supplier       vendors         @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines          purchaseline[]
+  stockmovements stockmovement[]
+
+  @@index([supplierId])
+  @@index([purchaseDate])
+}
+
+model purchaseline {
+  id           Int        @id @default(autoincrement())
+  purchaseId   Int
+  ingredientId Int
+  quantity     Float
+  unitCost     Float
+  lineTotal    Float
+  purchase     purchase   @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  ingredient   ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseId])
+  @@index([ingredientId])
 }
 
 model submenu {
@@ -1142,6 +1177,7 @@ model vendors {
   updated_at           DateTime             @default(now()) @db.Timestamp(0)
   vendor_bills         vendor_bills[]
   vendor_payments      vendor_payments[]
+  purchases            purchase[]
   chart_of_accounts    chart_of_accounts?   @relation(fields: [payable_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ven_ap")
   companies            companies            @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ven_company")
   currencies           currencies?          @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ven_currency")
