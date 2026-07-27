@@ -29,6 +29,7 @@ import { warmReportCaches } from './src/modules/restaurant/reporting/report/repo
 import { warmCategoryCaches } from './src/modules/restaurant/catalog/category/category.controller.js'
 import { isDbAuthError, isDbUnreachableError } from './src/utils/dbErrors.js'
 import { ensureCustomerInvoiceDefaults } from './src/modules/accounting/receivables/customerInvoices/customerInvoice.controller.js'
+import { ensureWalletChartOfAccounts } from './src/modules/accounting/services/walletAccounts.service.js'
 
 const skipStartupWarmup =
   process.env.SKIP_STARTUP_WARMUP === 'true' || process.env.SKIP_STARTUP_WARMUP === '1'
@@ -64,6 +65,7 @@ async function runStartupWarmup() {
   await ensurePurchasesMenuItem()
   await ensureIngredientsMenuItem()
   await ensureCustomerInvoiceDefaults()
+  await ensureWalletChartOfAccounts()
   await warmAllMenusCache()
   await warmAllMenuItemsCache()
   await warmCompositesCache()
