@@ -36,6 +36,7 @@ type Props<T extends { id: number }> = {
   emptyText?: string;
   minWidth?: string;
   pageSizes?: number[];
+  footer?: ReactNode;
 };
 
 export default function DashboardDataTable<T extends { id: number }>({
@@ -50,6 +51,7 @@ export default function DashboardDataTable<T extends { id: number }>({
   emptyText = 'No records found',
   minWidth = '900px',
   pageSizes = [10, 25, 50, 100],
+  footer,
 }: Props<T>) {
   const [pageSize, setPageSize] = useState(pageSizes[0] || 10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -105,6 +107,7 @@ export default function DashboardDataTable<T extends { id: number }>({
                 <tr><td colSpan={columns.length} className="px-6 py-12 text-center text-sm text-zinc-500 dark:text-white/70">{emptyText}</td></tr>
               )}
             </tbody>
+            {footer}
           </table>
         </div>
       </div>

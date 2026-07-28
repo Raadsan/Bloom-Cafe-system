@@ -33,6 +33,64 @@ const fail = (res, error, fallback) => {
     .json({ success: false, message: error.message || fallback })
 }
 
+// Vendor bills affect the P&L only through posted journal entries.  Keep the
+// entry alongside the bill so a bill can be reviewed as a draft before it is
+// posted, just like customer invoices.
+function journalItems(prepared) {
+  const rate = Number(prepared.header.exchange_rate)
+  const debits = new Map()
+  for (const line of prepared.lines) {
+    debits.set(line.expense_account_id, (debits.get(line.expense_account_id) || 0) + Number(line.subtotal))
+  }
+  // A purchase tax is included in the expense unless a separate input-tax
+  // account is configured. This guarantees a balanced entry for every bill.
+  if (Number(prepared.header.amount_tax) > 0) {
+    const firstExpenseAccount = prepared.lines[0]?.expense_account_id
+    debits.set(firstExpenseAccount, (debits.get(firstExpenseAccount) || 0) + Number(prepared.header.amount_tax))
+  }
+  const items = [...debits.entries()].map(([accountId, amount], index) => ({
+    sequence: (index + 1) * 10,
+    account_id: accountId,
+    label: 'Vendor bill expense',
+    partner_type: 'vendor',
+    partner_id: prepared.header.vendor_id,
+    debit: Math.round(amount * rate * 100) / 100,
+    credit: 0,
+    currency_id: prepared.header.currency_id,
+    amount_currency: amount,
+  }))
+  const debit = items.reduce((sum, item) => sum + Number(item.debit), 0)
+  items.push({
+    sequence: (items.length + 1) * 10,
+    account_id: prepared.header.payable_account_id,
+    label: 'Accounts Payable',
+    partner_type: 'vendor',
+    partner_id: prepared.header.vendor_id,
+    debit: 0,
+    credit: debit,
+    currency_id: prepared.header.currency_id,
+    amount_currency: -Number(prepared.header.amount_total),
+  })
+  return items
+}
+
+function entryData(prepared, billNumber, billId, state = 'draft', postedAt = null) {
+  return {
+    company_id: prepared.header.company_id,
+    journal_id: prepared.header.journal_id,
+    entry_number: billNumber,
+    entry_date: prepared.header.bill_date,
+    fiscal_period_id: prepared.header.fiscal_period_id,
+    reference: billNumber,
+    narration: `${state === 'posted' ? 'Posted' : 'Draft'} vendor bill ${billNumber}`,
+    state,
+    source_type: 'vendor_bill',
+    source_id: billId,
+    posted_at: postedAt,
+    journal_items: { create: journalItems(prepared) },
+  }
+}
+
 async function prepareBill(input, documentType = 'bill') {
   const vendorId = parseId(input.vendor_id)
   const billDate = parseDate(input.bill_date)
@@ -62,13 +120,13 @@ async function prepareBill(input, documentType = 'bill') {
     prisma.chart_of_accounts.findFirst({
       where: {
         company_id: vendor.company_id, is_active: true,
-        OR: [{ code: '2100' }, ...(vendor.payable_account_id ? [{ id: vendor.payable_account_id }] : []), ...(journal.default_credit_account_id ? [{ id: journal.default_credit_account_id }] : [])],
+        OR: [{ code: '2000' }, ...(vendor.payable_account_id ? [{ id: vendor.payable_account_id }] : []), ...(journal.default_credit_account_id ? [{ id: journal.default_credit_account_id }] : [])],
       },
       orderBy: { code: 'asc' },
     }),
   ])
   if (!currency?.is_active) throw inputError('Bill currency is inactive or missing')
-  if (!payableAccount) throw inputError('Accounts Payable account 2100 was not found')
+  if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
   if (reversedBillId) {
     const original = await prisma.vendor_bills.findFirst({ where: { id: reversedBillId, document_type: 'bill', vendor_id: vendorId, state: 'posted' } })
     if (!original) throw inputError('Original posted vendor bill was not found for this vendor')
@@ -160,7 +218,9 @@ export const create = async (req, res) => {
     const data = await prisma.$transaction(async (tx) => {
       const journal = await tx.journals.findUnique({ where: { id: prepared.header.journal_id } })
       const billNumber = await allocateNumber(tx, journal)
-      return tx.vendor_bills.create({ data: { ...prepared.header, bill_number: billNumber, vendor_bill_lines: { create: prepared.lines } }, include })
+      const bill = await tx.vendor_bills.create({ data: { ...prepared.header, bill_number: billNumber, vendor_bill_lines: { create: prepared.lines } } })
+      const entry = await tx.journal_entries.create({ data: entryData(prepared, billNumber, bill.id) })
+      return tx.vendor_bills.update({ where: { id: bill.id }, data: { journal_entry_id: entry.id }, include })
     }, { maxWait: 10000, timeout: 30000 })
     await logAudit({ userId: req.user?.id, action: 'Created', entity: 'VendorBill', entityId: data.id, description: `Prepared draft vendor bill "${data.bill_number}"` })
     res.status(201).json({ success: true, message: 'Draft vendor bill prepared successfully', data })
@@ -176,7 +236,15 @@ export const update = async (req, res) => {
     const prepared = await prepareBill(req.body)
     const data = await prisma.$transaction(async (tx) => {
       await tx.vendor_bill_lines.deleteMany({ where: { bill_id: billId } })
-      return tx.vendor_bills.update({ where: { id: billId }, data: { ...prepared.header, bill_number: existing.bill_number, vendor_bill_lines: { create: prepared.lines }, updated_at: new Date() }, include })
+      const bill = await tx.vendor_bills.update({ where: { id: billId }, data: { ...prepared.header, bill_number: existing.bill_number, vendor_bill_lines: { create: prepared.lines }, updated_at: new Date() } })
+      if (existing.journal_entry_id) {
+        await tx.journal_items.deleteMany({ where: { entry_id: existing.journal_entry_id } })
+        await tx.journal_entries.update({ where: { id: existing.journal_entry_id }, data: { ...entryData(prepared, existing.bill_number, billId), journal_items: { create: journalItems(prepared) } } })
+      } else {
+        const entry = await tx.journal_entries.create({ data: entryData(prepared, existing.bill_number, billId) })
+        await tx.vendor_bills.update({ where: { id: billId }, data: { journal_entry_id: entry.id } })
+      }
+      return tx.vendor_bills.findUnique({ where: { id: bill.id }, include })
     }, { maxWait: 10000, timeout: 30000 })
     await logAudit({ userId: req.user?.id, action: 'Updated', entity: 'VendorBill', entityId: data.id, description: `Updated draft vendor bill "${data.bill_number}"` })
     res.json({ success: true, message: 'Draft vendor bill updated successfully', data })
@@ -189,7 +257,10 @@ export const remove = async (req, res) => {
     const existing = await prisma.vendor_bills.findUnique({ where: { id: billId } })
     if (!existing) return res.status(404).json({ success: false, message: 'Vendor bill not found' })
     if (existing.state !== 'draft') throw inputError('Only draft vendor bills can be deleted')
-    await prisma.vendor_bills.delete({ where: { id: billId } })
+    await prisma.$transaction(async (tx) => {
+      await tx.vendor_bills.delete({ where: { id: billId } })
+      if (existing.journal_entry_id) await tx.journal_entries.deleteMany({ where: { id: existing.journal_entry_id, state: 'draft', source_type: 'vendor_bill' } })
+    })
     await logAudit({ userId: req.user?.id, action: 'Deleted', entity: 'VendorBill', entityId: billId, description: `Deleted draft vendor bill "${existing.bill_number}"` })
     res.json({ success: true, message: 'Draft vendor bill deleted successfully' })
   } catch (error) { fail(res, error, 'Failed to delete vendor bill') }
@@ -200,11 +271,13 @@ export const post = async (req, res) => {
   if (!billId) return res.status(400).json({ success: false, message: 'Invalid bill id' })
   try {
     const data = await prisma.$transaction(async (tx) => {
-      const bill = await tx.vendor_bills.findUnique({ where: { id: billId }, include: { fiscal_periods: { include: { fiscal_years: true } } } })
+      const bill = await tx.vendor_bills.findUnique({ where: { id: billId }, include: { fiscal_periods: { include: { fiscal_years: true } }, journal_entries: true } })
       if (!bill) throw inputError('Vendor bill not found')
       if (bill.state !== 'draft') throw inputError('Only draft vendor bills can be posted')
       if (!bill.fiscal_periods || bill.fiscal_periods.state !== 'open' || bill.fiscal_periods.fiscal_years.state !== 'open') throw inputError('Bill fiscal period is closed or invalid')
       const postedAt = new Date()
+      if (!bill.journal_entry_id || !bill.journal_entries || bill.journal_entries.state !== 'draft') throw inputError('Linked draft journal entry is missing or invalid')
+      await tx.journal_entries.update({ where: { id: bill.journal_entry_id }, data: { state: 'posted', posted_at: postedAt, narration: `Posted vendor bill ${bill.bill_number}` } })
       await tx.vendor_bills.update({ where: { id: billId }, data: { state: 'posted', posted_at: postedAt, updated_at: postedAt } })
       return tx.vendor_bills.findUnique({ where: { id: billId }, include })
     }, { maxWait: 10000, timeout: 30000 })

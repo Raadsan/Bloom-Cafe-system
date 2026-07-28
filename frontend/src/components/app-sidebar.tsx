@@ -279,23 +279,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return () => window.removeEventListener("sidebar-menu-updated", handleMenuUpdate);
   }, [workspace]);
 
-  // Update which menu section is open when the path changes (no API calls)
+  // Keep the parent expanded for the active child route. Submenu URLs are
+  // stored without the workspace prefix, so compare their resolved URLs.
+  // Merge rather than replace state: a navigation must not collapse a menu
+  // the user has already opened.
   useEffect(() => {
     if (menus.length === 0) return;
-    const initialOpen: Record<number, boolean> = {};
-    menus.forEach(menu => {
-      if (menu.items?.some(sub => pathname === sub.url || pathname.startsWith(`${sub.url}/`))) {
-        initialOpen[menu.id] = true;
-      }
+    setOpenMenus((current) => {
+      const next = { ...current };
+      menus.forEach((menu) => {
+        const hasActiveChild = (menu.items || []).some((sub) => {
+          const subUrl = workspaceHref(normalizeUrl(sub.url), workspace);
+          return sub.isActive !== false && isNavRouteActive(pathname, subUrl);
+        });
+        if (hasActiveChild) next[menu.id] = true;
+      });
+      return next;
     });
-    setOpenMenus(initialOpen);
-  }, [pathname, menus]);
+  }, [pathname, menus, workspace]);
 
   const toggleMenu = (menuId: number) => {
-    setOpenMenus(prev => ({
-      ...prev,
-      [menuId]: !prev[menuId]
-    }));
+    setOpenMenus((current) => {
+      const willOpen = !current[menuId];
+      // Accordion navigation: only one parent section is expanded at a time.
+      const next: Record<number, boolean> = {};
+      if (willOpen) next[menuId] = true;
+      return next;
+    });
   };
 
   const navItems = useMemo(() => {

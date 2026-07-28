@@ -11,6 +11,7 @@ import { fiscalYearApi } from '@/lib/api/accounting/ledger/fiscalYearApi';
 import { accountingJournalApi } from '@/lib/api/accounting/ledger/journalApi';
 import { useToast } from '@/components/ui/toast';
 import { pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
+import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
 
 export type FinancialReportKind = 'general-ledger' | 'trial-balance' | 'profit-and-loss' | 'balance-sheet' | 'cash-flow' | 'journal-report';
 type Row = { id?: number; [key: string]: unknown };
@@ -132,7 +133,24 @@ function ReportBody({ kind, data }: { kind: FinancialReportKind; data: unknown }
   const entries = data as Row[];
   return <div>{entries.map((entry) => <div key={String(entry.id)} className="border-b p-4"><div className="mb-3 flex flex-wrap justify-between gap-2"><div><span className="font-bold text-primary">{String(entry.entry_number || `#${entry.id}`)}</span><span className="ml-3 text-xs text-muted-foreground">{dateValue(entry.entry_date)} · {String((entry.journals as Row)?.name || '')}</span></div><span className="text-xs">{String(entry.reference || entry.narration || '')}</span></div><ReportTable compact headers={['Account', 'Label', 'Debit', 'Credit']} rows={((entry.journal_items as Row[]) || []).map((line) => [`${String((line.chart_of_accounts as Row)?.code || '')} — ${String((line.chart_of_accounts as Row)?.name || '')}`, line.label, money(line.debit), money(line.credit)])} footer={['', 'Totals', money(entry.total_debit), money(entry.total_credit)]} /></div>)}</div>;
 }
-function ReportTable({ headers, rows, footer, compact }: { headers: string[]; rows: unknown[][]; footer?: unknown[]; compact?: boolean }) { return <div className="overflow-x-auto"><table className={`w-full min-w-[720px] ${compact ? 'text-[11px]' : 'text-xs'}`}><thead className="bg-muted/50 text-muted-foreground"><tr>{headers.map((header, index) => <th key={header} className={`px-4 py-3 ${index >= headers.length - 3 ? 'text-right' : 'text-left'}`}>{header}</th>)}</tr></thead><tbody>{rows.length ? rows.map((row, index) => <tr key={index} className="border-t">{row.map((value, cell) => <td key={cell} className={`px-4 py-3 ${cell >= row.length - 3 ? 'text-right tabular-nums' : ''}`}>{String(value ?? '—')}</td>)}</tr>) : <tr><td colSpan={headers.length} className="p-10 text-center text-muted-foreground">No posted activity for this selection.</td></tr>}</tbody>{footer && <tfoot className="border-t-2 bg-muted/30 font-bold"><tr>{footer.map((value, index) => <td key={index} className={`px-4 py-3 ${index >= footer.length - 3 ? 'text-right' : ''}`}>{String(value ?? '')}</td>)}</tr></tfoot>}</table></div>; }
+type ReportTableRow = { id: number; values: unknown[] };
+function ReportTable({ headers, rows, footer, compact }: { headers: string[]; rows: unknown[][]; footer?: unknown[]; compact?: boolean }) {
+  const [search, setSearch] = useState('');
+  const tableRows = useMemo<ReportTableRow[]>(() => rows.map((values, index) => ({ id: index + 1, values })), [rows]);
+  const filteredRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query ? tableRows.filter((row) => row.values.some((value) => String(value ?? '').toLowerCase().includes(query))) : tableRows;
+  }, [search, tableRows]);
+  const columns = useMemo<DashboardTableColumn<ReportTableRow>[]>(() => headers.map((header, index) => ({
+    key: `${header}-${index}`,
+    header,
+    align: index >= headers.length - 3 ? 'right' : 'left',
+    className: compact ? 'text-[11px]' : undefined,
+    cell: (row) => String(row.values[index] ?? '—'),
+  })), [compact, headers]);
+  const footerContent = footer ? <tfoot className="border-t-2 bg-muted/30 font-bold"><tr>{footer.map((value, index) => <td key={index} className={`px-4 py-3 ${index >= footer.length - 3 ? 'text-right' : ''}`}>{String(value ?? '')}</td>)}</tr></tfoot> : undefined;
+  return <DashboardDataTable rows={filteredRows} columns={columns} searchValue={search} onSearchChange={setSearch} searchPlaceholder="Search report..." emptyText="No posted activity for this selection." minWidth="720px" pageSizes={[10, 25, 50]} footer={footerContent} />;
+}
 function Statement({ title, rows, total }: { title: string; rows: Row[]; total: number }) { return <section className="mb-5"><h3 className="border-b pb-2 font-bold">{title}</h3>{rows.map((row) => <div key={String(row.account_id)} className="flex justify-between border-b border-dashed py-2 text-sm"><span>{String(row.account_code)} — {String(row.account_name)}</span><span className="tabular-nums">{money(row.balance)}</span></div>)}<div className="mt-2 flex justify-between rounded-lg bg-muted px-3 py-2 font-bold"><span>Total {title}</span><span>{money(total)}</span></div></section>; }
 function Metric({ label, value, positive, negative }: { label: string; value: number; positive?: boolean; negative?: boolean }) { return <div className="rounded-xl border p-3"><p className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</p><p className={`mt-1 text-lg font-bold ${positive ? 'text-emerald-600' : negative ? 'text-rose-600' : ''}`}>{money(value)}</p></div>; }
 function Empty({ text }: { text: string }) { return <div className="p-16 text-center text-sm text-muted-foreground">{text}</div>; }

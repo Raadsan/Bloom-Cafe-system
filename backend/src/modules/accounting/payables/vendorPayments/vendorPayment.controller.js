@@ -31,7 +31,7 @@ async function prepare(input) {
   ])
   if (!vendor?.is_active) throw inputError('Active vendor not found')
   if (!method?.is_active || !['outbound', 'both'].includes(method.payment_type)) throw inputError('Select an active outbound payment method')
-  if (!bank?.is_active || bank.company_id !== vendor.company_id || !bank.journal_id) throw inputError('Select an active vendor-company bank account with a journal')
+  if (!bank?.is_active || bank.company_id !== vendor.company_id || !bank.journal_id || !bank.gl_account_id) throw inputError('Select an active vendor-company bank account with a journal and GL account')
   const fiscalPeriod = await prisma.fiscal_periods.findFirst({ where: { state: 'open', fiscal_years: { company_id: vendor.company_id, state: 'open' }, start_date: { lte: paymentDate }, end_date: { gte: paymentDate } } })
   if (!fiscalPeriod) throw inputError('No open fiscal period covers the payment date')
   const currencyId = id(input.currency_id) || bank.currency_id
@@ -49,9 +49,34 @@ async function prepare(input) {
   }
   const allocated = allocations.reduce((sum, row) => sum + row.allocated_amount, 0)
   if (allocated > amount + 0.005) throw inputError('Allocated amount cannot exceed payment amount')
+  const payableAccount = await prisma.chart_of_accounts.findFirst({ where: { company_id: vendor.company_id, is_active: true, OR: [{ code: '2000' }, ...(vendor.payable_account_id ? [{ id: vendor.payable_account_id }] : [])] }, orderBy: { code: 'asc' } })
+  if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
   return {
     header: { company_id: vendor.company_id, vendor_id: vendorId, journal_id: bank.journal_id, payment_method_id: paymentMethodId, bank_account_id: bankAccountId, fiscal_period_id: fiscalPeriod.id, payment_date: paymentDate, currency_id: currencyId, exchange_rate: exchangeRate, amount, unallocated_amount: Math.round((amount - allocated) * 100) / 100, reference: String(input.reference || '').trim() || null, memo: String(input.memo || '').trim() || null, state: 'draft' },
     allocations,
+    payableAccountId: payableAccount.id,
+    bankGlAccountId: bank.gl_account_id,
+  }
+}
+
+function paymentEntryData(prepared, paymentNumber, paymentId, state = 'draft', postedAt = null) {
+  const baseAmount = Math.round(Number(prepared.header.amount) * Number(prepared.header.exchange_rate) * 100) / 100
+  return {
+    company_id: prepared.header.company_id,
+    journal_id: prepared.header.journal_id,
+    entry_number: paymentNumber,
+    entry_date: prepared.header.payment_date,
+    fiscal_period_id: prepared.header.fiscal_period_id,
+    reference: prepared.header.reference || paymentNumber,
+    narration: prepared.header.memo || `${state === 'posted' ? 'Posted' : 'Draft'} vendor payment ${paymentNumber}`,
+    state,
+    source_type: 'vendor_payment',
+    source_id: paymentId,
+    posted_at: postedAt,
+    journal_items: { create: [
+      { sequence: 10, account_id: prepared.payableAccountId, label: 'Accounts Payable', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: baseAmount, credit: 0, currency_id: prepared.header.currency_id, amount_currency: Number(prepared.header.amount) },
+      { sequence: 20, account_id: prepared.bankGlAccountId, label: 'Bank payment', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -Number(prepared.header.amount) },
+    ] },
   }
 }
 async function number(tx, journalId) {
@@ -74,7 +99,12 @@ export const getById = async (req, res) => {
 export const create = async (req, res) => {
   try {
     const prepared = await prepare(req.body)
-    const data = await prisma.$transaction(async (tx) => tx.vendor_payments.create({ data: { ...prepared.header, payment_number: await number(tx, prepared.header.journal_id), payment_allocations: { create: prepared.allocations } }, include }), { maxWait: 10000, timeout: 30000 })
+    const data = await prisma.$transaction(async (tx) => {
+      const paymentNumber = await number(tx, prepared.header.journal_id)
+      const payment = await tx.vendor_payments.create({ data: { ...prepared.header, payment_number: paymentNumber, payment_allocations: { create: prepared.allocations } } })
+      const entry = await tx.journal_entries.create({ data: paymentEntryData(prepared, paymentNumber, payment.id) })
+      return tx.vendor_payments.update({ where: { id: payment.id }, data: { journal_entry_id: entry.id }, include })
+    }, { maxWait: 10000, timeout: 30000 })
     await logAudit({ userId: req.user?.id, action: 'Created', entity: 'VendorPayment', entityId: data.id, description: `Created draft vendor payment "${data.payment_number}"` })
     res.status(201).json({ success: true, message: 'Draft vendor payment created successfully', data })
   } catch (error) { fail(res, error, 'Failed to create vendor payment') }
@@ -88,7 +118,15 @@ export const update = async (req, res) => {
     const prepared = await prepare(req.body)
     const data = await prisma.$transaction(async (tx) => {
       await tx.payment_allocations.deleteMany({ where: { payment_id: paymentId } })
-      return tx.vendor_payments.update({ where: { id: paymentId }, data: { ...prepared.header, payment_number: existing.payment_number, payment_allocations: { create: prepared.allocations }, updated_at: new Date() }, include })
+      await tx.vendor_payments.update({ where: { id: paymentId }, data: { ...prepared.header, payment_number: existing.payment_number, payment_allocations: { create: prepared.allocations }, updated_at: new Date() } })
+      if (existing.journal_entry_id) {
+        await tx.journal_items.deleteMany({ where: { entry_id: existing.journal_entry_id } })
+        await tx.journal_entries.update({ where: { id: existing.journal_entry_id }, data: { ...paymentEntryData(prepared, existing.payment_number, paymentId), journal_items: { create: paymentEntryData(prepared, existing.payment_number, paymentId).journal_items.create } } })
+      } else {
+        const entry = await tx.journal_entries.create({ data: paymentEntryData(prepared, existing.payment_number, paymentId) })
+        await tx.vendor_payments.update({ where: { id: paymentId }, data: { journal_entry_id: entry.id } })
+      }
+      return tx.vendor_payments.findUnique({ where: { id: paymentId }, include })
     }, { maxWait: 10000, timeout: 30000 })
     res.json({ success: true, message: 'Draft vendor payment updated successfully', data })
   } catch (error) { fail(res, error, 'Failed to update vendor payment') }
@@ -99,7 +137,10 @@ export const remove = async (req, res) => {
   try {
     const existing = await prisma.vendor_payments.findUnique({ where: { id: paymentId } })
     if (!existing || existing.state !== 'draft') throw inputError('Draft vendor payment not found')
-    await prisma.vendor_payments.delete({ where: { id: paymentId } })
+    await prisma.$transaction(async (tx) => {
+      await tx.vendor_payments.delete({ where: { id: paymentId } })
+      if (existing.journal_entry_id) await tx.journal_entries.deleteMany({ where: { id: existing.journal_entry_id, state: 'draft', source_type: 'vendor_payment' } })
+    })
     res.json({ success: true, message: 'Draft vendor payment deleted successfully' })
   } catch (error) { fail(res, error, 'Failed to delete vendor payment') }
 }
@@ -110,14 +151,52 @@ export const post = async (req, res) => {
     const data = await prisma.$transaction(async (tx) => {
       const payment = await tx.vendor_payments.findUnique({ where: { id: paymentId }, include: { payment_allocations: true } })
       if (!payment || payment.state !== 'draft') throw inputError('Draft vendor payment not found')
+      if (!payment.bank_account_id || !payment.fiscal_period_id) throw inputError('Vendor payment is missing its bank account or fiscal period')
+      const allocated = payment.payment_allocations.reduce((sum, allocation) => sum + Number(allocation.allocated_amount), 0)
+      if (allocated > Number(payment.amount) + 0.005) throw inputError('Allocated amount cannot exceed payment amount')
+      const [vendor, bank, journal, payableAccount] = await Promise.all([
+        tx.vendors.findUnique({ where: { id: payment.vendor_id } }),
+        tx.bank_accounts.findUnique({ where: { id: payment.bank_account_id } }),
+        tx.journals.findUnique({ where: { id: payment.journal_id } }),
+        tx.chart_of_accounts.findFirst({
+          where: {
+            company_id: payment.company_id,
+            is_active: true,
+            OR: [{ code: '2000' }],
+          },
+          orderBy: { code: 'asc' },
+        }),
+      ])
+      if (!vendor?.is_active) throw inputError('Active vendor not found')
+      if (!bank?.is_active || bank.company_id !== payment.company_id || !bank.gl_account_id) throw inputError('The selected bank account needs an active GL account')
+      if (!journal?.is_active || journal.id !== bank.journal_id) throw inputError('The selected bank account journal is inactive or invalid')
+      if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
+      const fiscalPeriod = await tx.fiscal_periods.findUnique({ where: { id: payment.fiscal_period_id } })
+      if (!fiscalPeriod || fiscalPeriod.state !== 'open') throw inputError('Payment fiscal period is closed or invalid')
+      const existingEntry = await tx.journal_entries.findFirst({ where: { source_type: 'vendor_payment', source_id: paymentId }, select: { id: true, state: true } })
+      if (existingEntry && existingEntry.state !== 'draft') throw inputError('Linked vendor payment journal entry is invalid')
       for (const allocation of payment.payment_allocations) {
         const bill = await tx.vendor_bills.findUnique({ where: { id: allocation.bill_id } })
         if (!bill || bill.state !== 'posted' || bill.vendor_id !== payment.vendor_id) throw inputError('An allocated bill is no longer available')
+        if (bill.currency_id !== payment.currency_id) throw inputError('An allocated bill has a different currency')
+        if (Number(allocation.allocated_amount) > Number(bill.amount_due) + 0.005) throw inputError(`Allocation exceeds the balance of ${bill.bill_number}`)
         const due = Math.max(0, Number(bill.amount_due) - Number(allocation.allocated_amount))
         await tx.vendor_bills.update({ where: { id: bill.id }, data: { amount_due: due, payment_state: due <= 0.005 ? 'paid' : 'partial', updated_at: new Date() } })
       }
       const postedAt = new Date()
-      await tx.vendor_payments.update({ where: { id: paymentId }, data: { state: 'posted', posted_at: postedAt, updated_at: postedAt } })
+      const entry = existingEntry
+        ? await tx.journal_entries.update({ where: { id: existingEntry.id }, data: { state: 'posted', posted_at: postedAt, narration: payment.memo || `Vendor payment ${payment.payment_number}` } })
+        : await tx.journal_entries.create({ data: {
+          company_id: payment.company_id, journal_id: payment.journal_id, entry_number: payment.payment_number,
+          entry_date: payment.payment_date, fiscal_period_id: payment.fiscal_period_id,
+          reference: payment.reference || payment.payment_number, narration: payment.memo || `Vendor payment ${payment.payment_number}`,
+          state: 'posted', source_type: 'vendor_payment', source_id: payment.id, posted_at: postedAt,
+          journal_items: { create: [
+            { sequence: 10, account_id: payableAccount.id, label: 'Accounts Payable', partner_type: 'vendor', partner_id: payment.vendor_id, debit: Math.round(Number(payment.amount) * Number(payment.exchange_rate) * 100) / 100, credit: 0, currency_id: payment.currency_id, amount_currency: Number(payment.amount) },
+            { sequence: 20, account_id: bank.gl_account_id, label: 'Bank payment', partner_type: 'vendor', partner_id: payment.vendor_id, debit: 0, credit: Math.round(Number(payment.amount) * Number(payment.exchange_rate) * 100) / 100, currency_id: payment.currency_id, amount_currency: -Number(payment.amount) },
+          ] },
+        } })
+      await tx.vendor_payments.update({ where: { id: paymentId }, data: { state: 'posted', journal_entry_id: entry.id, posted_at: postedAt, updated_at: postedAt } })
       return tx.vendor_payments.findUnique({ where: { id: paymentId }, include })
     }, { maxWait: 10000, timeout: 30000 })
     await logAudit({ userId: req.user?.id, action: 'Posted', entity: 'VendorPayment', entityId: paymentId, description: `Posted vendor payment "${data.payment_number}"` })

@@ -361,6 +361,8 @@ model purchase {
   id             Int             @id @default(autoincrement())
   purchaseNumber String          @unique
   supplierId     Int             @db.UnsignedInt
+  companyId      Int?            @db.UnsignedInt
+  journalEntryId Int?            @unique @db.UnsignedInt
   purchaseDate   DateTime        @db.Date
   totalAmount    Float           @default(0)
   notes          String?         @db.Text
@@ -371,6 +373,7 @@ model purchase {
   stockmovements stockmovement[]
 
   @@index([supplierId])
+  @@index([companyId])
   @@index([purchaseDate])
 }
 
@@ -1290,6 +1293,7 @@ enum journal_entries_source_type {
   vendor_bill
   vendor_payment
   pos_order
+  restaurant_purchase
 }
 
 enum customer_receipts_state {
