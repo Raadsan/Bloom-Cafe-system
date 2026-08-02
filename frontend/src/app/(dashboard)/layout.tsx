@@ -120,7 +120,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   }, [fetchNotifications]);
 
   return (
-    <SidebarProvider defaultOpen={true} style={{ "--sidebar-width": "16rem", "--sidebar-width-icon": "5.5rem" } as React.CSSProperties}>
+    <SidebarProvider defaultOpen={true} style={{ "--sidebar-width": "17rem", "--sidebar-width-icon": "5.5rem" } as React.CSSProperties}>
       <PermissionProvider>
         <AppSidebar />
 
