@@ -13,6 +13,7 @@ import { fiscalYearApi } from '@/lib/api/accounting/ledger/fiscalYearApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import AccountingConfirmDialog from './AccountingConfirmDialog';
 import { actionBtnDelete, actionBtnEdit, actionBtnView, btnCreatePage, dashboardSelectClass, dashboardStatusBadgeClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Row = { id: number; [key: string]: unknown };
@@ -38,6 +39,7 @@ export default function CashTransactionsPage() {
   const [readonly, setReadonly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'post' | 'delete'; entry: Row } | null>(null);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -95,8 +97,8 @@ export default function CashTransactionsPage() {
       showToast(`Cash ${form.type} saved as draft`, 'success'); setOpen(false); await load();
     } catch (error) { showToast(message(error), 'error'); } finally { setSaving(false); }
   }
-  async function post(entry: Row) { if (!window.confirm('Post this cash transaction?')) return; try { await journalEntryApi.post(entry.id); showToast('Cash transaction posted', 'success'); await load(); } catch (error) { showToast(message(error), 'error'); } }
-  async function remove(entry: Row) { if (!window.confirm('Delete this draft cash transaction?')) return; try { await journalEntryApi.remove(entry.id); showToast('Draft cash transaction deleted', 'success'); await load(); } catch (error) { showToast(message(error), 'error'); } }
+  async function post(entry: Row) { setSaving(true); try { await journalEntryApi.post(entry.id); showToast('Cash transaction posted', 'success'); setPendingAction(null); await load(); } catch (error) { showToast(message(error), 'error'); } finally { setSaving(false); } }
+  async function remove(entry: Row) { setSaving(true); try { await journalEntryApi.remove(entry.id); showToast('Draft cash transaction deleted', 'success'); setPendingAction(null); await load(); } catch (error) { showToast(message(error), 'error'); } finally { setSaving(false); } }
   const columns: DashboardTableColumn<Row>[] = [
     { key: 'number', header: 'Transaction', cell: (row) => <span className="font-bold text-primary">{String(row.entry_number || `#${row.id}`)}</span> },
     { key: 'date', header: 'Date', cell: (row) => dateValue(row.entry_date) },
@@ -106,7 +108,7 @@ export default function CashTransactionsPage() {
     { key: 'description', header: 'Description', cell: (row) => String(row.narration || '—') },
     { key: 'amount', header: 'Amount', align: 'right', cell: (row) => <span className="font-semibold">{money(amountFor(row))}</span> },
     { key: 'status', header: 'Status', align: 'center', cell: (row) => <span className={`${dashboardStatusBadgeClass} ${row.state === 'posted' ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'}`}>{String(row.state)}</span> },
-    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1"><button onClick={() => edit(row, true)} className={actionBtnView}><Eye className="size-4" /></button>{row.state === 'draft' && <><button onClick={() => edit(row)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button onClick={() => void post(row)} className={actionBtnView}><Send className="size-4" /></button><button onClick={() => void remove(row)} className={actionBtnDelete}><Trash2 className="size-4" /></button></>}</div> },
+    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1"><button onClick={() => edit(row, true)} className={actionBtnView}><Eye className="size-4" /></button>{row.state === 'draft' && <><button onClick={() => edit(row)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button onClick={() => setPendingAction({ type: 'post', entry: row })} className={actionBtnView}><Send className="size-4" /></button><button onClick={() => setPendingAction({ type: 'delete', entry: row })} className={actionBtnDelete}><Trash2 className="size-4" /></button></>}</div> },
   ];
 
   return <main className="dashboard-scope space-y-5 p-4 sm:p-6 lg:p-8">
@@ -123,6 +125,7 @@ export default function CashTransactionsPage() {
       <Field label="Description" value={form.narration} set={(value) => setForm({ ...form, narration: value })} />
       </fieldset><DialogFooter className="sm:col-span-2"><button type="button" onClick={() => setOpen(false)} className="h-10 rounded-xl border px-5">{readonly ? 'Close' : 'Cancel'}</button>{!readonly && <button disabled={saving} className="h-10 rounded-xl bg-primary px-5 font-semibold text-white">{saving ? 'Saving...' : 'Save draft'}</button>}</DialogFooter>
     </form></DialogContent></Dialog>
+    <AccountingConfirmDialog open={Boolean(pendingAction)} title={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} Cash Transaction`} description={pendingAction?.type === 'delete' ? 'Confirm removal of this draft cash transaction.' : 'Confirm this cash transaction before posting it to the ledger.'} confirmLabel={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} Transaction`} destructive={pendingAction?.type === 'delete'} busy={saving} details={pendingAction && <div className="flex justify-between"><span className="text-muted-foreground">Reference</span><b>{String(pendingAction.entry.reference || pendingAction.entry.entry_number || '—')}</b></div>} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && void (pendingAction.type === 'delete' ? remove(pendingAction.entry) : post(pendingAction.entry))} />
   </main>;
 }
 function Field({ label, value, set, type = 'text', optional }: { label: string; value: string; set: (value: string) => void; type?: string; optional?: boolean }) { return <label className="text-xs font-semibold">{label}{!optional && ' *'}<input required={!optional} type={type} min={type === 'number' ? '.01' : undefined} step={type === 'number' ? '.01' : undefined} value={value} onChange={(event) => set(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border px-3" /></label>; }

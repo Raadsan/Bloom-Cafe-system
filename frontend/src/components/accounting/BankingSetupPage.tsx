@@ -12,6 +12,7 @@ import { accountingJournalApi } from '@/lib/api/accounting/ledger/journalApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import AccountingConfirmDialog from './AccountingConfirmDialog';
 import { actionBtnDelete, actionBtnEdit, btnCreatePage, dashboardSelectClass, dashboardStatusBadgeClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Row = { id: number; [key: string]: unknown };
@@ -37,6 +38,7 @@ export default function BankingSetupPage({ kind }: { kind: 'banks' | 'accounts' 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const [companyFilter, setCompanyFilter] = useState('all');
@@ -79,8 +81,7 @@ export default function BankingSetupPage({ kind }: { kind: 'banks' | 'accounts' 
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setSaving(false); }
   }
   async function remove(row: Row) {
-    if (!window.confirm(`Delete ${String(row.account_name || row.name)}?`)) return;
-    try { await api.remove(row.id); showToast(`${isAccounts ? 'Bank account' : 'Bank'} deleted`, 'success'); await load(); } catch (error) { showToast(errorMessage(error), 'error'); }
+    setSaving(true); try { await api.remove(row.id); showToast(`${isAccounts ? 'Bank account' : 'Bank'} deleted`, 'success'); setDeleteTarget(null); await load(); } catch (error) { showToast(errorMessage(error), 'error'); } finally { setSaving(false); }
   }
   const columns: DashboardTableColumn<Row>[] = isAccounts ? [
     { key: 'name', header: 'Account Name', cell: (row) => <span className="font-semibold">{String(row.account_name)}</span> },
@@ -90,14 +91,14 @@ export default function BankingSetupPage({ kind }: { kind: 'banks' | 'accounts' 
     { key: 'currency', header: 'Currency', cell: (row) => String(currencies.find((currency) => currency.id === Number(row.currency_id))?.code || '—') },
     { key: 'gl', header: 'GL Account', cell: (row) => { const account = accounts.find((item) => item.id === Number(row.gl_account_id)); return account ? `${String(account.code)} — ${String(account.name)}` : '—'; } },
     { key: 'status', header: 'Status', align: 'center', cell: (row) => <Status active={row.is_active !== false} /> },
-    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <Actions edit={() => edit(row)} remove={() => void remove(row)} /> },
+    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <Actions edit={() => edit(row)} remove={() => setDeleteTarget(row)} /> },
   ] : [
     { key: 'name', header: 'Bank Name', cell: (row) => <span className="font-semibold">{String(row.name)}</span> },
     { key: 'swift', header: 'SWIFT / BIC', cell: (row) => String(row.swift_bic || '—') },
     { key: 'location', header: 'Location', cell: (row) => [row.city, row.country].filter(Boolean).join(', ') || '—' },
     { key: 'phone', header: 'Phone', cell: (row) => String(row.phone || '—') },
     { key: 'status', header: 'Status', align: 'center', cell: (row) => <Status active={row.is_active !== false} /> },
-    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <Actions edit={() => edit(row)} remove={() => void remove(row)} /> },
+    { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <Actions edit={() => edit(row)} remove={() => setDeleteTarget(row)} /> },
   ];
 
   return <main className="dashboard-scope space-y-5 p-4 sm:p-6 lg:p-8">
@@ -125,6 +126,7 @@ export default function BankingSetupPage({ kind }: { kind: 'banks' | 'accounts' 
       </>}
       <DialogFooter className="sm:col-span-2"><button type="button" onClick={() => setOpen(false)} className="h-10 rounded-xl border px-5">Cancel</button><button disabled={saving} className="h-10 rounded-xl bg-primary px-5 font-semibold text-white">{saving ? 'Saving...' : 'Save'}</button></DialogFooter>
     </form></DialogContent></Dialog>
+    <AccountingConfirmDialog open={Boolean(deleteTarget)} title={`Delete ${isAccounts ? 'Bank Account' : 'Bank'}`} description={`Confirm removal of this ${isAccounts ? 'bank account' : 'bank'} record.`} confirmLabel={`Delete ${isAccounts ? 'Account' : 'Bank'}`} destructive busy={saving} details={deleteTarget && <div className="flex justify-between"><span className="text-muted-foreground">Name</span><b>{String(deleteTarget.account_name || deleteTarget.name)}</b></div>} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && void remove(deleteTarget)} />
   </main>;
 }
 function Status({ active }: { active: boolean }) { return <span className={`${dashboardStatusBadgeClass} ${active ? 'bg-emerald-600 text-white' : 'bg-zinc-500 text-white'}`}>{active ? 'Active' : 'Inactive'}</span>; }

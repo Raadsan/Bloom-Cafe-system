@@ -278,7 +278,32 @@ export const post = async (req, res) => {
       const postedAt = new Date()
       if (!bill.journal_entry_id || !bill.journal_entries || bill.journal_entries.state !== 'draft') throw inputError('Linked draft journal entry is missing or invalid')
       await tx.journal_entries.update({ where: { id: bill.journal_entry_id }, data: { state: 'posted', posted_at: postedAt, narration: `Posted vendor bill ${bill.bill_number}` } })
-      await tx.vendor_bills.update({ where: { id: billId }, data: { state: 'posted', posted_at: postedAt, updated_at: postedAt } })
+      const requestedAdvance = Math.max(0, Math.round(Number(req.body?.advance_amount || 0) * 100) / 100)
+      const advances = requestedAdvance > 0 ? await tx.vendor_advances.findMany({ where: { vendor_id: bill.vendor_id, currency_id: bill.currency_id, state: { in: ['open', 'partial'] }, remaining_amount: { gt: 0 } }, orderBy: { created_at: 'asc' } }) : []
+      const availableAdvance = advances.reduce((sum, advance) => sum + Number(advance.remaining_amount), 0)
+      if (requestedAdvance > availableAdvance + 0.005) throw inputError('Requested Vendor Advance exceeds the available balance')
+      let advanceRemaining = Math.min(requestedAdvance, Number(bill.amount_total))
+      for (const advance of advances) {
+        if (advanceRemaining <= 0.005) break
+        const applied = Math.min(advanceRemaining, Number(advance.remaining_amount))
+        const application = await tx.vendor_advance_applications.create({ data: { advance_id: advance.id, bill_id: bill.id, amount: applied } })
+        const baseAmount = Math.round(applied * Number(bill.exchange_rate) * 100) / 100
+        await tx.journal_entries.create({ data: {
+          company_id: bill.company_id, journal_id: bill.journal_id, entry_number: `VA${String(application.id).padStart(6, '0')}`,
+          entry_date: bill.bill_date, fiscal_period_id: bill.fiscal_period_id, reference: bill.bill_number,
+          narration: `Vendor Advance applied to ${bill.bill_number}`, state: 'posted', source_type: 'vendor_advance', source_id: application.id, posted_at: postedAt,
+          journal_items: { create: [
+            { sequence: 10, account_id: bill.payable_account_id, label: 'Accounts Payable', partner_type: 'vendor', partner_id: bill.vendor_id, debit: baseAmount, credit: 0, currency_id: bill.currency_id, amount_currency: applied },
+            { sequence: 20, account_id: advance.advance_account_id, label: 'Vendor Advance applied', partner_type: 'vendor', partner_id: bill.vendor_id, debit: 0, credit: baseAmount, currency_id: bill.currency_id, amount_currency: -applied },
+          ] },
+        } })
+        const nextAdvanceBalance = Math.max(0, Number(advance.remaining_amount) - applied)
+        await tx.vendor_advances.update({ where: { id: advance.id }, data: { remaining_amount: nextAdvanceBalance, state: nextAdvanceBalance <= 0.005 ? 'used' : 'partial', updated_at: postedAt } })
+        advanceRemaining -= applied
+      }
+      const appliedAdvance = requestedAdvance - advanceRemaining
+      const amountDue = Math.max(0, Number(bill.amount_total) - appliedAdvance)
+      await tx.vendor_bills.update({ where: { id: billId }, data: { state: 'posted', payment_state: amountDue <= 0.005 ? 'paid' : amountDue < Number(bill.amount_total) ? 'partial' : 'not_paid', amount_due: amountDue, posted_at: postedAt, updated_at: postedAt } })
       return tx.vendor_bills.findUnique({ where: { id: billId }, include })
     }, { maxWait: 10000, timeout: 30000 })
     await logAudit({ userId: req.user?.id, action: 'Posted', entity: 'VendorBill', entityId: billId, description: `Posted vendor bill "${data.bill_number}"` })

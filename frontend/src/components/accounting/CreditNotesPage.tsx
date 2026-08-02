@@ -8,6 +8,7 @@ import { customerInvoiceApi, type CustomerInvoice, type CustomerInvoiceLine } fr
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import AccountingConfirmDialog from './AccountingConfirmDialog';
 import { actionBtnDelete, actionBtnEdit, actionBtnView, btnCreatePage, dashboardSelectClass, dashboardStatusBadgeClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Line = {
@@ -35,6 +36,7 @@ export default function CreditNotesPage() {
   const [viewOnly, setViewOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'post' | 'delete'; note: CreditNote } | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const [customerFilter, setCustomerFilter] = useState('all');
@@ -48,7 +50,7 @@ export default function CreditNotesPage() {
       setCreditNotes(notes); setInvoices(invoiceRows);
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setLoading(false); }
   }, [showToast]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const creditedByInvoice = useMemo(() => {
     const totals = new Map<number, number>();
@@ -118,14 +120,14 @@ export default function CreditNotesPage() {
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setSaving(false); }
   }
   async function post(note: CreditNote) {
-    if (!window.confirm(`Post ${note.invoice_number}? The original invoice balance will be reduced.`)) return;
-    try { await creditNoteApi.post(note.id); showToast('Credit note posted successfully', 'success'); await load(); }
+    setSaving(true); try { await creditNoteApi.post(note.id); showToast('Credit note posted successfully', 'success'); setPendingAction(null); await load(); }
     catch (error) { showToast(errorMessage(error), 'error'); }
+    finally { setSaving(false); }
   }
   async function remove(note: CreditNote) {
-    if (!window.confirm(`Delete draft ${note.invoice_number}?`)) return;
-    try { await creditNoteApi.remove(note.id); showToast('Draft credit note deleted', 'success'); await load(); }
+    setSaving(true); try { await creditNoteApi.remove(note.id); showToast('Draft credit note deleted', 'success'); setPendingAction(null); await load(); }
     catch (error) { showToast(errorMessage(error), 'error'); }
+    finally { setSaving(false); }
   }
   function print(note: CreditNote) {
     edit(note, true); window.setTimeout(() => window.print(), 150);
@@ -139,7 +141,7 @@ export default function CreditNotesPage() {
     { key: 'amount', header: 'Amount', align: 'right', cell: (note) => <span className="font-semibold">{money(note.amount_total)}</span> },
     { key: 'status', header: 'Status', align: 'center', cell: (note) => <span className={`${dashboardStatusBadgeClass} ${note.state === 'posted' ? 'bg-emerald-600 text-white' : note.state === 'cancelled' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white'}`}>{note.state}</span> },
     { key: 'reference', header: 'Reference', cell: (note) => note.customer_reference || '—' },
-    { key: 'actions', header: 'Actions', align: 'right', cell: (note) => <div className="flex justify-end gap-1"><button title="View" onClick={() => edit(note, true)} className={actionBtnView}><Eye className="size-4" /></button>{note.state === 'draft' && <><button title="Edit" onClick={() => edit(note)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button title="Post" onClick={() => void post(note)} className={actionBtnView}><Send className="size-4" /></button><button title="Delete" onClick={() => void remove(note)} className={actionBtnDelete}><Trash2 className="size-4" /></button></>}{note.state === 'posted' && <button title="Print" onClick={() => print(note)} className={actionBtnView}><Printer className="size-4" /></button>}</div> },
+    { key: 'actions', header: 'Actions', align: 'right', cell: (note) => <div className="flex justify-end gap-1"><button title="View" onClick={() => edit(note, true)} className={actionBtnView}><Eye className="size-4" /></button>{note.state === 'draft' && <><button title="Edit" onClick={() => edit(note)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button title="Post" onClick={() => setPendingAction({ type: 'post', note })} className={actionBtnView}><Send className="size-4" /></button><button title="Delete" onClick={() => setPendingAction({ type: 'delete', note })} className={actionBtnDelete}><Trash2 className="size-4" /></button></>}{note.state === 'posted' && <button title="Print" onClick={() => print(note)} className={actionBtnView}><Printer className="size-4" /></button>}</div> },
   ];
 
   return (
@@ -161,11 +163,12 @@ export default function CreditNotesPage() {
       <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto"><DialogHeader><DialogTitle>{viewOnly ? 'Credit note' : selected ? 'Edit draft credit note' : 'New credit note'}</DialogTitle><DialogDescription>A draft does not affect the invoice or General Ledger until posted.</DialogDescription></DialogHeader>
         <form onSubmit={save} className="space-y-5"><div className="grid gap-4 rounded-xl border bg-muted/30 p-4 md:grid-cols-3"><div><p className="text-xs font-semibold uppercase text-muted-foreground">Credit Note Number</p><p className="mt-1 font-semibold">{selected?.invoice_number || 'Auto-generated (CN####)'}</p></div><div><p className="text-xs font-semibold uppercase text-muted-foreground">Status</p><p className="mt-1 font-semibold uppercase">{selected?.state || 'draft'}</p></div><div><p className="text-xs font-semibold uppercase text-muted-foreground">Total Credit</p><p className="mt-1 font-semibold">{money(total, original?.currencies?.code)}</p></div></div>
           <fieldset disabled={viewOnly || saving} className="grid gap-4 md:grid-cols-2"><label className="text-sm font-medium">Original posted invoice *<select required value={form.reversed_invoice_id} onChange={(e) => chooseInvoice(e.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3"><option value="">Select invoice</option>{eligibleInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.invoice_number} — {invoice.customers?.name} — Creditable {money(availableCredit(invoice), invoice.currencies?.code)}{Number(invoice.amount_due) <= 0 ? ' (Paid)' : ''}</option>)}</select></label><label className="text-sm font-medium">Credit note date *<input required type="date" value={form.invoice_date} onChange={(e) => setForm({ ...form, invoice_date: e.target.value })} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label><label className="text-sm font-medium">Reference<input value={form.customer_reference} onChange={(e) => setForm({ ...form, customer_reference: e.target.value })} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label><label className="text-sm font-medium">Reason / Notes<input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label></fieldset>
-          <div className="overflow-x-auto rounded-xl border"><table className="w-full text-sm"><thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr><th className="p-3">Description</th><th className="p-3">Quantity</th><th className="p-3">Unit Price</th><th className="p-3">Discount %</th><th className="p-3 text-right">Line Total</th></tr></thead><tbody>{form.lines.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Select an original invoice to load its lines.</td></tr> : form.lines.map((line, index) => <tr key={index} className="border-t"><td className="p-3"><input disabled={viewOnly} required value={line.description} onChange={(e) => updateLine(index, { description: e.target.value })} className="h-10 w-full rounded-lg border px-3" /></td><td className="p-3"><input disabled={viewOnly} required min="0.0001" step="0.0001" type="number" value={line.quantity} onChange={(e) => updateLine(index, { quantity: Number(e.target.value) })} className="h-10 w-28 rounded-lg border px-3" /></td><td className="p-3"><input disabled={viewOnly} required min="0" step="0.0001" type="number" value={line.unit_price} onChange={(e) => updateLine(index, { unit_price: Number(e.target.value) })} className="h-10 w-32 rounded-lg border px-3" /></td><td className="p-3"><input disabled={viewOnly} min="0" max="100" step="0.01" type="number" value={line.discount_percent} onChange={(e) => updateLine(index, { discount_percent: Number(e.target.value) })} className="h-10 w-24 rounded-lg border px-3" /></td><td className="p-3 text-right font-semibold">{money(line.quantity * line.unit_price * (1 - line.discount_percent / 100))}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto rounded-xl border"><table className="w-full text-sm"><thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr><th className="p-3">Description</th><th className="p-3">Quantity</th><th className="p-3">Unit Price</th><th className="p-3">Discount %</th><th className="p-3 text-right">Line Total</th></tr></thead><tbody>{form.lines.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Select an original invoice to load its lines.</td></tr> : form.lines.map((line, index) => <tr key={index} className="border-t"><td className="p-3"><input disabled={viewOnly} required value={line.description} onChange={(e) => updateLine(index, { description: e.target.value })} className="h-10 w-full rounded-lg border px-3" /></td><td className="p-3"><input disabled={viewOnly} required min="1" step="1" type="number" value={line.quantity} onChange={(e) => updateLine(index, { quantity: Number(e.target.value) })} className="h-10 w-28 rounded-lg border px-3" /></td><td className="p-3"><input disabled={viewOnly} required min="0" step="1" type="number" value={line.unit_price} onChange={(e) => updateLine(index, { unit_price: Number(e.target.value) })} className="h-10 w-32 rounded-lg border px-3" /></td><td className="p-3"><input disabled={viewOnly} min="0" max="100" step="0.01" type="number" value={line.discount_percent} onChange={(e) => updateLine(index, { discount_percent: Number(e.target.value) })} className="h-10 w-24 rounded-lg border px-3" /></td><td className="p-3 text-right font-semibold">{money(line.quantity * line.unit_price * (1 - line.discount_percent / 100))}</td></tr>)}</tbody></table></div>
           {original && total > availableCredit(original) + 0.005 && <p className="text-sm font-medium text-destructive">Credit total cannot exceed the remaining creditable amount of {money(availableCredit(original), original.currencies?.code)}.</p>}
           <DialogFooter><button type="button" onClick={() => setOpen(false)} className="rounded-xl border px-5 py-2.5">Close</button>{!viewOnly && <button disabled={saving || !form.lines.length || total <= 0 || Boolean(original && total > availableCredit(original) + 0.005)} className="rounded-xl bg-primary px-5 py-2.5 font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Saving…' : 'Save draft credit note'}</button>}</DialogFooter>
         </form>
       </DialogContent></Dialog>
+      <AccountingConfirmDialog open={Boolean(pendingAction)} title={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} Credit Note`} description={pendingAction?.type === 'delete' ? 'Confirm removal of this draft credit note.' : 'Confirm this credit note before reducing the original invoice balance.'} confirmLabel={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} Credit Note`} destructive={pendingAction?.type === 'delete'} busy={saving} details={pendingAction && <div className="flex justify-between"><span className="text-muted-foreground">Credit Note</span><b>{pendingAction.note.invoice_number}</b></div>} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && void (pendingAction.type === 'delete' ? remove(pendingAction.note) : post(pendingAction.note))} />
     </div>
   );
 }

@@ -886,6 +886,7 @@ export default function CompositesPage() {
                       <input
                         type="number"
                         min={1}
+                        step={1}
                         className={cn(formInputClass, "w-full sm:w-[88px]")}
                         value={row.quantity}
                         onChange={(e) => {
@@ -936,7 +937,7 @@ export default function CompositesPage() {
                   <label className={formLabelClass}>Bundle price ($) *</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="1"
                     className={formInputClass}
                     value={formPrice}
                     onChange={(e) => setFormPrice(e.target.value)}

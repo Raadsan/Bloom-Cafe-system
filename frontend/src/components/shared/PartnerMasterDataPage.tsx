@@ -11,7 +11,7 @@ import DashboardDataTable, { type DashboardTableColumn } from '@/components/shar
 import { actionBtnDelete, actionBtnEdit, btnCreatePage, dashboardStatusBadgeClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Kind = 'customer' | 'vendor';
-type Record = AccountingRecord & { name?: string; fullName?: string; phone?: string; email?: string; address?: string; is_active?: boolean };
+type Record = AccountingRecord & { name?: string; fullName?: string; phone?: string; email?: string; address?: string; is_active?: boolean; payable_balance?: number; advance_balance?: number; vendor_balance?: number };
 const EMPTY = { name: '', phone: '', email: '', address: '', is_active: true };
 
 function message(error: unknown) {
@@ -77,6 +77,11 @@ export default function PartnerMasterDataPage({ kind, restaurantLabel = false }:
     { key: 'name', header: 'Name', cell: (row) => <span className="font-medium">{row.name || row.fullName}</span> },
     { key: 'phone', header: 'Phone', cell: (row) => row.phone || '—' },
     { key: 'email', header: 'Email', cell: (row) => row.email || '—' },
+    ...(kind === 'vendor' ? [
+      { key: 'payable', header: 'Payable', align: 'right' as const, cell: (row: Record) => Number(row.payable_balance || 0).toFixed(2) },
+      { key: 'advance', header: 'Advance', align: 'right' as const, cell: (row: Record) => Number(row.advance_balance || 0).toFixed(2) },
+      { key: 'balance', header: 'Vendor Balance', align: 'right' as const, cell: (row: Record) => Number(row.vendor_balance || 0).toFixed(2) },
+    ] : []),
     { key: 'status', header: 'Status', align: 'center', cell: (row) => <span className={`${dashboardStatusBadgeClass} ${row.is_active === false ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'}`}>{row.is_active === false ? 'Inactive' : 'Active'}</span> },
     { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1">{canEdit && <button onClick={() => beginEdit(row)} aria-label="Edit" className={actionBtnEdit}><Edit3 className="size-4" /></button>}{canDelete && <button onClick={() => void remove(row)} aria-label="Delete" className={actionBtnDelete}><Trash2 className="size-4" /></button>}</div> },
   ];

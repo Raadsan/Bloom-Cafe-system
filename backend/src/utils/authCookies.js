@@ -4,7 +4,10 @@ export const ACCESS_COOKIE = 'restaurant_access'
 export const REFRESH_COOKIE = 'restaurant_refresh'
 export const LOGOUT_COOKIE = 'restaurant_logout'
 const secure = process.env.NODE_ENV === 'production'
-const cookieOptions = (maxAge) => ({ httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge })
+// Authentication is intentionally scoped to the current browser session.
+// Omitting Max-Age/Expires makes these session cookies, so the browser clears
+// them when it is fully closed while refreshes and open tabs remain signed in.
+const sessionCookieOptions = { httpOnly: true, secure, sameSite: 'lax', path: '/' }
 
 export function readCookie(req, name) {
   const header = req.headers.cookie || ''
@@ -18,11 +21,11 @@ export function readCookie(req, name) {
 
 export function setAuthCookies(res, user, accessToken, authContext = 'dashboard') {
   res.clearCookie(LOGOUT_COOKIE, { secure, sameSite: 'lax', path: '/' })
-  res.cookie(ACCESS_COOKIE, accessToken, cookieOptions(15 * 60 * 1000))
-  res.cookie(REFRESH_COOKIE, generateRefreshToken(user, authContext), cookieOptions(7 * 24 * 60 * 60 * 1000))
+  res.cookie(ACCESS_COOKIE, accessToken, sessionCookieOptions)
+  res.cookie(REFRESH_COOKIE, generateRefreshToken(user, authContext), sessionCookieOptions)
 }
 
 export function clearAuthCookies(res) {
-  res.clearCookie(ACCESS_COOKIE, cookieOptions(0))
-  res.clearCookie(REFRESH_COOKIE, cookieOptions(0))
+  res.clearCookie(ACCESS_COOKIE, sessionCookieOptions)
+  res.clearCookie(REFRESH_COOKIE, sessionCookieOptions)
 }

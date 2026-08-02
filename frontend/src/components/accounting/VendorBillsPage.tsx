@@ -1,10 +1,11 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Edit3, Eye, Plus, RefreshCw, Send, Trash2, X } from 'lucide-react';
+import { Edit3, Eye, Plus, Printer, RefreshCw, Send, Trash2, X } from 'lucide-react';
 import { vendorBillApi, vendorRefundApi, type VendorBill, type VendorBillLine } from '@/lib/api/accounting/payables/vendorBillApi';
 import { vendorApi } from '@/lib/api/accounting/payables/vendorApi';
+import { vendorPaymentApi } from '@/lib/api/accounting/payables/vendorPaymentApi';
 import { accountingProductApi } from '@/lib/api/accounting/catalog/productApi';
 import { accountingTaxApi } from '@/lib/api/accounting/configuration/taxApi';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
@@ -14,6 +15,7 @@ import { chartOfAccountApi } from '@/lib/api/accounting/ledger/chartOfAccountApi
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
+import AccountingConfirmDialog from './AccountingConfirmDialog';
 import { actionBtnDelete, actionBtnEdit, actionBtnView, btnCreatePage, dashboardSelectClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Row = { id: number; [key: string]: unknown };
@@ -23,7 +25,7 @@ type Form = {
   payment_term_id: string; vendor_reference: string; notes: string; lines: Line[];
 };
 const today = () => new Date().toISOString().slice(0, 10);
-const emptyLine = (): Line => ({ product_id: null, description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_id: null, expense_account_id: 0 });
+const emptyLine = (): Line => ({ product_id: null, description: 'Custom line', quantity: 1, unit_price: 0, discount_percent: 0, tax_id: null, expense_account_id: 0 });
 const emptyForm = (): Form => ({ vendor_id: '', reversed_bill_id: '', bill_date: today(), received_date: today(), currency_id: '', exchange_rate: '1', payment_term_id: '', vendor_reference: '', notes: '', lines: [emptyLine()] });
 const dateValue = (value: unknown) => value ? new Date(String(value)).toISOString().slice(0, 10) : '';
 const apiDate = (value: string) => new Date(`${value}T00:00:00.000Z`).toISOString();
@@ -52,6 +54,13 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   const [query, setQuery] = useState('');
   const [vendorFilter, setVendorFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [availableAdvance, setAvailableAdvance] = useState(0);
+  const [advanceAmount, setAdvanceAmount] = useState(0);
+  const [refundMode, setRefundMode] = useState<'full' | 'partial'>('full');
+  const [refundReason, setRefundReason] = useState('');
+  const [moreNotes, setMoreNotes] = useState('');
+  const [pendingAction, setPendingAction] = useState<{ type: 'post' | 'delete'; bill: VendorBill } | null>(null);
+  const [printTarget, setPrintTarget] = useState<VendorBill | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,7 +76,6 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const vendor = vendors.find((row) => row.id === Number(form.vendor_id));
-  const company = companies.find((row) => row.id === Number(vendor?.company_id));
   const companyAccounts = accounts.filter((row) => !vendor || Number(row.company_id) === Number(vendor.company_id));
   const totals = useMemo(() => form.lines.reduce((sum, line) => {
     const gross = Number(line.quantity) * Number(line.unit_price);
@@ -90,7 +98,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     if (currencies.length === 1) next.currency_id = String(currencies[0].id);
     const immediate = terms.find((row) => /immediate/i.test(String(row.name)));
     if (immediate) next.payment_term_id = String(immediate.id);
-    setSelected(null); setViewOnly(false); setForm(next); setOpen(true);
+    setSelected(null); setViewOnly(false); setAvailableAdvance(0); setAdvanceAmount(0); setRefundMode('full'); setRefundReason(''); setMoreNotes(''); setForm(next); setOpen(true);
   }
   function openBill(bill: VendorBill, readonly = false) {
     setSelected(bill); setViewOnly(readonly || bill.state !== 'draft');
@@ -98,13 +106,20 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
       vendor_id: String(bill.vendor_id), reversed_bill_id: String(bill.reversed_bill_id || ''), bill_date: dateValue(bill.bill_date), received_date: dateValue(bill.received_date),
       currency_id: String(bill.currency_id || ''), exchange_rate: String(bill.exchange_rate || 1),
       payment_term_id: String(bill.payment_term_id || ''), vendor_reference: String(bill.vendor_reference || ''),
-      notes: String(bill.notes || ''), lines: (bill.vendor_bill_lines || []).map((line) => ({
+      notes: '', lines: (bill.vendor_bill_lines || []).map((line) => ({
         product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity),
         unit_price: Number(line.unit_price), discount_percent: Number(line.discount_percent),
         tax_id: line.tax_id || null, expense_account_id: Number(line.expense_account_id),
       })),
     });
+    if (isRefund) { setRefundMode('partial'); setRefundReason(''); setMoreNotes(String(bill.notes || '')); }
+    if (!isRefund) void loadVendorAdvance(bill.vendor_id, bill.currency_id);
     setOpen(true);
+  }
+  async function loadVendorAdvance(vendorId: number, currencyId: number) {
+    if (!vendorId || !currencyId) { setAvailableAdvance(0); setAdvanceAmount(0); return; }
+    try { const result = await vendorPaymentApi.getAdvances(vendorId, currencyId); setAvailableAdvance(result.balance); setAdvanceAmount(0); }
+    catch { setAvailableAdvance(0); setAdvanceAmount(0); }
   }
   function selectVendor(value: string) {
     const nextVendor = vendors.find((row) => row.id === Number(value));
@@ -112,8 +127,21 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     setForm((current) => ({
       ...current, vendor_id: value, currency_id: String(nextVendor?.currency_id || nextCompany?.currency_id || current.currency_id),
       payment_term_id: String(nextVendor?.payment_term_id || current.payment_term_id), exchange_rate: '1',
-      lines: current.lines.map((line) => ({ ...line, expense_account_id: Number(nextVendor?.expense_account_id || line.expense_account_id) })),
+      ...(isRefund ? { reversed_bill_id: '', payment_term_id: '' } : {}),
+      lines: isRefund ? [emptyLine()] : current.lines.map((line) => ({ ...line, expense_account_id: Number(nextVendor?.expense_account_id || line.expense_account_id) })),
     }));
+    if (isRefund) { setRefundMode('full'); setRefundReason(''); setMoreNotes(''); }
+    if (!isRefund) void loadVendorAdvance(Number(value), Number(nextVendor?.currency_id || nextCompany?.currency_id || 0));
+  }
+  function selectOriginalBill(value: string) {
+    const original = sourceBills.find((row) => row.id === Number(value));
+    if (!original) { setForm((current) => ({ ...current, reversed_bill_id: value })); return; }
+    const lines = (original.vendor_bill_lines || []).map((line) => ({
+      product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity), unit_price: Number(line.unit_price),
+      discount_percent: Number(line.discount_percent), tax_id: line.tax_id || null, expense_account_id: Number(line.expense_account_id),
+    }));
+    setForm((current) => ({ ...current, vendor_id: String(original.vendor_id), reversed_bill_id: value, currency_id: String(original.currency_id), exchange_rate: String(original.exchange_rate || 1), payment_term_id: '', bill_date: today(), received_date: today(), lines }));
+    setRefundMode('full'); setRefundReason(''); setMoreNotes('');
   }
   function updateLine(index: number, patch: Partial<Line>) {
     setForm((current) => ({ ...current, lines: current.lines.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line) }));
@@ -125,27 +153,36 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
       expense_account_id: Number(product.expense_account_id || 0), tax_id: Number(product.purchase_tax_id) || null,
     } : { product_id: null });
   }
-  async function save(event: FormEvent) {
-    event.preventDefault(); setSaving(true);
+  async function save(postAfterSave = false) {
+    setSaving(true);
     const payload = {
-      ...form, vendor_id: Number(form.vendor_id), bill_date: apiDate(form.bill_date),
+      ...form, notes: isRefund ? [`Refund reason: ${refundReason.trim()}`, moreNotes.trim()].filter(Boolean).join('\n') : form.notes,
+      lines: form.lines.map((line) => ({ ...line, description: line.description || String(products.find((product) => product.id === Number(line.product_id))?.name || 'Custom line') })), vendor_id: Number(form.vendor_id), bill_date: apiDate(form.bill_date),
       received_date: form.received_date ? apiDate(form.received_date) : null, currency_id: Number(form.currency_id),
       exchange_rate: Number(form.exchange_rate), payment_term_id: form.payment_term_id ? Number(form.payment_term_id) : null,
       reversed_bill_id: form.reversed_bill_id ? Number(form.reversed_bill_id) : null,
     };
     try {
-      if (selected) await recordsApi.update(selected.id, payload); else await recordsApi.create(payload);
-      showToast(`Draft vendor ${kind} ${selected ? 'updated' : 'prepared'} successfully`, 'success'); setOpen(false); await load();
+      const saved = selected ? await recordsApi.update(selected.id, payload) : await recordsApi.create(payload);
+      if (postAfterSave) {
+        if (isRefund) await vendorRefundApi.post(saved.id); else await vendorBillApi.post(saved.id, Math.min(advanceAmount, totals.total));
+      }
+      showToast(postAfterSave ? `Vendor ${kind} posted successfully` : `Draft vendor ${kind} ${selected ? 'updated' : 'prepared'} successfully`, 'success');
+      setOpen(false); await load();
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setSaving(false); }
   }
   async function remove(bill: VendorBill) {
-    if (!window.confirm(`Delete draft vendor bill ${bill.bill_number}?`)) return;
-    try { await recordsApi.remove(bill.id); showToast(`Draft vendor ${kind} deleted`, 'success'); await load(); }
+    setSaving(true); try { await recordsApi.remove(bill.id); showToast(`Draft vendor ${kind} deleted`, 'success'); setPendingAction(null); await load(); }
     catch (error) { showToast(errorMessage(error), 'error'); }
+    finally { setSaving(false); }
   }
   async function postRecord(bill: VendorBill) {
-    if (!window.confirm(`Post ${bill.bill_number}? This will lock the ${kind}.`)) return;
-    try { await recordsApi.post(bill.id); showToast(`Vendor ${kind} posted successfully`, 'success'); await load(); }
+    setSaving(true); try { await recordsApi.post(bill.id); showToast(`Vendor ${kind} posted successfully`, 'success'); setPendingAction(null); await load(); }
+    catch (error) { showToast(errorMessage(error), 'error'); }
+    finally { setSaving(false); }
+  }
+  async function printRecord(bill: VendorBill) {
+    try { const fullRecord = await recordsApi.getById(bill.id); setPrintTarget(fullRecord); window.setTimeout(() => window.print(), 100); }
     catch (error) { showToast(errorMessage(error), 'error'); }
   }
 
@@ -159,7 +196,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     { key: 'total', header: 'Total', align: 'right', cell: (row) => <span className="font-semibold">{row.currencies?.code} {money(row.amount_total)}</span> },
     { key: 'dueAmount', header: 'Amount Due', align: 'right', cell: (row) => money(row.amount_due) },
     { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1">
-      {row.state === 'draft' ? <><button title="Edit" onClick={() => openBill(row)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button title="Post" onClick={() => void postRecord(row)} className={actionBtnView}><Send className="size-4" /></button><button title="Delete" onClick={() => void remove(row)} className={actionBtnDelete}><Trash2 className="size-4" /></button></> : <button title="View" onClick={() => openBill(row, true)} className={actionBtnView}><Eye className="size-4" /></button>}
+      {row.state === 'draft' ? <><button title="Edit" onClick={() => openBill(row)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button title="Post" onClick={() => setPendingAction({ type: 'post', bill: row })} className={actionBtnView}><Send className="size-4" /></button><button title="Delete" onClick={() => setPendingAction({ type: 'delete', bill: row })} className={actionBtnDelete}><Trash2 className="size-4" /></button></> : <><button title="View" onClick={() => openBill(row, true)} className={actionBtnView}><Eye className="size-4" /></button><button title="Print" onClick={() => void printRecord(row)} className={actionBtnView}><Printer className="size-4" /></button></>}
     </div> },
   ];
 
@@ -170,35 +207,34 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
       <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={dashboardSelectClass}><option value="all">All statuses</option><option value="draft">Draft</option><option value="posted">Posted</option><option value="cancelled">Cancelled</option></select>
       <button onClick={() => void load()} className="flex size-[42px] items-center justify-center rounded-md border"><RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /></button>
     </>} />
-    <Dialog open={open} onOpenChange={(value) => !saving && setOpen(value)}><DialogContent className="max-h-[94vh] max-w-[calc(100vw-2rem)] overflow-y-auto xl:max-w-[1240px]"><DialogHeader><DialogTitle>{viewOnly ? 'View' : selected ? 'Edit' : 'Prepare'} vendor {kind}</DialogTitle><DialogDescription>{viewOnly ? `This ${kind} is read-only.` : `Enter the vendor document and lines. Saving prepares a draft ${kind}.`}</DialogDescription></DialogHeader>
-      <form onSubmit={save} className="space-y-5"><fieldset disabled={viewOnly} className="contents">
-        <div className="grid gap-3 rounded-xl border bg-muted/20 p-3 sm:grid-cols-3"><Summary label="Bill number" value={selected?.bill_number || 'Auto (BILL####)'} /><Summary label="Status" value={selected?.state || 'Draft'} /><Summary label="Company" value={String(company?.name || 'Selected from vendor')} /></div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <Dialog open={open} onOpenChange={(value) => !saving && setOpen(value)}><DialogContent className="max-h-[94vh] max-w-[calc(100vw-2rem)] overflow-y-auto xl:max-w-[1400px]"><DialogHeader><DialogTitle>{viewOnly ? 'View' : selected ? 'Edit' : 'Prepare'} vendor {kind}</DialogTitle><DialogDescription>{viewOnly ? `This ${kind} is read-only.` : 'Bill number, company, currency, and exchange rate are applied automatically.'}</DialogDescription></DialogHeader>
+      <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="space-y-4"><fieldset disabled={viewOnly} className="contents">
+        <div className={`grid gap-x-4 gap-y-3 sm:grid-cols-2 ${isRefund ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
           <Select label="Vendor" value={form.vendor_id} set={selectVendor} rows={vendors} />
-          {isRefund && <Select label="Original bill" value={form.reversed_bill_id} set={(value) => setForm({ ...form, reversed_bill_id: value })} rows={sourceBills.filter((row) => row.vendor_id === Number(form.vendor_id) && row.state === 'posted')} labelKey="bill_number" optional />}
-          <Field label="Vendor reference" value={form.vendor_reference} set={(value) => setForm({ ...form, vendor_reference: value })} optional />
-          <Field label="Bill date" type="date" value={form.bill_date} set={(value) => setForm({ ...form, bill_date: value })} />
-          <Field label="Received date" type="date" value={form.received_date} set={(value) => setForm({ ...form, received_date: value })} />
-          <Select label="Payment term" value={form.payment_term_id} set={(value) => setForm({ ...form, payment_term_id: value })} rows={terms} optional />
-          <Select label="Currency" value={form.currency_id} set={(value) => setForm({ ...form, currency_id: value })} rows={currencies} labelKey="code" />
-          <Field label="Exchange rate" type="number" value={form.exchange_rate} set={(value) => setForm({ ...form, exchange_rate: value })} disabled={Number(form.currency_id) === Number(company?.currency_id)} />
+          {isRefund ? <><Select label="Original bill" value={form.reversed_bill_id} set={selectOriginalBill} rows={sourceBills.filter((row) => row.vendor_id === Number(form.vendor_id) && row.state === 'posted')} labelKey="bill_number" /><Field label="Refund date" type="date" value={form.bill_date} set={(value) => setForm({ ...form, bill_date: value, received_date: value })} /></> : <><Field label="Bill date" type="date" value={form.bill_date} set={(value) => setForm({ ...form, bill_date: value })} /><Field label="Received date" type="date" value={form.received_date} set={(value) => setForm({ ...form, received_date: value })} /><Select label="Payment term" value={form.payment_term_id} set={(value) => setForm({ ...form, payment_term_id: value })} rows={terms} optional /></>}
         </div>
-        {vendor && <div className="rounded-xl border p-3 text-xs text-muted-foreground"><span className="font-semibold text-foreground">{String(vendor.vendor_code || 'No code')} — {String(vendor.name)}</span><span className="ml-3">{String(vendor.phone || 'No phone')}</span><span className="ml-3">{String(vendor.email || 'No email')}</span></div>}
-        <div className="overflow-x-auto rounded-xl border"><table className="w-full min-w-[1050px] text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-left">Product</th><th className="p-3 text-left">Description</th><th className="p-3">Qty</th><th className="p-3">Unit cost</th><th className="p-3">Discount %</th><th className="p-3">Tax</th><th className="p-3">Expense account</th><th className="p-3 text-right">Line total</th><th /></tr></thead><tbody>{form.lines.map((line, index) => <tr key={index} className="border-t">
-          <td className="p-2"><select value={line.product_id || ''} onChange={(event) => chooseProduct(index, event.target.value)} className="h-9 w-40 rounded-lg border px-2"><option value="">Custom line</option>{products.filter((row) => row.can_be_purchased !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
-          <td className="p-2"><input required value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} className="h-9 w-full min-w-52 rounded-lg border px-2" /></td>
-          <td className="p-2"><input required type="number" min=".0001" step=".0001" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} className="h-9 w-20 rounded-lg border px-2" /></td>
-          <td className="p-2"><input required type="number" min="0" step=".01" value={line.unit_price} onChange={(event) => updateLine(index, { unit_price: Number(event.target.value) })} className="h-9 w-28 rounded-lg border px-2" /></td>
-          <td className="p-2"><input type="number" min="0" max="100" step=".01" value={line.discount_percent} onChange={(event) => updateLine(index, { discount_percent: Number(event.target.value) })} className="h-9 w-20 rounded-lg border px-2" /></td>
-          <td className="p-2"><select value={line.tax_id || ''} onChange={(event) => updateLine(index, { tax_id: Number(event.target.value) || null })} className="h-9 w-32 rounded-lg border px-2"><option value="">No tax</option>{taxes.filter((row) => row.is_active !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
-          <td className="p-2"><select required value={line.expense_account_id || ''} onChange={(event) => updateLine(index, { expense_account_id: Number(event.target.value) })} className="h-9 w-48 rounded-lg border px-2"><option value="">Select account</option>{companyAccounts.map((row) => <option key={row.id} value={row.id}>{String(row.code)} — {String(row.name)}</option>)}</select></td>
-          <td className="p-2 text-right font-semibold">{money(Number(line.quantity) * Number(line.unit_price) * (1 - Number(line.discount_percent) / 100))}</td>
+        {isRefund && form.reversed_bill_id && <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 sm:grid-cols-[220px_1fr]"><label className="text-xs font-semibold">Refund Type *<select value={refundMode} onChange={(event) => setRefundMode(event.target.value as 'full' | 'partial')} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3"><option value="full">Full Refund</option><option value="partial">Partial Refund</option></select></label><label className="text-xs font-semibold">Refund Reason *<input required value={refundReason} onChange={(event) => setRefundReason(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3" placeholder="Reason for this refund" /></label>{refundMode === 'full' && <label className="text-xs font-semibold sm:col-span-2">Refund Amount<input readOnly value={money(totals.total)} className="mt-1.5 h-10 w-full rounded-xl border bg-muted px-3 font-semibold" /></label>}</div>}
+        {!isRefund && form.vendor_id && availableAdvance > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"><div><b>Available Vendor Advance: ${money(availableAdvance)}</b><p className="text-xs text-emerald-700">Apply it now to reduce this bill&apos;s outstanding balance after posting.</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => setAdvanceAmount(Math.min(availableAdvance, totals.total))} className="h-9 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-semibold">Apply All</button><label className="flex items-center gap-2 text-xs font-semibold">Partial<input aria-label="Partial Vendor Advance" type="number" min="0" max={Math.min(availableAdvance, totals.total)} step="0.01" value={advanceAmount} onChange={(event) => setAdvanceAmount(Math.min(Math.max(0, Number(event.target.value) || 0), availableAdvance, totals.total))} className="h-9 w-28 rounded-lg border bg-white px-2 text-right" /></label><button type="button" onClick={() => setAdvanceAmount(0)} className="h-9 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-semibold">Ignore</button></div></div>}
+        {(!isRefund || refundMode === 'partial') && <div className="rounded-xl border"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[20%]" /><col className="w-[12%]" /><col className="w-[15%]" /><col className="w-[13%]" /><col className="w-[15%]" /><col className="w-[20%]" /><col className="w-[5%]" /></colgroup><thead className="bg-muted/50"><tr><th className="p-2.5 text-left">Product</th><th className="p-2.5">Qty</th><th className="p-2.5">Unit cost</th><th className="p-2.5">Discount</th><th className="p-2.5">Tax</th><th className="p-2.5">Expense account</th><th /></tr></thead><tbody>{form.lines.map((line, index) => <tr key={index} className="border-t">
+          <td className="p-2"><select value={line.product_id || ''} onChange={(event) => chooseProduct(index, event.target.value)} className="h-9 w-full rounded-lg border px-2"><option value="">Custom line</option>{products.filter((row) => row.can_be_purchased !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
+          <td className="p-2"><input required type="number" min="1" step="1" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
+          <td className="p-2"><input required type="number" min="0" step="1" value={line.unit_price} onChange={(event) => updateLine(index, { unit_price: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
+          <td className="p-2"><input type="number" min="0" max="100" step=".01" value={line.discount_percent} onChange={(event) => updateLine(index, { discount_percent: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
+          <td className="p-2"><select value={line.tax_id || ''} onChange={(event) => updateLine(index, { tax_id: Number(event.target.value) || null })} className="h-9 w-full rounded-lg border px-2"><option value="">No tax</option>{taxes.filter((row) => row.is_active !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
+          <td className="p-2"><select required value={line.expense_account_id || ''} onChange={(event) => updateLine(index, { expense_account_id: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2"><option value="">Select account</option>{companyAccounts.map((row) => <option key={row.id} value={row.id}>{String(row.code)} — {String(row.name)}</option>)}</select></td>
           <td className="p-2"><button type="button" disabled={form.lines.length === 1} onClick={() => setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) })} className="text-rose-600 disabled:opacity-30"><X className="size-4" /></button></td>
-        </tr>)}</tbody></table><button type="button" onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })} className="m-3 flex items-center gap-1 text-xs font-semibold text-primary"><Plus className="size-3" /> Add line</button></div>
-        <div className="grid gap-4 lg:grid-cols-[1fr_300px]"><label className="text-xs font-semibold">Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} rows={4} className="mt-1.5 w-full rounded-xl border p-3 text-sm" /></label><div className="rounded-xl border bg-muted/20 p-4 text-sm"><Total label="Subtotal" value={totals.subtotal} /><Total label="Tax" value={totals.tax} /><div className="my-2 border-t" /><Total label="Grand total" value={totals.total} strong /></div></div>
-      </fieldset><DialogFooter><button type="button" onClick={() => setOpen(false)} className="h-10 rounded-xl border px-5">{viewOnly ? 'Close' : 'Cancel'}</button>{!viewOnly && <button disabled={saving} className="h-10 rounded-xl bg-primary px-5 font-semibold text-white">{saving ? 'Saving...' : `Save draft ${kind}`}</button>}</DialogFooter></form>
+        </tr>)}</tbody></table><button type="button" onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })} className="m-3 flex items-center gap-1 text-xs font-semibold text-primary"><Plus className="size-3" /> Add line</button></div>}
+        <div className="mt-4 grid items-stretch gap-4 lg:min-h-[170px] lg:grid-cols-[minmax(0,1fr)_260px]">{isRefund ? <details className="h-fit rounded-xl border p-4"><summary className="cursor-pointer text-xs font-semibold">More Options</summary><label className="mt-3 flex flex-col text-xs font-semibold">Notes<textarea value={moreNotes} onChange={(event) => setMoreNotes(event.target.value)} className="mt-1 min-h-[100px] w-full resize-none rounded-lg border p-2 text-sm" placeholder="Optional internal notes..." /></label></details> : <label className="flex h-full flex-col text-xs font-semibold">Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 min-h-[140px] w-full flex-1 resize-none rounded-lg border p-2 text-sm" placeholder="Add any notes for this bill..." /></label>}<aside className="h-full rounded-xl border bg-muted/20 p-4 text-sm"><p className="mb-3 font-semibold">Invoice summary</p><Total label="Subtotal" value={totals.subtotal} /><Total label="Tax" value={totals.tax} /><div className="my-2 border-t" /><Total label="Grand total" value={totals.total} strong /></aside></div>
+      </fieldset><DialogFooter><button type="button" onClick={() => setOpen(false)} className="h-9 rounded-xl border px-4">{viewOnly ? 'Close' : 'Cancel'}</button>{!viewOnly && <><button disabled={saving} className="h-9 rounded-xl border px-4 font-semibold">{saving ? 'Saving...' : 'Save Draft'}</button><button type="button" disabled={saving} onClick={(event) => { if (event.currentTarget.form?.reportValidity()) void save(true); }} className="h-9 rounded-xl bg-primary px-4 font-semibold text-white">Post {isRefund ? 'Refund' : 'Bill'}</button></>}</DialogFooter></form>
     </DialogContent></Dialog>
+    <AccountingConfirmDialog open={Boolean(pendingAction)} title={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} Vendor ${isRefund ? 'Refund' : 'Bill'}`} description={pendingAction?.type === 'delete' ? `Confirm removal of this draft vendor ${kind}.` : `Confirm this vendor ${kind} before updating accounting balances.`} confirmLabel={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} ${isRefund ? 'Refund' : 'Bill'}`} destructive={pendingAction?.type === 'delete'} busy={saving} details={pendingAction && <div className="flex justify-between"><span className="text-muted-foreground">Document</span><b>{pendingAction.bill.bill_number}</b></div>} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && void (pendingAction.type === 'delete' ? remove(pendingAction.bill) : postRecord(pendingAction.bill))} />
+    {printTarget && <PrintableVendorDocument record={printTarget} refund={isRefund} />}
   </main>;
+}
+
+function PrintableVendorDocument({ record, refund }: { record: VendorBill; refund: boolean }) {
+  const currency = record.currencies?.code || '';
+  return <section id="printable-vendor-document" className="hidden bg-white text-slate-950 print:block"><header className="flex items-start justify-between border-b-2 border-slate-900 pb-6"><div><h1 className="text-3xl font-bold text-[#6f0d18]">Bloom Cafe</h1><p className="mt-1 text-sm text-slate-500">{refund ? 'Vendor refund' : 'Vendor bill'}</p></div><div className="text-right"><h2 className="text-3xl font-semibold">{refund ? 'VENDOR REFUND' : 'VENDOR BILL'}</h2><p className="mt-2 font-bold">{record.bill_number}</p></div></header><div className="grid grid-cols-2 gap-10 py-7 text-sm"><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Vendor</p><p className="mt-2 text-base font-bold">{record.vendors?.name || `Vendor #${record.vendor_id}`}</p>{record.vendors?.phone && <p>{record.vendors.phone}</p>}{record.vendors?.email && <p>{record.vendors.email}</p>}</div><dl className="grid grid-cols-2 gap-x-5 gap-y-2 text-right"><dt className="text-slate-500">{refund ? 'Refund date' : 'Bill date'}</dt><dd className="font-semibold">{dateValue(record.bill_date)}</dd>{!refund && <><dt className="text-slate-500">Due date</dt><dd className="font-semibold">{dateValue(record.due_date) || '—'}</dd></>}<dt className="text-slate-500">Status</dt><dd className="font-semibold uppercase">{record.state}</dd></dl></div><table className="w-full border-collapse text-sm"><thead><tr className="bg-[#6f0d18] text-white"><th className="p-3 text-left">Description</th><th className="p-3 text-right">Qty</th><th className="p-3 text-right">Unit cost</th><th className="p-3 text-right">Discount</th><th className="p-3 text-right">Amount</th></tr></thead><tbody>{(record.vendor_bill_lines || []).map((line, index) => { const amount = Number(line.quantity) * Number(line.unit_price) * (1 - Number(line.discount_percent || 0) / 100); return <tr key={line.id || index} className="border-b"><td className="p-3">{line.description}</td><td className="p-3 text-right">{Number(line.quantity)}</td><td className="p-3 text-right">{money(line.unit_price)}</td><td className="p-3 text-right">{Number(line.discount_percent || 0).toFixed(2)}%</td><td className="p-3 text-right font-medium">{money(amount)}</td></tr>; })}</tbody></table><div className="ml-auto mt-7 w-72 text-sm"><div className="flex justify-between py-1"><span>Subtotal</span><span>{money(record.amount_untaxed)}</span></div><div className="flex justify-between py-1"><span>Tax</span><span>{money(record.amount_tax)}</span></div><div className="my-2 border-t border-slate-400" /><div className="flex justify-between py-2 text-lg font-bold"><span>Total</span><span>{currency} {money(record.amount_total)}</span></div></div></section>;
 }
 
 function Select({ label, value, set, rows, labelKey = 'name', optional }: { label: string; value: string; set: (value: string) => void; rows: Row[]; labelKey?: string; optional?: boolean }) {
@@ -207,7 +243,6 @@ function Select({ label, value, set, rows, labelKey = 'name', optional }: { labe
 function Field({ label, value, set, type = 'text', optional, disabled }: { label: string; value: string; set: (value: string) => void; type?: string; optional?: boolean; disabled?: boolean }) {
   return <label className="text-xs font-semibold">{label}{!optional && <span className="text-rose-500"> *</span>}<input disabled={disabled} required={!optional} type={type} step={type === 'number' ? '.000001' : undefined} min={type === 'number' ? '.000001' : undefined} value={value} onChange={(event) => set(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3 text-sm disabled:bg-muted" /></label>;
 }
-function Summary({ label, value }: { label: string; value: string }) { return <div><p className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</p><p className="mt-1 text-sm font-bold capitalize">{value}</p></div>; }
 function Total({ label, value, strong }: { label: string; value: number; strong?: boolean }) { return <div className={`flex justify-between py-1 ${strong ? 'text-base font-bold' : ''}`}><span>{label}</span><span>{money(value)}</span></div>; }
 function Status({ bill }: { bill: VendorBill }) {
   const key = bill.state === 'cancelled' ? 'cancelled' : bill.payment_state === 'paid' ? 'paid' : bill.payment_state === 'partial' ? 'partial' : bill.state;

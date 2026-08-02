@@ -362,7 +362,7 @@ export default function InventoryPage() {
                 required
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={formCost}
                 onChange={(e) => setFormCost(Number(e.target.value))}
                 className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"

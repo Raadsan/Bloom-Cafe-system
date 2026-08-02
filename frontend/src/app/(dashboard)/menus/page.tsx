@@ -620,7 +620,7 @@ export default function MenuPage() {
                   <label className={formLabelClass}>Cost price ($)</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="1"
                     value={formCostPrice}
                     onChange={(e) => setFormCostPrice(e.target.value)}
                     placeholder="0.00"
@@ -631,7 +631,7 @@ export default function MenuPage() {
                   <label className={formLabelClass}>Selling price ($) *</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="1"
                     value={formPrice}
                     onChange={(e) => setFormPrice(e.target.value)}
                     placeholder="0.00"

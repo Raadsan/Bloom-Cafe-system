@@ -359,9 +359,11 @@ export default function StockMovementsPage() {
                 <label className="text-sm font-bold text-[#1E293B]">Quantity *</label>
                 <input
                   type="number"
+                  min="1"
+                  step="1"
                   value={formQuantity}
                   onChange={(e) => setFormQuantity(Number(e.target.value))}
-                  placeholder="0.00"
+                  placeholder="1"
                   className="w-full px-4 py-2.5 bg-white border border-zinc-200 rounded-lg outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all text-sm font-medium"
                 />
               </div>

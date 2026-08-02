@@ -112,8 +112,6 @@ async function prepare(input) {
   if (!customer || !customer.is_active) throw inputError('Customer is inactive or missing')
   if (!customer.companies?.is_active) throw inputError('Customer company is inactive or missing')
   if (!method?.is_active || !['inbound', 'both'].includes(method.payment_type)) throw inputError('Select an active inbound payment method')
-  if (method.requires_reference && !String(input.reference || '').trim()) throw inputError('A payment reference is required for this payment method')
-
   const fiscalPeriod = await prisma.fiscal_periods.findFirst({
     where: {
       state: 'open', start_date: { lte: receiptDate }, end_date: { gte: receiptDate },
@@ -162,10 +160,10 @@ async function prepare(input) {
     if (!invoice || invoice.customer_id !== customerId || invoice.company_id !== customer.company_id) throw inputError('Allocated invoice does not belong to the selected customer')
     if (invoice.state !== 'posted' || !['not_paid', 'partial'].includes(invoice.payment_state)) throw inputError(`Invoice ${invoice.invoice_number} is not open for payment`)
     if (invoice.currency_id !== currencyId) throw inputError(`Invoice ${invoice.invoice_number} uses a different currency`)
-    if (allocation.allocated_amount > Number(invoice.amount_due) + 0.005) throw inputError(`Allocation exceeds the outstanding amount for ${invoice.invoice_number}`)
+    if (allocation.allocated_amount > Number(invoice.amount_due) + 0.005) throw inputError('The allocated amount cannot exceed the invoice outstanding balance or the receipt amount.')
   }
   const allocated = Math.round(normalized.reduce((sum, row) => sum + row.allocated_amount, 0) * 100) / 100
-  if (allocated > amount + 0.005) throw inputError('Allocated amount cannot exceed the receipt amount')
+  if (allocated > amount + 0.005) throw inputError('The allocated amount cannot exceed the invoice outstanding balance or the receipt amount.')
 
   return {
     header: {
@@ -336,6 +334,7 @@ export const post = async (req, res) => {
       if (!receipt.journals?.is_active || !['cash', 'bank'].includes(receipt.journals.journal_type)) throw inputError('Receipt journal is inactive or incompatible')
       if (Number(receipt.amount) <= 0) throw inputError('Receipt amount must be greater than zero')
       const allocatedTotal = Math.round(receipt.receipt_allocations.reduce((sum, row) => sum + Number(row.allocated_amount), 0) * 100) / 100
+      if (allocatedTotal > Number(receipt.amount) + 0.005) throw inputError('The allocated amount cannot exceed the invoice outstanding balance or the receipt amount.')
       if (!receipt.receipt_allocations.length || Math.abs(allocatedTotal - Number(receipt.amount)) > 0.005) {
         throw inputError('The total allocated amount must equal the receipt amount before posting.')
       }
@@ -367,7 +366,8 @@ export const post = async (req, res) => {
       for (const allocation of receipt.receipt_allocations) {
         const invoice = await tx.customer_invoices.findUnique({ where: { id: allocation.invoice_id } })
         const allocated = Number(allocation.allocated_amount)
-        if (!invoice || invoice.customer_id !== receipt.customer_id || invoice.company_id !== receipt.company_id || invoice.currency_id !== receipt.currency_id || invoice.state !== 'posted' || !['not_paid', 'partial'].includes(invoice.payment_state) || allocated <= 0 || allocated > Number(invoice.amount_due) + 0.005) throw inputError('An invoice allocation is no longer valid')
+        if (!invoice || invoice.customer_id !== receipt.customer_id || invoice.company_id !== receipt.company_id || invoice.currency_id !== receipt.currency_id || invoice.state !== 'posted' || !['not_paid', 'partial'].includes(invoice.payment_state) || allocated <= 0) throw inputError('An invoice allocation is no longer valid')
+        if (allocated > Number(invoice.amount_due) + 0.005) throw inputError('The allocated amount cannot exceed the invoice outstanding balance or the receipt amount.')
         const reserved = await tx.customer_invoices.updateMany({
           where: { id: invoice.id, state: 'posted', payment_state: { in: ['not_paid', 'partial'] }, amount_due: { gte: allocated } },
           data: { amount_due: { decrement: allocated }, updated_at: postedAt },

@@ -1710,7 +1710,7 @@ export default function PosTerminalPage() {
                         type="number"
                         min={field.key === "quantity" ? 1 : 0}
                         max={field.key === "tax" ? 100 : undefined}
-                        step={field.key === "quantity" ? 1 : 0.01}
+                        step={field.key === "quantity" || field.key === "price" ? 1 : 0.01}
                         value={lineEditDraft[field.key]}
                         onFocus={() => setLineEditField(field.key)}
                         onChange={event => updateLineDraft(field.key, event.target.value)}
