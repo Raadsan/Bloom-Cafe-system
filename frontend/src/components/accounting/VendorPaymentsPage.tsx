@@ -120,7 +120,7 @@ export default function VendorPaymentsPage() {
     event?.preventDefault();
     if (postAfterSave && !canPostPayment) return;
     setSaving(true);
-    const payload = { ...form, vendor_id: Number(form.vendor_id), bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : null, payment_method_id: Number(form.payment_method_id), payment_date: new Date(`${form.payment_date}T00:00:00.000Z`).toISOString(), currency_id: Number(form.currency_id), exchange_rate: Number(form.exchange_rate), amount: Number(form.amount) };
+    const payload = { ...form, vendor_id: Number(form.vendor_id), bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : undefined, payment_method_id: Number(form.payment_method_id), payment_date: new Date(`${form.payment_date}T00:00:00.000Z`).toISOString(), currency_id: Number(form.currency_id), exchange_rate: Number(form.exchange_rate), amount: Number(form.amount) };
     try {
       const saved = selected ? await vendorPaymentApi.update(selected.id, payload) : await vendorPaymentApi.create(payload);
       if (postAfterSave) await vendorPaymentApi.post(saved.id);
