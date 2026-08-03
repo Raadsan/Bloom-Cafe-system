@@ -115,6 +115,16 @@ async function resolveCompany(tx, order) {
 
 async function resolveRouting(tx, order, company) {
   const paymentKind = classifyPOSPayment(order.payment)
+  const paymentMethodNeedles = [order.payment?.method, order.payment?.providerName].map(normalize).filter(Boolean)
+  const accountingMethods = paymentMethodNeedles.length ? await tx.payment_methods.findMany({
+    where: { is_active: true, gl_account_id: { not: null } },
+    include: { chart_of_accounts: true },
+    orderBy: { id: 'asc' },
+  }) : []
+  const matchedPaymentMethod = accountingMethods.find((row) => {
+    const haystack = normalize(`${row.code} ${row.name}`)
+    return paymentMethodNeedles.some((needle) => haystack.includes(needle) || needle.includes(normalize(row.code)) || needle.includes(normalize(row.name)))
+  })
   const journals = await tx.journals.findMany({
     where: { company_id: company.id, is_active: true },
     orderBy: [{ code: 'asc' }, { id: 'asc' }],
@@ -131,6 +141,12 @@ async function resolveRouting(tx, order, company) {
     journal = salesJournal
     settlementAccountId = salesJournal.default_debit_account_id
     if (!settlementAccountId) throw new POSAccountingError('Configure the Sales journal default debit Accounts Receivable account')
+  } else if (matchedPaymentMethod?.gl_account_id && !matchedPaymentMethod.allow_multiple_accounts) {
+    const journalType = paymentKind === 'cash' ? 'cash' : 'bank'
+    journal = journals.find((row) => row.journal_type === journalType && row.default_debit_account_id === matchedPaymentMethod.gl_account_id)
+      || journals.find((row) => row.journal_type === journalType)
+    settlementAccountId = matchedPaymentMethod.gl_account_id
+    if (!journal) throw new POSAccountingError(`Configure an active ${journalType === 'cash' ? 'Cash' : 'Bank'} journal for payment method ${matchedPaymentMethod.name}`)
   } else if (paymentKind === 'cash') {
     journal = journals.find((row) => row.journal_type === 'cash' && row.code.toUpperCase() === 'CASH')
       || journals.find((row) => row.journal_type === 'cash')
@@ -152,7 +168,7 @@ async function resolveRouting(tx, order, company) {
     journal = bank?.journals || journals.find((row) => row.journal_type === 'bank')
     settlementAccountId = bank?.gl_account_id || journal?.default_debit_account_id
     if (!journal || !settlementAccountId) {
-      throw new POSAccountingError('Configure one matching Bank/Mobile Wallet account with a Bank journal and GL account')
+      throw new POSAccountingError('Link the POS payment method to a GL account, or configure one matching Bank account with a Bank journal and GL account')
     }
   }
 

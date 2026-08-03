@@ -32,41 +32,6 @@ const ROSE = '#d94b63';
 
 const periods = ['This Month', 'Last Month', 'This Quarter'];
 
-const monthData = [
-  { date: 'Jul 1', revenue: 480, expense: 130, cashIn: 260, cashOut: 90 },
-  { date: 'Jul 5', revenue: 720, expense: 280, cashIn: 460, cashOut: 210 },
-  { date: 'Jul 9', revenue: 640, expense: 360, cashIn: 590, cashOut: 340 },
-  { date: 'Jul 13', revenue: 1320, expense: 310, cashIn: 980, cashOut: 320 },
-  { date: 'Jul 17', revenue: 2180, expense: 250, cashIn: 1580, cashOut: 280 },
-  { date: 'Jul 21', revenue: 1230, expense: 90, cashIn: 740, cashOut: 190 },
-  { date: 'Jul 25', revenue: 650, expense: 150, cashIn: 460, cashOut: 260 },
-  { date: 'Jul 31', revenue: 980, expense: 220, cashIn: 610, cashOut: 300 },
-];
-
-const lastMonthData = monthData.map((item, index) => ({
-  ...item,
-  date: item.date.replace('Jul', 'Jun'),
-  revenue: Math.round(item.revenue * (0.7 + (index % 3) * 0.08)),
-  expense: Math.round(item.expense * 1.12),
-  cashIn: Math.round(item.cashIn * 0.76),
-  cashOut: Math.round(item.cashOut * 1.08),
-}));
-
-const quarterData = [
-  { date: 'May 1', revenue: 3100, expense: 980, cashIn: 2500, cashOut: 760 },
-  { date: 'May 15', revenue: 3900, expense: 1200, cashIn: 3200, cashOut: 920 },
-  { date: 'Jun 1', revenue: 3600, expense: 1090, cashIn: 2900, cashOut: 880 },
-  { date: 'Jun 15', revenue: 4700, expense: 1380, cashIn: 4000, cashOut: 1050 },
-  { date: 'Jul 1', revenue: 4100, expense: 1150, cashIn: 3500, cashOut: 910 },
-  { date: 'Jul 15', revenue: 5600, expense: 1510, cashIn: 4820, cashOut: 1210 },
-];
-
-const periodData = {
-  'This Month': monthData,
-  'Last Month': lastMonthData,
-  'This Quarter': quarterData,
-};
-
 const stats = [
   { label: 'Total Revenue', value: '$8,172', change: '16.1%', trend: 'up', icon: CircleDollarSign, tone: 'brand' },
   { label: 'Expenses', value: '$1,801', change: '4.2%', trend: 'down', icon: ReceiptText, tone: 'rose' },
@@ -74,21 +39,6 @@ const stats = [
   { label: 'Cash Balance', value: '$4,416', change: '18.2%', trend: 'up', icon: WalletCards, tone: 'blush' },
   { label: 'Bank Balance', value: '$9,215', change: '7.6%', trend: 'up', icon: Landmark, tone: 'brand' },
 ] as const;
-
-const expenses = [
-  { name: 'Ingredients', value: 46, color: BRAND },
-  { name: 'Payroll', value: 27, color: BLUSH },
-  { name: 'Rent & utilities', value: 17, color: ROSE },
-  { name: 'Other', value: 10, color: '#e9c4ca' },
-];
-
-const transactions = [
-  { date: 'Jul 22, 2026', type: 'Revenue', description: 'Daily café sales', account: 'Sales Revenue', amount: '$1,240.00', status: 'Posted' },
-  { date: 'Jul 21, 2026', type: 'Expense', description: 'Fresh produce & dairy', account: 'Ingredients', amount: '-$286.50', status: 'Posted' },
-  { date: 'Jul 20, 2026', type: 'Revenue', description: 'Catering order #1048', account: 'Sales Revenue', amount: '$780.00', status: 'Draft' },
-  { date: 'Jul 19, 2026', type: 'Expense', description: 'Monthly electricity bill', account: 'Utilities', amount: '-$192.00', status: 'Posted' },
-  { date: 'Jul 18, 2026', type: 'Revenue', description: 'Weekend café sales', account: 'Sales Revenue', amount: '$965.00', status: 'Posted' },
-];
 
 function PeriodSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
@@ -173,7 +123,12 @@ function ChartCard({ title, period, onPeriodChange, children }: { title: string;
 export default function AccountingDashboardPage() {
   const [period, setPeriod] = useState('This Month');
   const [summary, setSummary] = useState<AccountingDashboardData | null>(null);
-  const data = periodData[period as keyof typeof periodData];
+  const data = summary?.chartData || [];
+  const expenseBreakdown = summary?.expenseBreakdown || [];
+  const transactions = summary?.recentTransactions || [];
+  const updatedAt = summary?.updatedAt
+    ? new Date(summary.updatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : 'Loading...';
   const liveStats = [
     { ...stats[0], value: summary ? `$${summary.totalRevenue.toLocaleString()}` : 'Loading...' },
     { ...stats[1], value: summary ? `$${summary.expenses.toLocaleString()}` : 'Loading...' },
@@ -183,10 +138,10 @@ export default function AccountingDashboardPage() {
   ];
 
   useEffect(() => {
-    accountingDashboardApi.getSummary().then(setSummary).catch((error) => {
+    accountingDashboardApi.getSummary(period).then(setSummary).catch((error) => {
       console.error('Failed to load accounting dashboard', error);
     });
-  }, []);
+  }, [period]);
 
   return (
     <main className="dashboard-scope min-h-full bg-background p-4 sm:p-6 lg:p-8">
@@ -195,7 +150,7 @@ export default function AccountingDashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Accounting Dashboard</h1>
         </div>
         <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">
-          <span className="size-2 rounded-full bg-emerald-500" /> Last updated today, 11:36 AM
+          <span className="size-2 rounded-full bg-emerald-500" /> Last updated {updatedAt}
         </div>
       </header>
 
@@ -255,13 +210,19 @@ export default function AccountingDashboardPage() {
           <ChartCard title="Expense Distribution" period={period} onPeriodChange={setPeriod}>
             <div className="flex min-h-[274px] flex-col items-center justify-center gap-4 sm:flex-row xl:flex-col 2xl:flex-row">
               <div className="relative h-40 w-40 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart><Pie data={expenses} dataKey="value" innerRadius={50} outerRadius={72} paddingAngle={2} stroke="none">{expenses.map((item) => <Cell key={item.name} fill={item.color} />)}</Pie></PieChart>
-                </ResponsiveContainer>
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-xl font-bold">$1.8k</span><span className="text-[10px] text-muted-foreground">Total expense</span></div>
+                {expenseBreakdown.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart><Pie data={expenseBreakdown} dataKey="value" innerRadius={50} outerRadius={72} paddingAngle={2} stroke="none">{expenseBreakdown.map((item) => <Cell key={item.name} fill={item.color} />)}</Pie></PieChart>
+                    </ResponsiveContainer>
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-xl font-bold">${summary?.expenses.toLocaleString() || 0}</span><span className="text-[10px] text-muted-foreground">Total expense</span></div>
+                  </>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-center text-xs font-semibold text-muted-foreground">No expenses</div>
+                )}
               </div>
               <div className="w-full space-y-3">
-                {expenses.map((item) => (
+                {expenseBreakdown.map((item) => (
                   <div key={item.name} className="flex items-center justify-between gap-4 text-[11px]">
                     <span className="flex items-center gap-2 text-muted-foreground"><span className="size-2.5 rounded-full" style={{ background: item.color }} />{item.name}</span>
                     <span className="font-semibold tabular-nums">{item.value}%</span>
@@ -282,20 +243,22 @@ export default function AccountingDashboardPage() {
           <table className="w-full min-w-[850px] text-left text-xs">
             <thead className="border-y bg-muted/50 text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3 font-semibold">Date</th><th className="px-4 py-3 font-semibold">Type</th><th className="px-4 py-3 font-semibold">Description</th><th className="px-4 py-3 font-semibold">Account</th><th className="px-4 py-3 text-right font-semibold">Amount</th><th className="px-4 py-3 font-semibold">Status</th><th className="w-10" /></tr></thead>
             <tbody className="divide-y">
-              {transactions.map((transaction) => {
-                const revenue = transaction.type === 'Revenue';
+              {transactions.length > 0 ? transactions.map((transaction) => {
+                const revenue = /revenue|customer|pos|sale/i.test(transaction.type);
                 return (
-                  <tr key={`${transaction.date}-${transaction.description}`} className="transition hover:bg-muted/30">
-                    <td className="whitespace-nowrap px-5 py-3.5 text-muted-foreground">{transaction.date}</td>
+                  <tr key={`${transaction.id}-${transaction.date}`} className="transition hover:bg-muted/30">
+                    <td className="whitespace-nowrap px-5 py-3.5 text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</td>
                     <td className="px-4 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${revenue ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'}`}>{transaction.type}</span></td>
                     <td className="px-4 py-3.5 font-medium">{transaction.description}</td>
                     <td className="px-4 py-3.5 text-muted-foreground">{transaction.account}</td>
-                    <td className={`px-4 py-3.5 text-right font-bold tabular-nums ${revenue ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-500'}`}>{transaction.amount}</td>
+                    <td className={`px-4 py-3.5 text-right font-bold tabular-nums ${revenue ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-500'}`}>${transaction.amount.toLocaleString()}</td>
                     <td className="px-4 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium ${transaction.status === 'Posted' ? 'bg-primary/8 text-primary dark:text-[#f99bab]' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'}`}>{transaction.status}</span></td>
                     <td className="pr-3"><button aria-label={`Options for ${transaction.description}`} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"><MoreVertical className="size-4" /></button></td>
                   </tr>
                 );
-              })}
+              }) : (
+                <tr><td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">No recent accounting transactions</td></tr>
+              )}
             </tbody>
           </table>
         </div>

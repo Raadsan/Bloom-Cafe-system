@@ -4,7 +4,7 @@ export type VendorPayment = AccountingRecord & {
   payment_date: string; currency_id: number; exchange_rate: number; amount: number; unallocated_amount: number;
   reference?: string; memo?: string; state: string;
   vendors?: { id: number; name: string; vendor_code?: string };
-  currencies?: { id: number; code: string }; payment_methods?: { id: number; name: string };
+  currencies?: { id: number; code: string }; payment_methods?: { id: number; name: string; allow_multiple_accounts?: boolean; chart_of_accounts?: { id: number; name: string } };
   journals?: { id: number; name: string; code: string }; bank_accounts?: { id: number; account_name: string; account_number: string };
   payment_allocations?: Array<{ bill_id: number; allocated_amount: number }>;
   vendor_advances?: VendorAdvance[];

@@ -490,11 +490,13 @@ model bank_accounts {
   id                Int                @id @default(autoincrement()) @db.UnsignedInt
   company_id        Int                @db.UnsignedInt
   bank_id           Int                @db.UnsignedInt
+  institution_name  String             @db.VarChar(128)
   account_name      String             @db.VarChar(128)
-  account_number    String             @db.VarChar(64)
+  account_number    String?            @db.VarChar(64)
   iban              String?            @db.VarChar(34)
   currency_id       Int                @db.UnsignedInt
   gl_account_id     Int?               @db.UnsignedInt
+  payment_method_id Int?               @db.UnsignedInt
   journal_id        Int?               @db.UnsignedInt
   is_active         Boolean            @default(true)
   created_at        DateTime           @default(now()) @db.Timestamp(0)
@@ -503,6 +505,7 @@ model bank_accounts {
   companies         companies          @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_company")
   currencies        currencies         @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_currency")
   chart_of_accounts chart_of_accounts? @relation(fields: [gl_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_gl")
+  payment_methods   payment_methods?   @relation(fields: [payment_method_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_payment_method")
   journals          journals?          @relation(fields: [journal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ba_journal")
   vendor_payments   vendor_payments[]
 
@@ -510,6 +513,7 @@ model bank_accounts {
   @@index([company_id], map: "fk_ba_company")
   @@index([currency_id], map: "fk_ba_currency")
   @@index([gl_account_id], map: "fk_ba_gl")
+  @@index([payment_method_id], map: "fk_ba_payment_method")
   @@index([journal_id], map: "fk_ba_journal")
 }
 
@@ -542,6 +546,7 @@ model chart_of_accounts {
   created_at                                                     DateTime                 @default(now()) @db.Timestamp(0)
   updated_at                                                     DateTime                 @default(now()) @db.Timestamp(0)
   bank_accounts                                                  bank_accounts[]
+  payment_methods                                                payment_methods[]
   companies                                                      companies                @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_coa_company")
   currencies                                                     currencies?              @relation(fields: [currency_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_coa_currency")
   chart_of_accounts                                              chart_of_accounts?       @relation("chart_of_accountsTochart_of_accounts", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_coa_parent")
@@ -926,12 +931,18 @@ model payment_methods {
   name               String                       @db.VarChar(64)
   code               String                       @unique(map: "uq_payment_methods_code") @db.VarChar(16)
   payment_type       payment_methods_payment_type @default(both)
+  gl_account_id      Int?                         @db.UnsignedInt
+  allow_multiple_accounts Boolean                 @default(false)
   requires_reference Boolean                      @default(false)
   is_active          Boolean                      @default(true)
   created_at         DateTime                     @default(now()) @db.Timestamp(0)
   updated_at         DateTime                     @default(now()) @db.Timestamp(0)
+  chart_of_accounts  chart_of_accounts?           @relation(fields: [gl_account_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_pm_gl")
+  bank_accounts      bank_accounts[]
   customer_receipts  customer_receipts[]
   vendor_payments    vendor_payments[]
+
+  @@index([gl_account_id], map: "fk_pm_gl")
 }
 
 model payment_term_lines {

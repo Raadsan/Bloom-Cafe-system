@@ -1,4 +1,15 @@
 node_modules/
 .env
 serviceAccountKey.json
-prisma/migrations/
+prisma/migrations/*
+!prisma/migrations/202608030001_payment_methods_gl_account/
+!prisma/migrations/202608030001_payment_methods_gl_account/migration.sql
+!prisma/migrations/202608030002_numeric_wallet_account_codes/
+!prisma/migrations/202608030002_numeric_wallet_account_codes/migration.sql
+!prisma/migrations/202608030003_payment_method_account_modes/
+!prisma/migrations/202608030003_payment_method_account_modes/migration.sql
+!prisma/migrations/202608030004_deactivate_legacy_wallet_bank_records/
+!prisma/migrations/202608030004_deactivate_legacy_wallet_bank_records/migration.sql
+!prisma/migrations/202608030005_simplify_bank_accounts/
+!prisma/migrations/202608030005_simplify_bank_accounts/migration.sql
+  

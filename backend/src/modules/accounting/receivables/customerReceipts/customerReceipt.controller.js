@@ -7,7 +7,7 @@ const include = {
   companies: { select: { id: true, name: true } },
   currencies: { select: { id: true, code: true, symbol: true } },
   journals: { select: { id: true, name: true, code: true } },
-  payment_methods: { select: { id: true, name: true, code: true } },
+  payment_methods: { select: { id: true, name: true, code: true, gl_account_id: true, chart_of_accounts: { select: { id: true, code: true, name: true } } } },
   fiscal_periods: { select: { id: true, name: true, state: true } },
   journal_entries: {
     select: {
@@ -49,6 +49,30 @@ const paymentChannel = (method) => {
 
 async function compatibleSetups({ companyId, currencyId, method }) {
   const channel = paymentChannel(method)
+  if (method?.gl_account_id && !method.allow_multiple_accounts) {
+    const account = await prisma.chart_of_accounts.findFirst({
+      where: {
+        id: method.gl_account_id, company_id: companyId, is_active: true, allow_manual_entry: true,
+        account_types: { internal_group: 'asset' }, other_chart_of_accounts: { none: {} },
+        OR: [{ currency_id: null }, { currency_id: currencyId }],
+      },
+      select: { id: true, code: true, name: true, currency_id: true },
+    })
+    if (!account) return []
+    const journalType = channel === 'cash' ? 'cash' : 'bank'
+    const journal = await prisma.journals.findFirst({
+      where: {
+        company_id: companyId, journal_type: journalType, is_active: true,
+        OR: [{ default_debit_account_id: account.id }, { default_debit_account_id: null }],
+      },
+      orderBy: [{ default_debit_account_id: 'desc' }, { code: 'asc' }, { id: 'asc' }],
+    }) || await prisma.journals.findFirst({
+      where: { company_id: companyId, journal_type: journalType, is_active: true },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+    })
+    if (!journal) return []
+    return [{ channel, journal, account, fixed: true }]
+  }
   if (channel === 'cash') {
     const journals = await prisma.journals.findMany({
       where: { company_id: companyId, journal_type: 'cash', is_active: true },
@@ -130,7 +154,7 @@ async function prepare(input) {
   const setup = cashBankAccountId
     ? setups.find((row) => row.account.id === cashBankAccountId)
     : setups.find((row) => row.journal.default_debit_account_id === row.account.id) || (setups.length === 1 ? setups[0] : null)
-  if (!setup) throw inputError(`Select a valid ${paymentChannel(method) === 'cash' ? 'cash' : 'bank'} account`)
+  if (!setup) throw inputError(method.allow_multiple_accounts ? 'Select a bank account associated with this payment method' : method.gl_account_id ? 'The selected payment method has no compatible active GL account' : `Select a valid ${paymentChannel(method) === 'cash' ? 'cash' : 'bank'} account`)
   const submittedJournalId = asId(input.journal_id)
   if (submittedJournalId && submittedJournalId !== setup.journal.id) throw inputError('Payment method, journal, and cash/bank account are inconsistent')
   const journal = setup.journal
@@ -176,7 +200,7 @@ async function prepare(input) {
     },
     allocations: normalized,
     journal,
-    cashBankAccountId: setup.account.id,
+    paymentAccountId: setup.account.id,
     receivableAccountId: receivable.id,
   }
 }
@@ -200,7 +224,7 @@ function entryData(prepared, receiptNumber, receiptId) {
     narration: `Draft customer receipt ${receiptNumber}`, state: 'draft',
     source_type: 'customer_receipt', source_id: receiptId,
     journal_items: { create: [
-      { sequence: 10, account_id: prepared.cashBankAccountId, label: 'Customer receipt', debit: baseAmount, credit: 0, currency_id: prepared.header.currency_id, amount_currency: prepared.header.amount },
+      { sequence: 10, account_id: prepared.paymentAccountId, label: 'Customer receipt', debit: baseAmount, credit: 0, currency_id: prepared.header.currency_id, amount_currency: prepared.header.amount },
       { sequence: 20, account_id: prepared.receivableAccountId, label: 'Accounts Receivable', partner_type: 'customer', partner_id: prepared.header.customer_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -prepared.header.amount },
     ] },
   }
@@ -346,7 +370,9 @@ export const post = async (req, res) => {
       if (!debitAccount?.is_active || !debitAccount.allow_manual_entry || debitAccount.account_types.internal_group !== 'asset' || debitAccount.other_chart_of_accounts.length) {
         throw inputError('Cash/Bank account is inactive, a parent, or incompatible')
       }
-      if (paymentChannel(receipt.payment_methods) === 'cash') {
+      if (receipt.payment_methods.gl_account_id && !receipt.payment_methods.allow_multiple_accounts) {
+        if (receipt.payment_methods.gl_account_id !== debitAccount.id) throw inputError('Receipt journal entry does not use the GL account linked to the payment method')
+      } else if (paymentChannel(receipt.payment_methods) === 'cash') {
         const cashCompatible = receipt.journals.journal_type === 'cash' &&
           (receipt.journals.default_debit_account_id === debitAccount.id || /cash/i.test(`${debitAccount.code} ${debitAccount.name}`))
         if (!cashCompatible) throw inputError('Cash payment method requires a compatible Cash journal and account')

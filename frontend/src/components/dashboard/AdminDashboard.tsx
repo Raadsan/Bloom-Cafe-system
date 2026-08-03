@@ -84,14 +84,25 @@ const EMPTY_WEEKLY_DATA = [
 ];
 
 type WeeklyPoint = { name: string; revenue: number; orders: number };
+type CategoryPoint = { name: string; value: number };
+type TopSellingItem = {
+  category?: string | null;
+  totalQuantitySold?: number;
+};
 
-const MOCK_CATEGORY_DATA = [
-  { name: 'Main Course', value: 450 },
-  { name: 'Appetizers', value: 200 },
-  { name: 'Drinks', value: 300 },
-  { name: 'Desserts', value: 150 },
-];
 const COLORS = [...chartPrimaryVariants];
+
+function categorySalesFromTopItems(items: TopSellingItem[]): CategoryPoint[] {
+  const byCategory = new Map<string, number>();
+  items.forEach((item) => {
+    const name = item.category?.trim() || "Uncategorized";
+    byCategory.set(name, (byCategory.get(name) || 0) + Number(item.totalQuantitySold || 0));
+  });
+  return [...byCategory.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value);
+}
 
 export default function AdminDashboard({
   data,
@@ -107,6 +118,7 @@ export default function AdminDashboard({
   const router = useRouter();
   const [fetchedWeeklyData, setFetchedWeeklyData] = useState<WeeklyPoint[]>(EMPTY_WEEKLY_DATA);
   const [accountingData, setAccountingData] = useState<AccountingDashboardData | null>(null);
+  const [categoryData, setCategoryData] = useState<CategoryPoint[]>([]);
   const weeklyData = weeklyDataProp?.length ? weeklyDataProp : fetchedWeeklyData;
 
   useEffect(() => {
@@ -132,6 +144,16 @@ export default function AdminDashboard({
       console.error("Failed to load accounting dashboard summary", error);
     });
   }, [dashboardMode]);
+
+  useEffect(() => {
+    reportApi
+      .getTopSellingItems({ limit: 100 })
+      .then((res) => {
+        const rows = Array.isArray(res?.data) ? res.data as TopSellingItem[] : [];
+        setCategoryData(categorySalesFromTopItems(rows));
+      })
+      .catch(() => setCategoryData([]));
+  }, []);
 
   const statCards = [
     {
@@ -463,42 +485,49 @@ export default function AdminDashboard({
           </div>
           
           <div className="h-[300px] w-full relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={MOCK_CATEGORY_DATA}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {MOCK_CATEGORY_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            {categoryData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {categoryData.map((entry, index) => (
+                        <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        borderColor: "hsl(var(--border))",
+                        borderRadius: "12px",
+                        fontSize: "12px",
+                        fontWeight: 700
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
+                  {categoryData.map((entry, index) => (
+                    <div key={`legend-${entry.name}`} className="flex items-center gap-1.5">
+                      <div className="size-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">{entry.name}</span>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    borderColor: "hsl(var(--border))",
-                    borderRadius: "12px",
-                    fontSize: "12px",
-                    fontWeight: 700
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Custom Legend */}
-            <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
-              {MOCK_CATEGORY_DATA.map((entry, index) => (
-                <div key={`legend-${index}`} className="flex items-center gap-1.5">
-                  <div className="size-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase">{entry.name}</span>
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-xs font-semibold text-muted-foreground">
+                No category sales yet
+              </div>
+            )}
           </div>
         </div>
       </div>

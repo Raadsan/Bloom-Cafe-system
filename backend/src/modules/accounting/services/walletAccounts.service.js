@@ -1,11 +1,12 @@
 import prisma from '../../../config/db.js'
 
 const WALLET_ACCOUNTS = [
-  { code: 'WLT-MERCH', name: 'Mobile Wallet - Merchant' },
-  { code: 'WLT-EVC', name: 'Mobile Wallet - EVC Plus' },
-  { code: 'WLT-WAAFI', name: 'Mobile Wallet - Waafi' },
-  { code: 'WLT-EDAHAB', name: 'Mobile Wallet - eDahab' },
-  { code: 'WLT-PREMIER', name: 'Mobile Wallet - Premier Wallet' },
+  { code: '1003', aliases: ['WLT-EVC'], name: 'Mobile Wallet - EVC Plus' },
+  { code: '1004', aliases: ['WLT-EDAHAB'], name: 'Mobile Wallet - eDahab' },
+  { code: '1005', aliases: ['WLT-MERCH'], name: 'Mobile Wallet - Merchant' },
+  { code: '1006', aliases: [], name: 'Mobile Wallet - IBS' },
+  { code: '1007', aliases: ['WLT-WAAFI'], name: 'Mobile Wallet - Waafi' },
+  { code: '1008', aliases: ['WLT-PREMIER'], name: 'Mobile Wallet - Premier Wallet' },
 ]
 
 /** Creates only missing mobile-wallet asset accounts for every active company. */
@@ -25,7 +26,7 @@ export async function ensureWalletChartOfAccounts() {
   for (const company of companies) {
     for (const wallet of WALLET_ACCOUNTS) {
       const existing = await prisma.chart_of_accounts.findFirst({
-        where: { company_id: company.id, OR: [{ code: wallet.code }, { name: wallet.name }] },
+        where: { company_id: company.id, OR: [{ code: wallet.code }, ...wallet.aliases.map((code) => ({ code })), { name: wallet.name }] },
         select: { id: true },
       })
       if (existing) continue

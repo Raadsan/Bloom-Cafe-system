@@ -35,7 +35,7 @@ const accountingMenus = [
   },
   {
     title: 'Banking', url: '/banking', icon: 'Landmark', order: 8,
-    items: [['Banks', '/banks'], ['Bank Accounts', '/bank-accounts'], ['Cash Transactions', '/cash-transactions']],
+    items: [['Bank Accounts', '/bank-accounts'], ['Cash Transactions', '/cash-transactions']],
   },
   { title: 'Products', url: '/products', icon: 'Package', order: 9 },
   {
@@ -99,6 +99,15 @@ async function main() {
         })
       }
     }
+
+    const activeUrls = new Set((items || []).map(([, url]) => url))
+    await prisma.submenu.updateMany({
+      where: {
+        menuId: menu.id,
+        ...(activeUrls.size ? { url: { notIn: [...activeUrls] } } : {}),
+      },
+      data: { isActive: false },
+    })
   }
 
   console.log(`Accounting menus synchronized for ${permittedRoles.length} permitted role(s).`)

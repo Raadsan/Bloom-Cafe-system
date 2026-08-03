@@ -6,6 +6,7 @@ import { Check, Edit3, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import { createAccountingCrudApi, type AccountingRecord } from '@/lib/api/accounting/accountingCrud';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
 import { accountingProductCategoryApi } from '@/lib/api/accounting/configuration/productCategoryApi';
+import { chartOfAccountApi } from '@/lib/api/accounting/ledger/chartOfAccountApi';
 import { useToast } from '@/components/ui/toast';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -21,7 +22,7 @@ type Field = {
   type?: 'text' | 'number' | 'email' | 'select' | 'boolean' | 'textarea';
   required?: boolean;
   options?: Array<{ label: string; value: string | number }>;
-  relation?: 'currencies' | 'categories';
+  relation?: 'currencies' | 'categories' | 'accounts';
   placeholder?: string;
   min?: number;
   max?: number;
@@ -80,12 +81,14 @@ const CONFIGS: Record<string, Config> = {
   'payment-methods': {
     title: 'Payment Methods', singular: 'payment method', resource: '/accounting/configuration/payment-methods',
     description: 'Configure the ways customer receipts and vendor payments are recorded.',
-    columns: ['name', 'code', 'payment_type', 'requires_reference', 'is_active'],
-    defaults: { name: '', code: '', payment_type: 'both', requires_reference: false, is_active: true },
+    columns: ['name', 'code', 'payment_type', 'gl_account_id', 'allow_multiple_accounts', 'requires_reference', 'is_active'],
+    defaults: { name: '', code: '', payment_type: 'both', gl_account_id: null, allow_multiple_accounts: false, requires_reference: false, is_active: true },
     fields: [
       { key: 'name', label: 'Name', required: true, placeholder: 'e.g. Mobile Money' },
       { key: 'code', label: 'Code', required: true, placeholder: 'e.g. MOBILE' },
       { key: 'payment_type', label: 'Payment Type', type: 'select', required: true, options: options(['inbound', 'outbound', 'both']) },
+      { key: 'gl_account_id', label: 'Linked GL Account', type: 'select', relation: 'accounts', required: true },
+      { key: 'allow_multiple_accounts', label: 'Allow Multiple Accounts', type: 'boolean' },
       { key: 'requires_reference', label: 'Requires Reference', type: 'boolean' },
       { key: 'is_active', label: 'Active', type: 'boolean' },
     ],
@@ -140,13 +143,15 @@ function errorMessage(error: unknown) {
 function displayValue(key: string, value: unknown, relations: RelationMaps) {
   if (key === 'currency_id') return relations.currencies.get(Number(value)) || '—';
   if (key === 'parent_id') return value ? relations.categories.get(Number(value)) || `#${value}` : 'Top level';
+  if (key === 'gl_account_id') return value ? relations.accounts.get(Number(value)) || `#${value}` : '---';
+  if (key === 'allow_multiple_accounts') return value ? 'Yes' : 'No';
   if (typeof value === 'boolean') return value ? 'Active' : 'Inactive';
   if (key === 'rate_percent') return `${Number(value).toFixed(2)}%`;
   if (value === null || value === undefined || value === '') return '—';
   return humanize(String(value));
 }
 
-type RelationMaps = { currencies: Map<number, string>; categories: Map<number, string> };
+type RelationMaps = { currencies: Map<number, string>; categories: Map<number, string>; accounts: Map<number, string> };
 
 export default function ConfigurationCrudPage({ section }: { section: string }) {
   const config = CONFIGS[section];
@@ -160,7 +165,7 @@ export default function ConfigurationCrudPage({ section }: { section: string }) 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<Row | null>(null);
   const [form, setForm] = useState<Record<string, Value>>(config.defaults);
-  const [relations, setRelations] = useState<RelationMaps>({ currencies: new Map(), categories: new Map() });
+  const [relations, setRelations] = useState<RelationMaps>({ currencies: new Map(), categories: new Map(), accounts: new Map() });
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -176,12 +181,15 @@ export default function ConfigurationCrudPage({ section }: { section: string }) 
   useEffect(() => {
     const needsCurrencies = config.fields.some((field) => field.relation === 'currencies');
     const needsCategories = config.fields.some((field) => field.relation === 'categories');
+    const needsAccounts = config.fields.some((field) => field.relation === 'accounts');
     Promise.all([
       needsCurrencies ? currencyApi.getAll() : Promise.resolve([]),
       needsCategories ? accountingProductCategoryApi.getAll() : Promise.resolve([]),
-    ]).then(([currencies, categories]) => setRelations({
+      needsAccounts ? chartOfAccountApi.getAll() : Promise.resolve([]),
+    ]).then(([currencies, categories, accounts]) => setRelations({
       currencies: new Map(currencies.map((item) => [item.id, `${String(item.code || '')} — ${String(item.name || '')}`])),
       categories: new Map(categories.map((item) => [item.id, String(item.name || '')])),
+      accounts: new Map(accounts.filter((item) => item.is_active !== false).map((item) => [item.id, `${String(item.code || '')} - ${String(item.name || '')}`])),
     })).catch(() => undefined);
   }, [config.fields]);
 
@@ -268,7 +276,8 @@ export default function ConfigurationCrudPage({ section }: { section: string }) 
 
 function FormField({ field, value, onChange, relations, currentId }: { field: Field; value: Value | undefined; onChange: (value: Value) => void; relations: RelationMaps; currentId?: number }) {
   if (field.type === 'boolean') return <label className="flex min-h-11 items-center justify-between gap-3 rounded-xl border p-3 sm:col-span-2"><div><span className="text-xs font-semibold">{field.label}</span><p className="mt-0.5 text-[10px] text-muted-foreground">Enable this option for the record</p></div><button type="button" role="switch" aria-checked={Boolean(value)} onClick={() => onChange(!value)} className={`relative h-6 w-11 rounded-full transition ${value ? 'bg-primary' : 'bg-muted-foreground/30'}`}><span className={`absolute top-1 size-4 rounded-full bg-white shadow transition ${value ? 'left-6' : 'left-1'}`} /></button></label>;
-  const relationOptions = field.relation === 'currencies' ? [...relations.currencies.entries()].map(([optionValue, label]) => ({ value: optionValue, label })) : field.relation === 'categories' ? [...relations.categories.entries()].filter(([id]) => id !== currentId).map(([optionValue, label]) => ({ value: optionValue, label })) : field.options;
+  const relationOptions = field.relation === 'currencies' ? [...relations.currencies.entries()].map(([optionValue, label]) => ({ value: optionValue, label })) : field.relation === 'categories' ? [...relations.categories.entries()].filter(([id]) => id !== currentId).map(([optionValue, label]) => ({ value: optionValue, label })) : field.relation === 'accounts' ? [...relations.accounts.entries()].map(([optionValue, label]) => ({ value: optionValue, label })) : field.options;
   const base = 'mt-1.5 min-h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10';
   return <label className={field.type === 'textarea' ? 'sm:col-span-2' : ''}><span className="text-xs font-semibold">{field.label}{field.required && <span className="ml-0.5 text-rose-500">*</span>}</span>{field.type === 'select' ? <select required={field.required} value={value === null ? '' : String(value ?? '')} onChange={(event) => onChange(event.target.value === '' ? null : field.relation ? Number(event.target.value) : event.target.value)} className={base}><option value="">Select {field.label.toLowerCase()}</option>{relationOptions?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : field.type === 'textarea' ? <textarea required={field.required} value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} rows={3} className={`${base} resize-none py-2.5`} /> : <input required={field.required} type={field.type || 'text'} value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder} min={field.min} max={field.max} step={field.step} className={base} />}</label>;
 }
+

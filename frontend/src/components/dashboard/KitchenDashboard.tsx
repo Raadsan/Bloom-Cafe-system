@@ -1,13 +1,11 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { reportApi } from "@/lib/api/restaurant/reportApi";
 import {
   ChefHat,
   Flame,
   CheckSquare,
   Clock,
-  MoreHorizontal,
-  Filter
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -53,6 +51,7 @@ import {
 import { isToday, format, subDays } from "date-fns";
 
 export default function KitchenDashboard({ orders }: { orders: Order[] }) {
+  const [categoryData, setCategoryData] = useState<Array<{ name: string; value: number }>>([]);
   const stats = useMemo(() => {
     const todayOrders = orders.filter(o => isToday(o.createdAt ? new Date(o.createdAt) : new Date()));
     
@@ -81,13 +80,27 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
     return days;
   }, [orders]);
 
-  // Mock Category Data for Kitchen (could be calculated if orderItems were fully populated with categories)
-  const categoryData = [
-    { name: 'Main Course', value: 45 },
-    { name: 'Appetizers', value: 20 },
-    { name: 'Desserts', value: 15 },
-  ];
   const COLORS = [...chartPrimaryVariants];
+
+  useEffect(() => {
+    reportApi
+      .getTopSellingItems({ limit: 100 })
+      .then((res) => {
+        const rows = Array.isArray(res?.data)
+          ? res.data as Array<{ category?: string | null; totalQuantitySold?: number }>
+          : [];
+        const byCategory = new Map<string, number>();
+        rows.forEach((row) => {
+          const name = row.category?.trim() || "Uncategorized";
+          byCategory.set(name, (byCategory.get(name) || 0) + Number(row.totalQuantitySold || 0));
+        });
+        setCategoryData([...byCategory.entries()]
+          .map(([name, value]) => ({ name, value }))
+          .filter((item) => item.value > 0)
+          .sort((a, b) => b.value - a.value));
+      })
+      .catch(() => setCategoryData([]));
+  }, []);
 
   const pendingOrders = useMemo(() => orders.filter(o => o.status === 'pending' || o.status === 'preparing').slice(0, 5), [orders]);
 
@@ -172,24 +185,32 @@ export default function KitchenDashboard({ orders }: { orders: Order[] }) {
           </div>
           
           <div className="h-[300px] w-full relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={categoryData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" stroke="none">
+            {categoryData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={categoryData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" stroke="none">
+                      {categoryData.map((entry, index) => (
+                        <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={chartTooltipStyle} itemStyle={{ color: "#ffffff" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
                   {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <div key={`legend-${entry.name}`} className="flex items-center gap-1.5">
+                      <div className="size-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">{entry.name}</span>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip contentStyle={chartTooltipStyle} itemStyle={{ color: "#ffffff" }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-wrap items-center justify-center gap-4 mt-2">
-              {categoryData.map((entry, index) => (
-                <div key={`legend-${index}`} className="flex items-center gap-1.5">
-                  <div className="size-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase">{entry.name}</span>
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-xs font-semibold text-muted-foreground">
+                No active category sales yet
+              </div>
+            )}
           </div>
         </div>
       </div>

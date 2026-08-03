@@ -249,6 +249,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               url: src.url,
               icon: src.icon,
               order: src.order,
+              isActive: src.isActive,
               items: (rm.items || [])
                 .map((sub) => {
                   const srcSub = srcSubs.get(sub.id);
@@ -258,6 +259,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     title: srcSub.title,
                     url: srcSub.url,
                     order: srcSub.order,
+                    isActive: srcSub.isActive,
                   };
                 })
                 .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -285,16 +287,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // the user has already opened.
   useEffect(() => {
     if (menus.length === 0) return;
-    setOpenMenus((current) => {
-      const next = { ...current };
-      menus.forEach((menu) => {
-        const hasActiveChild = (menu.items || []).some((sub) => {
-          const subUrl = workspaceHref(normalizeUrl(sub.url), workspace);
-          return sub.isActive !== false && isNavRouteActive(pathname, subUrl);
+    queueMicrotask(() => {
+      setOpenMenus((current) => {
+        const next = { ...current };
+        menus.forEach((menu) => {
+          const hasActiveChild = (menu.items || []).some((sub) => {
+            const subUrl = workspaceHref(normalizeUrl(sub.url), workspace);
+            return sub.isActive !== false && isNavRouteActive(pathname, subUrl);
+          });
+          if (hasActiveChild) next[menu.id] = true;
         });
-        if (hasActiveChild) next[menu.id] = true;
+        return next;
       });
-      return next;
     });
   }, [pathname, menus, workspace]);
 

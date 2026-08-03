@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { menuApi, Menu, SubMenu } from "@/lib/api/restaurant/menuApi";
+import { menuApi, Menu, MenuPermission } from "@/lib/api/restaurant/menuApi";
 import type { WorkspaceKey } from "@/lib/workspaces";
 import { authApi } from "@/lib/api/auth/authApi";
 
@@ -45,7 +45,10 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
         if (cached.roleId) {
           const moduleKey = getModuleKeyForRole(roleName);
           const menus = await menuApi.getMenusByRole(cached.roleId, false, moduleKey);
-          setPermissions(menus || []);
+          setPermissions((menus || []).filter((menu) => menu.isActive !== false).map((menu) => ({
+            ...menu,
+            items: (menu.items || []).filter((item) => item.isActive !== false),
+          })));
           return;
         }
       }
@@ -59,7 +62,10 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
         if (!adminRole && user.roleId) {
           const moduleKey = getModuleKeyForRole(roleName);
           const menus = await menuApi.getMenusByRole(user.roleId, false, moduleKey);
-          setPermissions(menus || []);
+          setPermissions((menus || []).filter((menu) => menu.isActive !== false).map((menu) => ({
+            ...menu,
+            items: (menu.items || []).filter((item) => item.isActive !== false),
+          })));
         }
       }
     } catch (error) {
@@ -70,15 +76,15 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
   };
 
   useEffect(() => {
-    fetchPermissions();
+    queueMicrotask(() => void fetchPermissions());
   }, []);
 
   /**
    * Find permission config for a URL.
    * Tries exact match first, then prefix match for nested routes.
    */
-  const findConfig = (url: string) => {
-    let bestMatch: any = null;
+  const findConfig = (url: string): MenuPermission | null => {
+    let bestMatch: MenuPermission | null = null;
     let bestMatchLength = 0;
 
     for (const menu of permissions) {

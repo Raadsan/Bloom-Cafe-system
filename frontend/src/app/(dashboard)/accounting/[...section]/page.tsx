@@ -45,7 +45,6 @@ const TITLES: Record<string, string> = {
   'vendor-payments': 'Vendor Payments',
   'vendor-refunds': 'Vendor Refunds',
   banking: 'Banking',
-  banks: 'Banks',
   'bank-accounts': 'Bank Accounts',
   'cash-transactions': 'Cash Transactions',
   products: 'Products',
@@ -115,12 +114,8 @@ export default async function AccountingSectionPage({
     return <VendorBillsPage kind="refund" />;
   }
 
-  if (key === 'banks') {
-    return <BankingSetupPage kind="banks" />;
-  }
-
   if (key === 'bank-accounts') {
-    return <BankingSetupPage kind="accounts" />;
+    return <BankingSetupPage />;
   }
 
   if (key === 'cash-transactions') {

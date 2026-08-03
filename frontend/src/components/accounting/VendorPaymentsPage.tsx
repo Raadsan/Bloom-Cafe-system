@@ -54,7 +54,10 @@ export default function VendorPaymentsPage() {
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const vendor = vendors.find((row) => row.id === Number(form.vendor_id));
-  const availableBanks = banks.filter((row) => Number(row.company_id) === Number(vendor?.company_id) && row.is_active !== false && row.journal_id);
+  const selectedMethod = methods.find((row) => row.id === Number(form.payment_method_id));
+  const methodUsesMultipleAccounts = selectedMethod?.allow_multiple_accounts === true;
+  const availableBanks = banks.filter((row) => Number(row.company_id) === Number(vendor?.company_id) && row.is_active !== false && row.journal_id && row.gl_account_id);
+  const shouldSelectBankAccount = methodUsesMultipleAccounts && availableBanks.length > 1;
   const openBills = bills.filter((bill) => bill.vendor_id === Number(form.vendor_id) && bill.state === 'posted' && Number(bill.currency_id) === Number(form.currency_id) && (Number(bill.amount_due) > 0 || form.allocations.some((row) => row.bill_id === bill.id)));
   const allocated = form.allocations.reduce((sum, row) => sum + Number(row.allocated_amount || 0), 0);
   const unallocated = Number(form.amount || 0) - allocated;
@@ -62,7 +65,7 @@ export default function VendorPaymentsPage() {
   const otherOutstandingBills = openBills.filter((bill) => !form.allocations.some((row) => row.bill_id === bill.id));
   const paymentExceedsSelectedBills = form.allocations.length > 0 && Number(form.amount || 0) > selectedBillTotal + 0.005;
   const hasRemainingPayment = unallocated > 0.005;
-  const canPostPayment = !saving && Number(form.amount) > 0 && Boolean(form.payment_method_id) && Boolean(form.bank_account_id) && form.allocations.length > 0 && unallocated >= -0.005;
+  const canPostPayment = !saving && Number(form.amount) > 0 && Boolean(form.payment_method_id) && (!shouldSelectBankAccount || Boolean(form.bank_account_id)) && form.allocations.length > 0 && unallocated >= -0.005;
   const filtered = payments.filter((payment) => {
     const needle = query.trim().toLowerCase();
     return (!needle || [payment.payment_number, payment.vendors?.name, payment.reference].some((value) => String(value || '').toLowerCase().includes(needle))) &&
@@ -78,6 +81,9 @@ export default function VendorPaymentsPage() {
   function selectBank(value: string) {
     const bank = banks.find((row) => row.id === Number(value));
     setForm((current) => ({ ...current, bank_account_id: value, currency_id: String(bank?.currency_id || current.currency_id), allocations: [] }));
+  }
+  function selectPaymentMethod(value: string) {
+    setForm((current) => ({ ...current, payment_method_id: value, bank_account_id: '' }));
   }
   function edit(payment: VendorPayment, view = false) {
     setSelected(payment); setReadonly(view || payment.state !== 'draft');
@@ -114,7 +120,7 @@ export default function VendorPaymentsPage() {
     event?.preventDefault();
     if (postAfterSave && !canPostPayment) return;
     setSaving(true);
-    const payload = { ...form, vendor_id: Number(form.vendor_id), bank_account_id: Number(form.bank_account_id), payment_method_id: Number(form.payment_method_id), payment_date: new Date(`${form.payment_date}T00:00:00.000Z`).toISOString(), currency_id: Number(form.currency_id), exchange_rate: Number(form.exchange_rate), amount: Number(form.amount) };
+    const payload = { ...form, vendor_id: Number(form.vendor_id), bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : null, payment_method_id: Number(form.payment_method_id), payment_date: new Date(`${form.payment_date}T00:00:00.000Z`).toISOString(), currency_id: Number(form.currency_id), exchange_rate: Number(form.exchange_rate), amount: Number(form.amount) };
     try {
       const saved = selected ? await vendorPaymentApi.update(selected.id, payload) : await vendorPaymentApi.create(payload);
       if (postAfterSave) await vendorPaymentApi.post(saved.id);
@@ -136,7 +142,7 @@ export default function VendorPaymentsPage() {
     { key: 'date', header: 'Date', cell: (row) => day(row.payment_date) },
     { key: 'vendor', header: 'Vendor', cell: (row) => row.vendors?.name || '—' },
     { key: 'method', header: 'Method', cell: (row) => row.payment_methods?.name || '—' },
-    { key: 'account', header: 'Bank Account', cell: (row) => row.bank_accounts?.account_name || '—' },
+    { key: 'account', header: 'Payment Account', cell: (row) => row.bank_accounts?.account_name || row.payment_methods?.chart_of_accounts?.name || '—' },
     { key: 'amount', header: 'Amount', align: 'right', cell: (row) => <span className="font-semibold">{money(row.amount, row.currencies?.code)}</span> },
     { key: 'allocated', header: 'Allocated', align: 'right', cell: (row) => money(Number(row.amount) - Number(row.unallocated_amount)) },
     { key: 'advance', header: 'Vendor Advance', align: 'right', cell: (row) => money(row.vendor_advances?.reduce((sum, advance) => sum + Number(advance.original_amount || 0), 0) || 0) },
@@ -152,8 +158,8 @@ export default function VendorPaymentsPage() {
         <Select label="Vendor" value={form.vendor_id} set={selectVendor} rows={vendors} />
         <Field label="Payment date" type="date" value={form.payment_date} set={(value) => setForm({ ...form, payment_date: value })} />
         <Field label="Amount" type="number" value={form.amount} set={(value) => setForm({ ...form, amount: value })} />
-        <Select label="Payment method" value={form.payment_method_id} set={(value) => setForm({ ...form, payment_method_id: value })} rows={methods.filter((row) => row.is_active !== false && ['outbound', 'both'].includes(String(row.payment_type)))} />
-        <Select label="Bank / Wallet Account" value={form.bank_account_id} set={selectBank} rows={availableBanks} labelKey="account_name" />
+        <Select label="Payment method" value={form.payment_method_id} set={selectPaymentMethod} rows={methods.filter((row) => row.is_active !== false && ['outbound', 'both'].includes(String(row.payment_type)))} />
+        {shouldSelectBankAccount && <Select label="Bank account" value={form.bank_account_id} set={selectBank} rows={availableBanks} labelKey="account_name" />}
         <Field label="Reference" value={form.reference} set={(value) => setForm({ ...form, reference: value })} optional />
       </fieldset>
       <div className="rounded-2xl border"><div className="flex flex-wrap items-center justify-between gap-4 border-b p-4"><div><h3 className="font-semibold">Outstanding Bills</h3><p className="text-xs text-muted-foreground">Select the bills covered by this payment.</p></div><button disabled={readonly || !form.amount || !openBills.length} type="button" onClick={autoAllocate} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Auto Allocate</button></div>

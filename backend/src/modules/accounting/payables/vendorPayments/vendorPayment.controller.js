@@ -4,7 +4,7 @@ import { logAudit } from '../../../../utils/auditHelper.js'
 const include = {
   vendors: { select: { id: true, name: true, vendor_code: true } },
   currencies: { select: { id: true, code: true, symbol: true } },
-  payment_methods: { select: { id: true, name: true, code: true } },
+  payment_methods: { select: { id: true, name: true, code: true, gl_account_id: true, allow_multiple_accounts: true, chart_of_accounts: { select: { id: true, code: true, name: true } } } },
   journals: { select: { id: true, name: true, code: true } },
   bank_accounts: { select: { id: true, account_name: true, account_number: true } },
   payment_allocations: { include: { vendor_bills: { select: { id: true, bill_number: true, bill_date: true, amount_total: true, amount_due: true } } } },
@@ -18,11 +18,51 @@ const fail = (res, error, fallback) => {
   return res.status(error.status || (error.code === 'P2025' ? 404 : 500)).json({ success: false, message: error.message || fallback })
 }
 async function ensureVendorAdvanceAccount(db, companyId) {
-  const existing = await db.chart_of_accounts.findFirst({ where: { company_id: companyId, is_active: true, OR: [{ code: 'VA1400' }, { name: 'Vendor Advances' }] } })
+  const existing = await db.chart_of_accounts.findFirst({ where: { company_id: companyId, is_active: true, OR: [{ code: '1400' }, { code: 'VA1400' }, { name: 'Vendor Advances' }] } })
   if (existing) return existing
   const assetType = await db.account_types.findFirst({ where: { internal_group: 'asset' }, orderBy: { sequence: 'asc' } })
   if (!assetType) throw inputError('An asset account type is required to configure Vendor Advances')
-  return db.chart_of_accounts.create({ data: { company_id: companyId, code: 'VA1400', name: 'Vendor Advances', account_type_id: assetType.id, is_reconcilable: true, allow_manual_entry: false, is_active: true } })
+  return db.chart_of_accounts.create({ data: { company_id: companyId, code: '1400', name: 'Vendor Advances', account_type_id: assetType.id, is_reconcilable: true, allow_manual_entry: false, is_active: true } })
+}
+async function resolvePaymentAccount({ vendor, method, bankAccountId, currencyId }) {
+  let bank = null
+  if (method.allow_multiple_accounts && !bankAccountId) {
+    const activeBanks = await prisma.bank_accounts.findMany({
+      where: { company_id: vendor.company_id, currency_id, is_active: true, gl_account_id: { not: null }, journal_id: { not: null } },
+      orderBy: [{ institution_name: 'asc' }, { account_name: 'asc' }, { id: 'asc' }],
+    })
+    if (activeBanks.length !== 1) throw inputError('Select a bank account for this payment method')
+    bank = activeBanks[0]
+  }
+  if (bankAccountId) {
+    bank = await prisma.bank_accounts.findUnique({ where: { id: bankAccountId } })
+    if (!bank?.is_active || bank.company_id !== vendor.company_id || !bank.journal_id || !bank.gl_account_id) throw inputError('Select an active vendor-company bank account with a journal and GL account')
+  }
+  const accountId = method.allow_multiple_accounts ? bank?.gl_account_id : method.gl_account_id || bank?.gl_account_id
+  if (!accountId) throw inputError('Link this payment method to a GL account before using it')
+  const account = await prisma.chart_of_accounts.findFirst({
+    where: {
+      id: accountId, company_id: vendor.company_id, is_active: true, allow_manual_entry: true,
+      account_types: { internal_group: 'asset' }, other_chart_of_accounts: { none: {} },
+      ...(currencyId ? { OR: [{ currency_id: null }, { currency_id: currencyId }] } : {}),
+    },
+  })
+  if (!account) throw inputError('The selected payment method GL account is inactive, a parent, or incompatible')
+  const journal = bank?.journal_id
+    ? await prisma.journals.findUnique({ where: { id: bank.journal_id } })
+    : await prisma.journals.findFirst({
+      where: {
+        company_id: vendor.company_id, is_active: true, journal_type: 'bank',
+        OR: [{ default_debit_account_id: account.id }, { default_credit_account_id: account.id }, { default_debit_account_id: null }],
+      },
+      orderBy: [{ default_debit_account_id: 'desc' }, { code: 'asc' }, { id: 'asc' }],
+    }) || await prisma.journals.findFirst({
+      where: { company_id: vendor.company_id, is_active: true, journal_type: 'bank' },
+      orderBy: [{ code: 'asc' }, { id: 'asc' }],
+    })
+  if (!journal?.is_active || journal.company_id !== vendor.company_id) throw inputError('Configure an active payment journal for this company')
+  if (bank && journal.id !== bank.journal_id) throw inputError('The selected bank account journal is inactive or invalid')
+  return { bank, journal, account }
 }
 async function prepare(input) {
   const vendorId = id(input.vendor_id)
@@ -30,20 +70,20 @@ async function prepare(input) {
   const paymentMethodId = id(input.payment_method_id)
   const bankAccountId = id(input.bank_account_id)
   const amount = Number(input.amount)
-  if (!vendorId || !paymentDate || !paymentMethodId || !bankAccountId) throw inputError('Vendor, date, payment method, and bank account are required')
+  if (!vendorId || !paymentDate || !paymentMethodId) throw inputError('Vendor, date, and payment method are required')
   if (!Number.isFinite(amount) || amount <= 0) throw inputError('Payment amount must be greater than zero')
-  const [vendor, method, bank] = await Promise.all([
-    prisma.vendors.findUnique({ where: { id: vendorId } }),
+  const [vendor, method] = await Promise.all([
+    prisma.vendors.findUnique({ where: { id: vendorId }, include: { companies: true } }),
     prisma.payment_methods.findUnique({ where: { id: paymentMethodId } }),
-    prisma.bank_accounts.findUnique({ where: { id: bankAccountId } }),
   ])
   if (!vendor?.is_active) throw inputError('Active vendor not found')
+  if (!vendor.companies?.is_active) throw inputError('Vendor company is inactive or missing')
   if (!method?.is_active || !['outbound', 'both'].includes(method.payment_type)) throw inputError('Select an active outbound payment method')
-  if (!bank?.is_active || bank.company_id !== vendor.company_id || !bank.journal_id || !bank.gl_account_id) throw inputError('Select an active vendor-company bank account with a journal and GL account')
   const fiscalPeriod = await prisma.fiscal_periods.findFirst({ where: { state: 'open', fiscal_years: { company_id: vendor.company_id, state: 'open' }, start_date: { lte: paymentDate }, end_date: { gte: paymentDate } } })
   if (!fiscalPeriod) throw inputError('No open fiscal period covers the payment date')
-  const currencyId = id(input.currency_id) || bank.currency_id
-  if (currencyId !== bank.currency_id) throw inputError('Payment currency must match the selected bank account')
+  const currencyId = id(input.currency_id) || vendor.currency_id || vendor.companies.currency_id
+  const { bank, journal, account } = await resolvePaymentAccount({ vendor, method, bankAccountId, currencyId })
+  if (bank && currencyId !== bank.currency_id) throw inputError('Payment currency must match the selected bank account')
   const exchangeRate = Number(input.exchange_rate || 1)
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw inputError('A positive exchange rate is required')
   const allocations = (Array.isArray(input.allocations) ? input.allocations : []).map((row) => ({ bill_id: id(row.bill_id), allocated_amount: Math.round(Number(row.allocated_amount) * 100) / 100 }))
@@ -61,12 +101,12 @@ async function prepare(input) {
   if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
   const advanceAccount = amount - allocated > 0.005 ? await ensureVendorAdvanceAccount(prisma, vendor.company_id) : null
   return {
-    header: { company_id: vendor.company_id, vendor_id: vendorId, journal_id: bank.journal_id, payment_method_id: paymentMethodId, bank_account_id: bankAccountId, fiscal_period_id: fiscalPeriod.id, payment_date: paymentDate, currency_id: currencyId, exchange_rate: exchangeRate, amount, unallocated_amount: Math.round((amount - allocated) * 100) / 100, reference: String(input.reference || '').trim() || null, memo: String(input.memo || '').trim() || null, state: 'draft' },
+    header: { company_id: vendor.company_id, vendor_id: vendorId, journal_id: journal.id, payment_method_id: paymentMethodId, bank_account_id: bank?.id || null, fiscal_period_id: fiscalPeriod.id, payment_date: paymentDate, currency_id: currencyId, exchange_rate: exchangeRate, amount, unallocated_amount: Math.round((amount - allocated) * 100) / 100, reference: String(input.reference || '').trim() || null, memo: String(input.memo || '').trim() || null, state: 'draft' },
     allocations,
     payableAccountId: payableAccount.id,
     advanceAccountId: advanceAccount?.id || null,
     allocatedAmount: allocated,
-    bankGlAccountId: bank.gl_account_id,
+    paymentAccountId: account.id,
   }
 }
 
@@ -90,7 +130,7 @@ function paymentEntryData(prepared, paymentNumber, paymentId, state = 'draft', p
     source_type: 'vendor_payment',
     source_id: paymentId,
     posted_at: postedAt,
-    journal_items: { create: [...debitLines, { sequence: 30, account_id: prepared.bankGlAccountId, label: 'Bank payment', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -Number(prepared.header.amount) }] },
+    journal_items: { create: [...debitLines, { sequence: 30, account_id: prepared.paymentAccountId, label: 'Payment method clearing', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -Number(prepared.header.amount) }] },
   }
 }
 async function number(tx, journalId) {
@@ -177,15 +217,15 @@ export const post = async (req, res) => {
   if (!paymentId) return res.status(400).json({ success: false, message: 'Invalid payment id' })
   try {
     const data = await prisma.$transaction(async (tx) => {
-      const payment = await tx.vendor_payments.findUnique({ where: { id: paymentId }, include: { payment_allocations: true } })
+      const payment = await tx.vendor_payments.findUnique({ where: { id: paymentId }, include: { payment_allocations: true, payment_methods: true } })
       if (!payment || payment.state !== 'draft') throw inputError('Draft vendor payment not found')
-      if (!payment.bank_account_id || !payment.fiscal_period_id) throw inputError('Vendor payment is missing its bank account or fiscal period')
+      if (!payment.fiscal_period_id) throw inputError('Vendor payment is missing its fiscal period')
       const allocated = payment.payment_allocations.reduce((sum, allocation) => sum + Number(allocation.allocated_amount), 0)
       if (allocated > Number(payment.amount) + 0.005) throw inputError('Allocated amount cannot exceed payment amount')
       const advanceAmount = Math.max(0, Math.round((Number(payment.amount) - allocated) * 100) / 100)
       const [vendor, bank, journal, payableAccount] = await Promise.all([
-        tx.vendors.findUnique({ where: { id: payment.vendor_id } }),
-        tx.bank_accounts.findUnique({ where: { id: payment.bank_account_id } }),
+        tx.vendors.findUnique({ where: { id: payment.vendor_id }, include: { companies: true } }),
+        payment.bank_account_id ? tx.bank_accounts.findUnique({ where: { id: payment.bank_account_id } }) : Promise.resolve(null),
         tx.journals.findUnique({ where: { id: payment.journal_id } }),
         tx.chart_of_accounts.findFirst({
           where: {
@@ -197,8 +237,20 @@ export const post = async (req, res) => {
         }),
       ])
       if (!vendor?.is_active) throw inputError('Active vendor not found')
-      if (!bank?.is_active || bank.company_id !== payment.company_id || !bank.gl_account_id) throw inputError('The selected bank account needs an active GL account')
-      if (!journal?.is_active || journal.id !== bank.journal_id) throw inputError('The selected bank account journal is inactive or invalid')
+      if (payment.payment_methods?.allow_multiple_accounts && !bank) throw inputError('Vendor payment is missing the selected bank account')
+      const paymentAccountId = payment.payment_methods?.allow_multiple_accounts ? bank?.gl_account_id : payment.payment_methods?.gl_account_id || bank?.gl_account_id
+      if (!payment.payment_methods?.is_active || !['outbound', 'both'].includes(payment.payment_methods.payment_type)) throw inputError('Payment method is inactive or incompatible')
+      if (!paymentAccountId) throw inputError('Link this payment method to a GL account before posting')
+      const paymentAccount = await tx.chart_of_accounts.findFirst({
+        where: {
+          id: paymentAccountId, company_id: payment.company_id, is_active: true, allow_manual_entry: true,
+          account_types: { internal_group: 'asset' }, other_chart_of_accounts: { none: {} },
+        },
+        include: { account_types: true, other_chart_of_accounts: { select: { id: true } } },
+      })
+      if (!paymentAccount) throw inputError('The selected payment method GL account is inactive, a parent, or incompatible')
+      if (bank && (!bank.is_active || bank.company_id !== payment.company_id || bank.gl_account_id !== paymentAccountId)) throw inputError('The selected bank account is inactive or inconsistent with the payment method')
+      if (!journal?.is_active || journal.company_id !== payment.company_id || (bank && journal.id !== bank.journal_id)) throw inputError('The selected payment journal is inactive or invalid')
       if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
       const advanceAccount = advanceAmount > 0 ? await ensureVendorAdvanceAccount(tx, payment.company_id) : null
       const fiscalPeriod = await tx.fiscal_periods.findUnique({ where: { id: payment.fiscal_period_id } })
@@ -224,7 +276,7 @@ export const post = async (req, res) => {
           journal_items: { create: [
             ...(allocated > 0 ? [{ sequence: 10, account_id: payableAccount.id, label: 'Accounts Payable', partner_type: 'vendor', partner_id: payment.vendor_id, debit: Math.round(allocated * Number(payment.exchange_rate) * 100) / 100, credit: 0, currency_id: payment.currency_id, amount_currency: allocated }] : []),
             ...(advanceAmount > 0 ? [{ sequence: 20, account_id: advanceAccount.id, label: 'Vendor Advance', partner_type: 'vendor', partner_id: payment.vendor_id, debit: Math.round(advanceAmount * Number(payment.exchange_rate) * 100) / 100, credit: 0, currency_id: payment.currency_id, amount_currency: advanceAmount }] : []),
-            { sequence: 30, account_id: bank.gl_account_id, label: 'Bank payment', partner_type: 'vendor', partner_id: payment.vendor_id, debit: 0, credit: Math.round(Number(payment.amount) * Number(payment.exchange_rate) * 100) / 100, currency_id: payment.currency_id, amount_currency: -Number(payment.amount) },
+            { sequence: 30, account_id: paymentAccountId, label: 'Payment method clearing', partner_type: 'vendor', partner_id: payment.vendor_id, debit: 0, credit: Math.round(Number(payment.amount) * Number(payment.exchange_rate) * 100) / 100, currency_id: payment.currency_id, amount_currency: -Number(payment.amount) },
           ] },
         } })
       if (advanceAmount > 0) await tx.vendor_advances.create({ data: { company_id: payment.company_id, vendor_id: payment.vendor_id, currency_id: payment.currency_id, payment_id: payment.id, advance_account_id: advanceAccount.id, original_amount: advanceAmount, remaining_amount: advanceAmount, state: 'open' } })

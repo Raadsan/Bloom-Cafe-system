@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Check, ChevronDown, Landmark, LayoutGrid, Store } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, ChevronDown, Key, Landmark, LayoutGrid, Store } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,19 +11,85 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { workspaceFromPath } from "@/lib/workspaces";
+import { authApi } from "@/lib/api/auth/authApi";
+import { menuApi } from "@/lib/api/restaurant/menuApi";
+import { WORKSPACE_KEYS, workspaceFromPath, workspaceHref, type WorkspaceKey } from "@/lib/workspaces";
 
-const dashboards = [
-  { key: "CORE", label: "Main Dashboard", href: "/dashboard", icon: LayoutGrid },
-  { key: "RESTAURANT", label: "Restaurant Dashboard", href: "/restaurant/dashboard", icon: Store },
-  { key: "ACCOUNTING", label: "Accounting Dashboard", href: "/accounting/dashboard", icon: Landmark },
-] as const;
+const workspaceMeta: Record<WorkspaceKey, { label: string; icon: typeof LayoutGrid }> = {
+  CORE: { label: "Main Dashboard", icon: LayoutGrid },
+  RESTAURANT: { label: "Restaurant Dashboard", icon: Store },
+  ACCOUNTING: { label: "Accounting Dashboard", icon: Landmark },
+  ACCESS_CONTROL: { label: "Access Control", icon: Key },
+};
+
+type DashboardOption = {
+  key: WorkspaceKey;
+  label: string;
+  href: string;
+  icon: typeof LayoutGrid;
+};
+
+function findDashboardHref(workspace: WorkspaceKey, menus: Awaited<ReturnType<typeof menuApi.getMenusByRole>>) {
+  const dashboard = menus.find((menu) => menu.isActive !== false && menu.url === "/dashboard")
+    ?? menus.find((menu) => menu.isActive !== false && menu.title.toLowerCase().includes("dashboard"));
+  if (!dashboard) return null;
+  return workspaceHref(dashboard.url, workspace);
+}
 
 export function DashboardSwitcher() {
   const pathname = usePathname();
   const router = useRouter();
   const workspace = workspaceFromPath(pathname);
-  const active = dashboards.find((item) => item.key === workspace) ?? dashboards[0];
+  const [dashboards, setDashboards] = useState<DashboardOption[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDashboards() {
+      try {
+        setLoading(true);
+        const user = authApi.getCachedUser() ?? await authApi.getMe();
+        if (!user?.roleId) {
+          if (!cancelled) setDashboards([]);
+          return;
+        }
+
+        const resolved = await Promise.all(
+          WORKSPACE_KEYS.map(async (key) => {
+            try {
+              const menus = await menuApi.getMenusByRole(user.roleId!, false, key);
+              const href = findDashboardHref(key, menus);
+              if (!href) return null;
+              return { key, href, label: workspaceMeta[key].label, icon: workspaceMeta[key].icon };
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setDashboards(resolved.filter(Boolean) as DashboardOption[]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadDashboards();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const active = useMemo(() => {
+    return dashboards.find((item) => item.key === workspace)
+      ?? dashboards.find((item) => item.href === pathname)
+      ?? dashboards[0];
+  }, [dashboards, pathname, workspace]);
+
+  if (loading || dashboards.length <= 1 || !active) return null;
+
   const ActiveIcon = active.icon;
 
   return (

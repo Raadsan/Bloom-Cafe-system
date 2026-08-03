@@ -72,6 +72,9 @@ export default function CustomerReceiptsPage() {
   });
   const allocated = form.allocations.reduce((sum, row) => sum + Number(row.allocated_amount || 0), 0);
   const unallocated = Number(form.amount || 0) - allocated;
+  const selectedMethod = methods.find((row) => row.id === Number(form.payment_method_id));
+  const methodUsesMultipleAccounts = selectedMethod?.allow_multiple_accounts === true;
+  const shouldSelectBankAccount = methodUsesMultipleAccounts && paymentOptions.length > 1;
   const selectedOutstandingBefore = form.allocations.reduce((sum, allocation) => {
     const invoice = invoices.find((row) => row.id === allocation.invoice_id);
     const currentOutstanding = Number(invoice?.amount_due || 0);
@@ -237,7 +240,7 @@ export default function CustomerReceiptsPage() {
             <label className="text-sm font-medium">Receipt date *<input required type="date" value={form.receipt_date} onChange={(e) => setForm({ ...form, receipt_date: e.target.value })} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label>
             <label className="text-sm font-medium">Amount *<input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => changeReceiptAmount(e.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label>
             <label className="text-sm font-medium">Payment method *<select required value={form.payment_method_id} onChange={(e) => void selectPaymentMethod(e.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3"><option value="">Select method</option>{methods.filter((row) => row.is_active !== false && ['inbound', 'both'].includes(String(row.payment_type))).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></label>
-            <label className="text-sm font-medium">Cash / Bank Account *<select required value={form.cash_bank_account_id} onChange={(e) => selectAccount(e.target.value)} disabled={viewOnly || saving || !form.payment_method_id || paymentOptions.length === 1} className="mt-1 h-11 w-full rounded-xl border bg-background px-3 disabled:bg-muted"><option value="">{form.payment_method_id ? 'Select compatible account' : 'Select payment method first'}</option>{paymentOptions.map((row) => <option key={row.id} value={row.id}>{row.code} — {row.account_name}</option>)}</select></label>
+            {shouldSelectBankAccount && <label className="text-sm font-medium">Bank Account *<select required value={form.cash_bank_account_id} onChange={(e) => selectAccount(e.target.value)} disabled={viewOnly || saving || !form.payment_method_id} className="mt-1 h-11 w-full rounded-xl border bg-background px-3 disabled:bg-muted"><option value="">{form.payment_method_id ? 'Select compatible account' : 'Select payment method first'}</option>{paymentOptions.map((row) => <option key={row.id} value={row.id}>{row.code} - {row.account_name}</option>)}</select></label>}
             <label className="text-sm font-medium">Reference<input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label>
           </fieldset>
           <div className="rounded-2xl border"><div className="flex items-center justify-between gap-4 border-b p-4"><div><h3 className="font-semibold">Outstanding Invoices</h3><p className="text-xs text-muted-foreground">Select the invoices covered by this receipt.</p></div>{openInvoices.length >= 2 && <button disabled={viewOnly || !form.amount} type="button" onClick={autoAllocate} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50">Auto Allocate</button>}</div>
@@ -273,3 +276,4 @@ function PrintableCustomerReceipt({ receipt }: { receipt: CustomerReceipt }) {
     <div className="ml-auto mt-7 w-80 text-sm"><div className="flex justify-between py-1"><span>Receipt</span><b>{money(receipt.amount, currency)}</b></div><div className="flex justify-between py-1"><span>Allocated</span><b>{money(allocated, currency)}</b></div><div className="my-2 border-t border-slate-400" /><div className="flex justify-between py-2 text-base font-bold"><span>Remaining</span><span>{money(receipt.unallocated_amount, currency)}</span></div></div>
   </section>;
 }
+
