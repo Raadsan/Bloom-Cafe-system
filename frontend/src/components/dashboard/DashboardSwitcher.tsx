@@ -19,7 +19,7 @@ const workspaceMeta: Record<WorkspaceKey, { label: string; icon: typeof LayoutGr
   CORE: { label: "Main Dashboard", icon: LayoutGrid },
   RESTAURANT: { label: "Restaurant Dashboard", icon: Store },
   ACCOUNTING: { label: "Accounting Dashboard", icon: Landmark },
-  ACCESS_CONTROL: { label: "Access Control", icon: Key },
+  ACCESS_CONTROL: { label: "Configurations", icon: Key },
 };
 
 type DashboardOption = {

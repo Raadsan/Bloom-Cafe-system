@@ -120,7 +120,7 @@ async function prepareBill(input, documentType = 'bill') {
     prisma.chart_of_accounts.findFirst({
       where: {
         company_id: vendor.company_id, is_active: true,
-        OR: [{ code: '2000' }, ...(vendor.payable_account_id ? [{ id: vendor.payable_account_id }] : []), ...(journal.default_credit_account_id ? [{ id: journal.default_credit_account_id }] : [])],
+        code: '2000',
       },
       orderBy: { code: 'asc' },
     }),

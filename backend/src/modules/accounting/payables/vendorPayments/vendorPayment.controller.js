@@ -97,7 +97,7 @@ async function prepare(input) {
   }
   const allocated = allocations.reduce((sum, row) => sum + row.allocated_amount, 0)
   if (allocated > amount + 0.005) throw inputError('Allocated amount cannot exceed payment amount')
-  const payableAccount = await prisma.chart_of_accounts.findFirst({ where: { company_id: vendor.company_id, is_active: true, OR: [{ code: '2000' }, ...(vendor.payable_account_id ? [{ id: vendor.payable_account_id }] : [])] }, orderBy: { code: 'asc' } })
+  const payableAccount = await prisma.chart_of_accounts.findFirst({ where: { company_id: vendor.company_id, code: '2000', is_active: true } })
   if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
   const advanceAccount = amount - allocated > 0.005 ? await ensureVendorAdvanceAccount(prisma, vendor.company_id) : null
   return {
@@ -231,7 +231,7 @@ export const post = async (req, res) => {
           where: {
             company_id: payment.company_id,
             is_active: true,
-            OR: [{ code: '2000' }],
+            code: '2000',
           },
           orderBy: { code: 'asc' },
         }),

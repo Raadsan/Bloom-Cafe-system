@@ -132,7 +132,11 @@ export default function ChartOfAccountsPage() {
     finally { setSaving(false); }
   }
 
-  const eligibleParents = accounts.filter((account) => account.id !== selected?.id && String(account.company_id) === form.company_id);
+  const eligibleParents = accounts.filter((account) =>
+    account.id !== selected?.id
+    && String(account.company_id) === form.company_id
+    && String(account.account_type_id) === form.account_type_id
+  );
   const columns: DashboardTableColumn<RecordRow>[] = [
     { key: 'select', header: <input type="checkbox" aria-label="Select all accounts" checked={filtered.length > 0 && filtered.every((account) => selectedIds.has(account.id))} onChange={(event) => setSelectedIds(event.target.checked ? new Set(filtered.map((account) => account.id)) : new Set())} className="size-4 accent-primary" />, cell: (account) => <input type="checkbox" aria-label={`Select ${String(account.name)}`} checked={selectedIds.has(account.id)} onChange={(event) => setSelectedIds((current) => { const next = new Set(current); if (event.target.checked) next.add(account.id); else next.delete(account.id); return next; })} className="size-4 accent-primary" /> },
     { key: 'code', header: 'Code', cell: (account) => <span className="font-mono font-bold text-primary">{String(account.code)}</span> },
@@ -200,7 +204,7 @@ export default function ChartOfAccountsPage() {
       <Dialog open={formOpen} onOpenChange={(open) => !saving && setFormOpen(open)}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>{selected ? 'Edit Account' : 'Add Ledger Account'}</DialogTitle><DialogDescription>Configure the identity, classification, hierarchy, and posting behavior for this account.</DialogDescription></DialogHeader><form onSubmit={saveAccount} className="space-y-5"><div className="grid gap-4 sm:grid-cols-2">
           <SelectField label="Company" required value={form.company_id} onChange={(value) => setForm((current) => ({ ...current, company_id: value, parent_id: '' }))} options={companies.map((row) => ({ value: String(row.id), label: String(row.name) }))} />
-          <SelectField label="Account Type" required value={form.account_type_id} onChange={(value) => setForm((current) => ({ ...current, account_type_id: value }))} options={accountTypes.map((row) => ({ value: String(row.id), label: `${String(row.name)} — ${humanize(row.internal_group)}` }))} />
+          <SelectField label="Account Type" required value={form.account_type_id} onChange={(value) => setForm((current) => ({ ...current, account_type_id: value, parent_id: '' }))} options={accountTypes.map((row) => ({ value: String(row.id), label: `${String(row.name)} — ${humanize(row.internal_group)}` }))} />
           <TextField label="Account Code" required value={form.code} maxLength={16} placeholder="e.g. 1100" onChange={(value) => setForm((current) => ({ ...current, code: value }))} />
           <TextField label="Account Name" required value={form.name} maxLength={128} placeholder="e.g. Cash on Hand" onChange={(value) => setForm((current) => ({ ...current, name: value }))} />
           <SelectField label="Parent Account" value={form.parent_id} onChange={(value) => setForm((current) => ({ ...current, parent_id: value }))} emptyLabel="No parent account" options={eligibleParents.map((row) => ({ value: String(row.id), label: `${String(row.code)} — ${String(row.name)}` }))} />

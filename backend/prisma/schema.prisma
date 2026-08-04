@@ -380,12 +380,14 @@ model purchase {
 model purchaseline {
   id           Int        @id @default(autoincrement())
   purchaseId   Int
-  ingredientId Int
+  ingredientId Int?
+  description  String     @db.VarChar(255)
+  unit         String     @db.VarChar(32)
   quantity     Float
   unitCost     Float
   lineTotal    Float
   purchase     purchase   @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  ingredient   ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  ingredient   ingredient? @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
 
   @@index([purchaseId])
   @@index([ingredientId])

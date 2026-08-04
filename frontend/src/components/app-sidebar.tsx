@@ -203,6 +203,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   useEffect(() => {
     const initSidebar = async (forceRefresh = false) => {
       try {
+        const refreshWorkspaceMenus = forceRefresh || workspace !== 'CORE';
         const cachedUser = authApi.getCachedUser();
         if (cachedUser) setUser(cachedUser);
 
@@ -210,12 +211,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         setUser(currentUser);
 
         if (currentUser && currentUser.roleId) {
-          if (!forceRefresh && _sidebarCache && _sidebarCache.roleId === currentUser.roleId && _sidebarCache.workspace === workspace) {
+          if (!refreshWorkspaceMenus && _sidebarCache && _sidebarCache.roleId === currentUser.roleId && _sidebarCache.workspace === workspace) {
             setMenus(_sidebarCache.menus);
             setLoading(false);
             return;
           }
-          const fetchedMenus = await menuApi.getMenusByRole(currentUser.roleId, forceRefresh, workspace);
+          const fetchedMenus = await menuApi.getMenusByRole(currentUser.roleId, refreshWorkspaceMenus, workspace);
           _sidebarCache = { menus: fetchedMenus, roleId: currentUser.roleId, workspace };
           setMenus(fetchedMenus);
         }

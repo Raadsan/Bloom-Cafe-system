@@ -13,13 +13,14 @@ export function workspaceFromPath(pathname: string): WorkspaceKey {
   if (POS_RESTAURANT_ROUTES.has(pathname)) return 'RESTAURANT';
   if (pathname.startsWith('/restaurant/')) return 'RESTAURANT';
   if (pathname.startsWith('/accounting/')) return 'ACCOUNTING';
-  if (pathname.startsWith('/access-control/')) return 'ACCESS_CONTROL';
+  if (pathname.startsWith('/access-control/') || pathname.startsWith('/config/')) return 'ACCESS_CONTROL';
   return 'CORE';
 }
 
 export function workspaceHref(url: string, workspace: WorkspaceKey) {
   if (workspace === 'RESTAURANT' && !url.startsWith('/restaurant/')) return `/restaurant${url}`;
-  if (workspace === 'ACCESS_CONTROL' && !url.startsWith('/access-control/')) return `/access-control${url}`;
+  if (workspace === 'ACCESS_CONTROL' && url === '/users') return '/config/users';
+  if (workspace === 'ACCESS_CONTROL' && !url.startsWith('/access-control/') && !url.startsWith('/config/')) return `/access-control${url}`;
   if (workspace === 'ACCOUNTING' && !url.startsWith('/accounting/')) return `/accounting${url}`;
   return url;
 }
