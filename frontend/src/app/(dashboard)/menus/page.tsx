@@ -90,7 +90,7 @@ export default function MenuPage() {
   const [formIsPurchasable, setFormIsPurchasable] = useState(false);
   const [formIsRecommended, setFormIsRecommended] = useState(false);
   const [formImageUrl, setFormImageUrl] = useState("");
-  const [formTax, setFormTax] = useState("");
+  const [formTax, setFormTax] = useState("5");
   const [formOptions, setFormOptions] = useState("");
   const [formDiscountType, setFormDiscountType] = useState<"" | "percentage" | "fixed">("");
   const [formDiscountValue, setFormDiscountValue] = useState("");
@@ -172,7 +172,7 @@ export default function MenuPage() {
     setFormIsPurchasable(false);
     setFormIsRecommended(false);
     setFormImageUrl("");
-    setFormTax("0");
+    setFormTax("5");
     setFormOptions("");
     setFormDiscountType("");
     setFormDiscountValue("");

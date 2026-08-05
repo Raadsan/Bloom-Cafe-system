@@ -188,7 +188,7 @@ export const createMenuItem = async (req, res) => {
         description: description?.trim() ? description.trim() : null,
         costPrice: costPrice !== undefined ? Number(costPrice) : null,
         price: parsedPrice,
-        tax: tax !== undefined ? Number(tax) : 0,
+        tax: tax !== undefined ? Number(tax) : 5,
         discountType: discount.discountType,
         discountValue: discount.discountValue,
         imageUrl: null,

@@ -120,7 +120,7 @@ model menuitem {
   description                  String?                        @db.Text
   costPrice                    Float?
   price                        Float
-  tax                          Float                          @default(0)
+  tax                          Float                          @default(5)
   discountType                 String?
   discountValue                Float                          @default(0)
   imageUrl                     String?                        @db.LongText
