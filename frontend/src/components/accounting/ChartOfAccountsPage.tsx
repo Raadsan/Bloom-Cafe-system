@@ -155,7 +155,6 @@ export default function ChartOfAccountsPage() {
           <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Chart of Accounts</h1>
           <p className="mt-1 text-sm text-muted-foreground">Build and maintain the account structure used throughout Bloom Café’s books.</p>
         </div>
-        <button onClick={createAccount} disabled={!companies.length || !accountTypes.length} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-4" /> Add Account</button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

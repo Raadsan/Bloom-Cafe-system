@@ -143,9 +143,20 @@ async function resolveRouting(tx, order, company) {
     if (!settlementAccountId) throw new POSAccountingError('Configure the Sales journal default debit Accounts Receivable account')
   } else if (matchedPaymentMethod?.gl_account_id && !matchedPaymentMethod.allow_multiple_accounts) {
     const journalType = paymentKind === 'cash' ? 'cash' : 'bank'
-    journal = journals.find((row) => row.journal_type === journalType && row.default_debit_account_id === matchedPaymentMethod.gl_account_id)
-      || journals.find((row) => row.journal_type === journalType)
     settlementAccountId = matchedPaymentMethod.gl_account_id
+    const settlementAccount = matchedPaymentMethod.chart_of_accounts
+    const isMobileWallet = /^100[3-9]/.test(String(settlementAccount?.code || '')) || /mobile\s*wallet|evc|edahab|merchant|\bibs\b|waafi/.test(normalize(`${matchedPaymentMethod.code} ${matchedPaymentMethod.name} ${settlementAccount?.name}`))
+    if (isMobileWallet) {
+      const walletCode = String(matchedPaymentMethod.code || `W${settlementAccount?.code || 'ALLET'}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16)
+      journal = await tx.journals.upsert({
+        where: { company_id_code: { company_id: company.id, code: walletCode } },
+        update: { name: settlementAccount.name, journal_type: 'bank', default_debit_account_id: settlementAccountId, default_credit_account_id: settlementAccountId, is_active: true },
+        create: { company_id: company.id, code: walletCode, name: settlementAccount.name, journal_type: 'bank', default_debit_account_id: settlementAccountId, default_credit_account_id: settlementAccountId, currency_id: company.currency_id, sequence_prefix: walletCode, is_active: true },
+      })
+    } else {
+      journal = journals.find((row) => row.journal_type === journalType && row.default_debit_account_id === matchedPaymentMethod.gl_account_id)
+        || journals.find((row) => row.journal_type === journalType)
+    }
     if (!journal) throw new POSAccountingError(`Configure an active ${journalType === 'cash' ? 'Cash' : 'Bank'} journal for payment method ${matchedPaymentMethod.name}`)
   } else if (paymentKind === 'cash') {
     journal = journals.find((row) => row.journal_type === 'cash' && row.code.toUpperCase() === 'CASH')

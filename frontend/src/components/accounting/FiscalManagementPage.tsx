@@ -145,7 +145,6 @@ export default function FiscalManagementPage({ kind }: { kind: Kind }) {
     <main className="dashboard-scope space-y-5 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div><div className="flex items-center gap-2 text-primary"><CalendarDays className="size-4" /><span className="text-xs font-semibold uppercase tracking-[0.16em]">Fiscal Management</span></div><h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{isYears ? 'Fiscal Years' : 'Fiscal Periods'}</h1><p className="mt-1 text-sm text-muted-foreground">{isYears ? 'Define your company accounting years and control when they are open or closed.' : 'Manage the posting periods within each fiscal year.'}</p></div>
-        <button onClick={openCreate} disabled={isYears ? !companies.length : !years.length} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-4" /> Add {isYears ? 'Fiscal Year' : 'Period'}</button>
       </div>
 
       <div className={`grid gap-3 sm:grid-cols-2 ${isYears ? 'xl:grid-cols-3' : 'xl:grid-cols-4'}`}>
