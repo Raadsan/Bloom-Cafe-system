@@ -24,18 +24,26 @@ export async function ensureWalletChartOfAccounts() {
   })
   let created = 0
   for (const company of companies) {
+    const parent = await prisma.chart_of_accounts.findFirst({
+      where: { company_id: company.id, code: '1000', name: 'Current Assets' },
+      select: { id: true },
+    })
     for (const wallet of WALLET_ACCOUNTS) {
       const existing = await prisma.chart_of_accounts.findFirst({
         where: { company_id: company.id, OR: [{ code: wallet.code }, ...wallet.aliases.map((code) => ({ code })), { name: wallet.name }] },
-        select: { id: true },
+        select: { id: true, parent_id: true },
       })
-      if (existing) continue
+      if (existing) {
+        if (parent && existing.parent_id !== parent.id) await prisma.chart_of_accounts.update({ where: { id: existing.id }, data: { parent_id: parent.id } })
+        continue
+      }
       await prisma.chart_of_accounts.create({
         data: {
           company_id: company.id,
           code: wallet.code,
           name: wallet.name,
           account_type_id: accountType.id,
+          parent_id: parent?.id || null,
           currency_id: company.currency_id,
           is_reconcilable: true,
           allow_manual_entry: true,

@@ -49,6 +49,8 @@ export interface MenuItem {
   discountValue?: number;
   imageUrl?: string;
   isAvailable: boolean;
+  isSellable?: boolean;
+  isPurchasable?: boolean;
   isRecommended: boolean;
   categoryId: number;
   category?: { id: number; name: string };
@@ -83,6 +85,8 @@ export interface CreateMenuItemPayload {
   discountValue?: number;
   imageUrl?: string;
   isAvailable?: boolean;
+  isSellable?: boolean;
+  isPurchasable?: boolean;
   isRecommended?: boolean;
   categoryId: number;
   options?: string[] | string | null;
@@ -98,6 +102,8 @@ export interface UpdateMenuItemPayload {
   discountValue?: number;
   imageUrl?: string;
   isAvailable?: boolean;
+  isSellable?: boolean;
+  isPurchasable?: boolean;
   isRecommended?: boolean;
   categoryId?: number;
   options?: string[] | string | null;

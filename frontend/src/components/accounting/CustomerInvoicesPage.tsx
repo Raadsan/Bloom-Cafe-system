@@ -9,6 +9,8 @@ import { accountingProductApi } from '@/lib/api/accounting/catalog/productApi';
 import { accountingTaxApi } from '@/lib/api/accounting/configuration/taxApi';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
 import { paymentTermApi } from '@/lib/api/accounting/configuration/paymentTermApi';
+import { accountingPaymentMethodApi } from '@/lib/api/accounting/configuration/paymentMethodApi';
+import { customerReceiptApi } from '@/lib/api/accounting/receivables/customerReceiptApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
@@ -19,10 +21,11 @@ type Row = { id: number; [key: string]: unknown };
 type Line = Omit<CustomerInvoiceLine, 'id' | 'products' | 'subtotal'>;
 type Form = {
   customer_id: string; invoice_date: string; due_date: string; payment_term_id: string; notes: string; lines: Line[];
+  receive_payment_now: boolean; payment_method_id: string; amount_received: string; payment_reference: string;
 };
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = (): Line => ({ product_id: null, description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_id: null });
-const emptyForm = (): Form => ({ customer_id: '', invoice_date: today(), due_date: today(), payment_term_id: '', notes: '', lines: [emptyLine()] });
+const emptyForm = (): Form => ({ customer_id: '', invoice_date: today(), due_date: today(), payment_term_id: '', notes: '', lines: [emptyLine()], receive_payment_now: false, payment_method_id: '', amount_received: '', payment_reference: '' });
 const apiDate = (value: string) => new Date(`${value}T00:00:00.000Z`).toISOString();
 const dateValue = (value: unknown) => value ? new Date(String(value)).toISOString().slice(0, 10) : '';
 const money = (value: unknown, code = '') => `${code ? `${code} ` : ''}${Number(value || 0).toFixed(2)}`;
@@ -36,6 +39,7 @@ export default function CustomerInvoicesPage() {
   const [taxes, setTaxes] = useState<Row[]>([]);
   const [currencies, setCurrencies] = useState<Row[]>([]);
   const [terms, setTerms] = useState<Row[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<Row[]>([]);
   const [form, setForm] = useState<Form>(emptyForm);
   const [selected, setSelected] = useState<CustomerInvoice | null>(null);
   const [open, setOpen] = useState(false);
@@ -54,12 +58,13 @@ export default function CustomerInvoicesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [invoiceRows, customerRows, productRows, taxRows, currencyRows, termRows] = await Promise.all([
+      const [invoiceRows, customerRows, productRows, taxRows, currencyRows, termRows, methodRows] = await Promise.all([
         customerInvoiceApi.getAll(), accountingCustomerApi.getAll(), accountingProductApi.getAll(), accountingTaxApi.getAll(),
-        currencyApi.getAll(), paymentTermApi.getAll(),
+        currencyApi.getAll(), paymentTermApi.getAll(), accountingPaymentMethodApi.getAll(),
       ]);
       setInvoices(invoiceRows); setCustomers(customerRows); setProducts(productRows); setTaxes(taxRows); setCurrencies(currencyRows);
       setTerms(termRows);
+      setPaymentMethods(methodRows);
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setLoading(false); }
   }, [showToast]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
@@ -73,7 +78,6 @@ export default function CustomerInvoicesPage() {
     const taxAmount = tax ? (tax.price_includes_tax ? discounted - untaxed : untaxed * rate) : 0;
     return { untaxed: sum.untaxed + untaxed, discount: sum.discount + gross - discounted, tax: sum.tax + taxAmount, total: sum.total + untaxed + taxAmount };
   }, { untaxed: 0, discount: 0, tax: 0, total: 0 }), [form.lines, taxes]);
-  const customerCompanyId = Number(customers.find((item) => item.id === Number(form.customer_id))?.company_id || 0);
 
   const filtered = invoices.filter((invoice) => {
     const needle = query.trim().toLowerCase();
@@ -102,6 +106,7 @@ export default function CustomerInvoicesPage() {
       customer_id: String(invoice.customer_id), invoice_date: dateValue(invoice.invoice_date), due_date: dateValue(invoice.due_date),
       payment_term_id: String(invoice.payment_term_id || ''), notes: String(invoice.notes || ''),
       lines: (invoice.customer_invoice_lines || []).map((line) => ({ product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity), unit_price: Number(line.unit_price), discount_percent: Number(line.discount_percent), tax_id: line.tax_id || null })),
+      receive_payment_now: false, payment_method_id: '', amount_received: '', payment_reference: '',
     });
     setOpen(true);
   }
@@ -133,15 +138,39 @@ export default function CustomerInvoicesPage() {
     updateLine(index, product ? { product_id: product.id, description: String(product.name), unit_price: Number(product.list_price || 0), tax_id: Number(product.sale_tax_id) || null } : { product_id: null });
   }
   async function save(postAfterSave = false) {
+    const amountReceived = Number(form.amount_received || 0);
+    if (postAfterSave && form.receive_payment_now) {
+      if (!form.payment_method_id) return showToast('Select a payment method for the immediate payment.', 'error');
+      if (!Number.isFinite(amountReceived) || amountReceived <= 0) return showToast('Amount received must be greater than zero.', 'error');
+      if (amountReceived > totals.total + 0.005) return showToast('Amount received cannot exceed the invoice total.', 'error');
+      try {
+        const options = await customerReceiptApi.options({ customer_id: Number(form.customer_id), payment_method_id: Number(form.payment_method_id) });
+        if (!options.accounts.length) return showToast('The selected payment method has no compatible active money account and journal.', 'error');
+      } catch (error) { return showToast(errorMessage(error), 'error'); }
+    }
     setSaving(true);
     const payload = {
-      ...form, lines: form.lines.map((line) => ({ ...line, description: line.description || String(products.find((product) => product.id === Number(line.product_id))?.name || 'Custom line') })), customer_id: Number(form.customer_id),
+      notes: form.notes, lines: form.lines.map((line) => ({ ...line, description: line.description || String(products.find((product) => product.id === Number(line.product_id))?.name || 'Custom line') })), customer_id: Number(form.customer_id),
       invoice_date: apiDate(form.invoice_date), due_date: form.due_date ? apiDate(form.due_date) : null, payment_term_id: form.payment_term_id ? Number(form.payment_term_id) : null,
     };
     try {
       const saved = selected ? await customerInvoiceApi.update(selected.id, payload) : await customerInvoiceApi.create(payload);
-      if (postAfterSave) await customerInvoiceApi.post(saved.id);
-      showToast(postAfterSave ? 'Invoice posted successfully' : `Draft invoice ${selected ? 'updated' : 'created'} successfully`, 'success');
+      if (postAfterSave) {
+        const postedInvoice = await customerInvoiceApi.post(saved.id);
+        if (form.receive_payment_now) {
+          const receipt = await customerReceiptApi.create({
+            customer_id: postedInvoice.customer_id,
+            payment_method_id: Number(form.payment_method_id),
+            receipt_date: apiDate(form.invoice_date),
+            amount: amountReceived,
+            reference: form.payment_reference.trim() || undefined,
+            memo: `Immediate payment for invoice ${postedInvoice.invoice_number}`,
+            allocations: [{ invoice_id: postedInvoice.id, allocated_amount: amountReceived }],
+          });
+          await customerReceiptApi.post(receipt.id);
+        }
+      }
+      showToast(postAfterSave ? form.receive_payment_now ? 'Invoice and payment posted successfully' : 'Invoice posted successfully' : `Draft invoice ${selected ? 'updated' : 'created'} successfully`, 'success');
       setOpen(false); await load();
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setSaving(false); }
   }
@@ -185,20 +214,49 @@ export default function CustomerInvoicesPage() {
         <Select label="Payment term" value={form.payment_term_id} set={setPaymentTerm} rows={terms} optional />
       </div>
       <div className="space-y-3"><div className="overflow-x-auto rounded-xl border"><table className="w-full min-w-[900px] table-fixed text-xs"><colgroup><col className="w-[18%]" /><col className="w-[24%]" /><col className="w-[10%]" /><col className="w-[14%]" /><col className="w-[13%]" /><col className="w-[16%]" /><col className="w-[5%]" /></colgroup><thead className="bg-muted/50"><tr><th className="p-2.5 text-left">Product</th><th className="p-2.5 text-left">Description</th><th className="p-2.5">Qty</th><th className="p-2.5">Unit price</th><th className="p-2.5">Discount</th><th className="p-2.5">Tax</th><th className="w-9"></th></tr></thead><tbody>{form.lines.map((line, index) => <tr key={index} className="border-t">
-        <td className="p-2"><select value={line.product_id || ''} onChange={(event) => chooseProduct(index, event.target.value)} className="h-9 w-full rounded-lg border px-2"><option value="">Custom line</option>{products.filter((item) => item.can_be_sold !== false && (!customerCompanyId || Number(item.company_id) === customerCompanyId)).map((item) => <option key={item.id} value={item.id}>{String(item.name)}</option>)}</select></td>
+        <td className="p-2"><ProductPicker value={line.product_id} products={products.filter((item) => item.is_active !== false && item.can_be_sold !== false)} onChange={(value) => chooseProduct(index, value)} /></td>
         <td className="p-2"><input required value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} className="h-9 w-full rounded-lg border px-2" placeholder="Product or service description" /></td>
-        <td className="p-2"><input required type="number" min="1" step="1" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
-        <td className="p-2"><input required type="number" min="0" step="1" value={line.unit_price} onChange={(event) => updateLine(index, { unit_price: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
+        <td className="p-2"><input required type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
+        <td className="p-2"><input required type="number" min="0" step="0.01" value={line.unit_price} onChange={(event) => updateLine(index, { unit_price: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
         <td className="p-2"><input type="number" min="0" max="100" step="0.01" value={line.discount_percent} onChange={(event) => updateLine(index, { discount_percent: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
         <td className="p-2"><select value={line.tax_id || ''} onChange={(event) => updateLine(index, { tax_id: Number(event.target.value) || null })} className="h-9 w-full rounded-lg border px-2"><option value="">No tax</option>{taxes.filter((item) => item.is_active !== false).map((item) => <option key={item.id} value={item.id}>{String(item.name)}</option>)}</select></td>
         <td className="p-2"><button type="button" disabled={form.lines.length === 1} onClick={() => setForm({ ...form, lines: form.lines.filter((_, lineIndex) => lineIndex !== index) })} className="rounded p-1 text-rose-600 disabled:opacity-30"><X className="size-4" /></button></td>
       </tr>)}</tbody></table><button type="button" onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })} className="m-2.5 flex items-center gap-1 text-xs font-semibold text-primary"><Plus className="size-3" /> Add line</button></div>
-        </div><div className="mt-4 grid items-stretch gap-4 lg:min-h-[170px] lg:grid-cols-[minmax(0,1fr)_260px]"><label className="flex h-full flex-col text-xs font-semibold">Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 min-h-[140px] w-full flex-1 resize-none rounded-lg border p-2 text-sm" placeholder="Add any notes for this invoice..." /></label><aside className="h-full rounded-xl border bg-muted/20 p-4 text-sm"><p className="mb-3 font-semibold">Invoice summary</p><Total label="Subtotal" value={totals.untaxed} /><Total label="Tax" value={totals.tax} /><div className="my-2 border-t" /><Total label="Grand total" value={totals.total} strong /></aside></div>
+        </div>
+        {!viewOnly && <section className="rounded-xl border bg-muted/10 p-4"><h3 className="font-semibold">Payment Information</h3><label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" checked={form.receive_payment_now} onChange={(event) => setForm((current) => ({ ...current, receive_payment_now: event.target.checked, payment_method_id: event.target.checked ? current.payment_method_id : '', amount_received: event.target.checked ? current.amount_received : '', payment_reference: event.target.checked ? current.payment_reference : '' }))} className="size-4 accent-primary" /> Receive Payment Now</label>{form.receive_payment_now && <div className="mt-4 grid gap-4 sm:grid-cols-3"><label className="text-xs font-semibold">Payment Method *<select required value={form.payment_method_id} onChange={(event) => setForm({ ...form, payment_method_id: event.target.value })} className="mt-1 h-10 w-full rounded-lg border bg-background px-3"><option value="">Select payment method</option>{paymentMethods.filter((method) => method.is_active !== false && method.gl_account_id && ['inbound', 'both'].includes(String(method.payment_type))).map((method) => <option key={method.id} value={method.id}>{String(method.name)}</option>)}</select></label><label className="text-xs font-semibold">Amount Received *<input required type="number" min="0.01" max={totals.total || undefined} step="0.01" value={form.amount_received} onChange={(event) => setForm({ ...form, amount_received: event.target.value })} className="mt-1 h-10 w-full rounded-lg border px-3" /></label><label className="text-xs font-semibold">Reference <span className="font-normal text-muted-foreground">(optional)</span><input value={form.payment_reference} onChange={(event) => setForm({ ...form, payment_reference: event.target.value })} className="mt-1 h-10 w-full rounded-lg border px-3" /></label></div>}</section>}
+        <div className="mt-4 grid items-stretch gap-4 lg:min-h-[170px] lg:grid-cols-[minmax(0,1fr)_280px]"><label className="flex h-full flex-col text-xs font-semibold">Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 min-h-[140px] w-full flex-1 resize-none rounded-lg border p-2 text-sm" placeholder="Add any notes for this invoice..." /></label><aside className="h-full rounded-xl border bg-muted/20 p-4 text-sm"><p className="mb-3 font-semibold">Invoice summary</p><Total label="Subtotal" value={selected ? Number(selected.amount_untaxed) : totals.untaxed} /><Total label="Tax" value={selected ? Number(selected.amount_tax) : totals.tax} /><div className="my-2 border-t" /><Total label="Grand total" value={selected ? Number(selected.amount_total) : totals.total} strong /><div className="my-2 border-t" /><Total label="Paid" value={selected ? Number(selected.paid_amount || 0) : form.receive_payment_now ? Math.min(Number(form.amount_received || 0), totals.total) : 0} /><Total label="Balance" value={selected ? Number(selected.amount_due) : Math.max(0, totals.total - (form.receive_payment_now ? Number(form.amount_received || 0) : 0))} /><div className="mt-2 flex justify-between gap-4 border-t pt-2"><span>Status</span><b>{selected?.state === 'cancelled' ? 'Cancelled' : selected?.payment_state === 'paid' ? 'Paid' : selected?.payment_state === 'partial' ? 'Partially Paid' : selected?.state === 'posted' ? 'Posted' : form.receive_payment_now && Number(form.amount_received || 0) >= totals.total && totals.total > 0 ? 'Paid' : form.receive_payment_now && Number(form.amount_received || 0) > 0 ? 'Partially Paid' : 'Draft'}</b></div></aside></div>
       </fieldset><DialogFooter><button type="button" onClick={() => setOpen(false)} className="h-9 rounded-xl border px-4">{viewOnly ? 'Close' : 'Cancel'}</button>{!viewOnly && <><button disabled={saving} className="h-9 rounded-xl border px-4 font-semibold">{saving ? 'Saving...' : 'Save Draft'}</button><button type="button" disabled={saving} onClick={(event) => { if (event.currentTarget.form?.reportValidity()) void save(true); }} className="h-9 rounded-xl bg-primary px-4 font-semibold text-white">Post Invoice</button></>}</DialogFooter>
     </form></DialogContent></Dialog>
     <AccountingConfirmDialog open={Boolean(pendingAction)} title={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} Customer Invoice`} description={pendingAction?.type === 'delete' ? 'Confirm removal of this draft customer invoice.' : 'Confirm this invoice before posting its journal entry and locking it.'} confirmLabel={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} Invoice`} destructive={pendingAction?.type === 'delete'} busy={saving} details={pendingAction && <div className="flex justify-between"><span className="text-muted-foreground">Invoice</span><b>{pendingAction.invoice.invoice_number}</b></div>} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && void (pendingAction.type === 'delete' ? remove(pendingAction.invoice) : postInvoice(pendingAction.invoice))} />
     {printInvoice && <PrintableInvoice invoice={printInvoice} />}
   </main>;
+}
+
+function ProductPicker({ value, products, onChange }: { value?: number | null; products: Row[]; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const selected = products.find((item) => item.id === Number(value));
+  const visible = products.filter((item) => String(item.name || '').toLowerCase().includes(search.trim().toLowerCase()));
+
+  function select(id: number | null) {
+    onChange(id ? String(id) : '');
+    setOpen(false);
+    setSearch('');
+  }
+
+  return <div className="relative min-w-0">
+    <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)} className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border bg-background px-2 text-left">
+      <span className="truncate">{selected ? String(selected.name) : 'Custom line'}</span><span className="text-[10px] text-muted-foreground">▼</span>
+    </button>
+    {open && <div className="mt-1 w-full rounded-lg border bg-background p-1 shadow-sm">
+      <input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search products..." className="mb-1 h-9 w-full rounded-md border px-2 outline-none focus:border-primary" />
+      <div role="listbox" className="max-h-40 overflow-y-auto overscroll-contain">
+        <button type="button" role="option" aria-selected={!value} onClick={() => select(null)} className={`block w-full rounded px-2 py-2 text-left hover:bg-muted ${!value ? 'bg-primary text-primary-foreground hover:bg-primary' : ''}`}>Custom line</button>
+        {visible.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === Number(value)} onClick={() => select(item.id)} className={`block w-full rounded px-2 py-2 text-left hover:bg-muted ${item.id === Number(value) ? 'bg-primary text-primary-foreground hover:bg-primary' : ''}`}>{String(item.name)}</button>)}
+        {!visible.length && <p className="px-2 py-3 text-center text-xs text-muted-foreground">No matching products</p>}
+      </div>
+    </div>}
+  </div>;
 }
 
 function PrintableInvoice({ invoice }: { invoice: CustomerInvoice }) {

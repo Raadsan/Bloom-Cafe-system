@@ -99,6 +99,7 @@ export function attachCompositesToMenuItems(items, componentMap) {
 }
 
 export function assertMenuItemSellable(menuItem, componentMap) {
+  if (!menuItem?.isSellable) return 'Menu item is not enabled for sales'
   if (!menuItem?.isAvailable) {
     return menuItem?.isComposite
       ? `Combo "${menuItem.name}" is not available`

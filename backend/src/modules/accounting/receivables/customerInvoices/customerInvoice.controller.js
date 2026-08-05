@@ -147,7 +147,7 @@ async function prepareInvoice(input) {
     const unitPrice = Number(line.unit_price)
     const discount = Number(line.discount_percent || 0)
     const description = String(line.description || product?.name || '').trim()
-    if (productId && (!product || product.company_id !== customer.company_id)) throw inputError(`Line ${index + 1}: product does not belong to the customer company`)
+    if (productId && (!product || !product.is_active || !product.can_be_sold)) throw inputError(`Line ${index + 1}: product is not active and sellable`)
     if (!description) throw inputError(`Line ${index + 1}: description is required`)
     if (!Number.isFinite(quantity) || quantity <= 0) throw inputError(`Line ${index + 1}: quantity must be greater than zero`)
     if (!Number.isFinite(unitPrice) || unitPrice < 0) throw inputError(`Line ${index + 1}: unit price cannot be negative`)
