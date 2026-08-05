@@ -395,7 +395,8 @@ export const updateUser = async (req, res) => {
 export const getAllUsers = async (req, res) => {
   try {
     const now = Date.now();
-    if (cachedUsersList && now - cachedUsersAt < USERS_LIST_TTL) {
+    const forceRefresh = String(req.query.refresh || '').toLowerCase() === 'true';
+    if (!forceRefresh && cachedUsersList && now - cachedUsersAt < USERS_LIST_TTL) {
       return res.status(200).json({
         success: true,
         count: cachedUsersList.length,
@@ -403,7 +404,7 @@ export const getAllUsers = async (req, res) => {
       });
     }
 
-    if (usersFetchInflight) {
+    if (!forceRefresh && usersFetchInflight) {
       const data = await usersFetchInflight;
       return res.status(200).json({
         success: true,

@@ -100,8 +100,9 @@ export const checkPermission = (menuUrl, permissionType) => {
         return res.status(401).json({ success: false, message: 'Not authorized' })
       }
 
-      // Admin has full access
-      if (req.user.role === 'admin' || req.user.role === 'Admin') {
+      // Administrator role names are case-insensitive and may use spaces/hyphens.
+      const normalizedRole = String(req.user.role || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+      if (normalizedRole === 'admin' || normalizedRole === 'super_admin') {
         return next()
       }
 

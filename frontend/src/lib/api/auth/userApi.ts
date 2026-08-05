@@ -63,11 +63,11 @@ function clearAllCaches(): void {
   if (typeof window !== 'undefined') localStorage.removeItem(USERS_CACHE_KEY);
 }
 
-async function fetchUsersFromNetwork(): Promise<User[]> {
+async function fetchUsersFromNetwork(forceRefresh = false): Promise<User[]> {
   if (inflight) return inflight;
 
   inflight = api
-    .get('/users')
+    .get('/users', { params: forceRefresh ? { refresh: true } : undefined })
     .then((res) => {
       const data: User[] = res.data.data || [];
       memoryCache = { data, at: Date.now() };
@@ -108,7 +108,7 @@ export const userApi = {
       }
     }
 
-    return fetchUsersFromNetwork();
+    return fetchUsersFromNetwork(forceRefresh);
   },
 
   getUsersByRole: async (roleId: number): Promise<User[]> => {

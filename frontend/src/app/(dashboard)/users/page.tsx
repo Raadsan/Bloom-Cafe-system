@@ -154,8 +154,9 @@ export default function UsersPage() {
       setRoles(initialRoles);
     }
 
-    // Only hit network when cache is stale; show cached data instantly when available
-    fetchData(false);
+    // Show cached rows immediately, then reconcile with the database so newly
+    // seeded or externally-created users are never hidden by stale local data.
+    fetchData(true);
   }, []);
 
   const filteredUsers = useMemo(() => {
