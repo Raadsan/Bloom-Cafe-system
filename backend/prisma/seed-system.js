@@ -155,20 +155,21 @@ async function seedAccounting() {
   let company = await prisma.companies.findFirst({ where: { name: 'Bloom Cafe' } })
   company = company ? await prisma.companies.update({ where: { id: company.id }, data: { currency_id: usd.id, is_active: true } }) : await prisma.companies.create({ data: { name: 'Bloom Cafe', legal_name: 'Bloom Cafe', currency_id: usd.id, country: 'Somalia' } })
   const accountDefs = [
-    ['1000', 'Cash on Hand', 'asset', true], ['1001', 'Bank Account', 'asset', true], ['1003', 'Mobile Wallet - EVC Plus', 'asset', true],
+    ['1000', 'Current Assets', 'asset', false], ['1001', 'Cash on Hand', 'asset', true], ['1002', 'Bank Account', 'asset', true], ['1003', 'Mobile Wallet - EVC Plus', 'asset', true],
     ['1004', 'Mobile Wallet - eDahab', 'asset', true], ['1005', 'Mobile Wallet - Merchant', 'asset', true], ['1006', 'Mobile Wallet - IBS', 'asset', true],
     ['1100', 'Accounts Receivable', 'asset', true], ['1400', 'Vendor Advances', 'asset', true], ['2000', 'Accounts Payable', 'liability', true],
     ['3000', 'Owner Equity', 'equity', false], ['4000', 'Sales Revenue', 'income', true],
-    ['5001', 'Cost of Goods Sold', 'expense', false], ['5005', 'Ingredients Purchase Expense', 'expense', false],
+    ['5001', 'Cost of Goods Sold', 'expense', false], ['5005', 'Cafeteria Expense', 'expense', false],
   ]
   const accounts = {}
-  for (const [code, name, group, reconcilable] of accountDefs) accounts[code] = await prisma.chart_of_accounts.upsert({ where: { company_id_code: { company_id: company.id, code } }, update: { name, account_type_id: types[group].id, currency_id: usd.id, is_active: true, allow_manual_entry: code !== '5001' }, create: { company_id: company.id, code, name, account_type_id: types[group].id, currency_id: usd.id, is_reconcilable: reconcilable, allow_manual_entry: code !== '5001' } })
+  for (const [code, name, group, reconcilable] of accountDefs) accounts[code] = await prisma.chart_of_accounts.upsert({ where: { company_id_code: { company_id: company.id, code } }, update: { name, account_type_id: types[group].id, currency_id: usd.id, is_active: true, allow_manual_entry: !['1000', '5001'].includes(code) }, create: { company_id: company.id, code, name, account_type_id: types[group].id, currency_id: usd.id, is_reconcilable: reconcilable, allow_manual_entry: !['1000', '5001'].includes(code) } })
+  for (const code of ['1001', '1002', '1003', '1004', '1005', '1006', '1100', '1400']) await prisma.chart_of_accounts.update({ where: { id: accounts[code].id }, data: { parent_id: accounts['1000'].id } })
   const journals = [
     ['INV', 'Customer Invoices', 'sale', '1100', '4000'], ['POS', 'Point of Sale', 'sale', '1100', '4000'],
-    ['BILL', 'Vendor Bills', 'purchase', '5005', '2000'], ['CASH', 'Cash', 'cash', '1000', null], ['BANK', 'Bank', 'bank', '1001', null],
+    ['BILL', 'Vendor Bills', 'purchase', '5005', '2000'], ['CASH', 'Cash', 'cash', '1001', null], ['BANK', 'Bank', 'bank', '1002', null], ['WALLET', 'Mobile Wallet', 'bank', '1003', null],
   ]
   for (const [code, name, journal_type, debit, credit] of journals) await prisma.journals.upsert({ where: { company_id_code: { company_id: company.id, code } }, update: { name, journal_type, default_debit_account_id: accounts[debit]?.id, default_credit_account_id: accounts[credit]?.id, is_active: true }, create: { company_id: company.id, code, name, journal_type, default_debit_account_id: accounts[debit]?.id, default_credit_account_id: accounts[credit]?.id, currency_id: usd.id, sequence_prefix: code } })
-  for (const [code, name, account] of [['CASH', 'Cash', '1000'], ['BANK', 'Bank', '1001'], ['EVC', 'EVC Plus', '1003'], ['EDAHAB', 'eDahab', '1004'], ['MERCHANT', 'Merchant', '1005'], ['IBS', 'IBS', '1006']]) await prisma.payment_methods.upsert({ where: { code }, update: { name, gl_account_id: accounts[account].id, is_active: true }, create: { code, name, payment_type: 'both', gl_account_id: accounts[account].id } })
+  for (const [code, name, account] of [['CASH', 'Cash', '1001'], ['BANK', 'Bank', '1002'], ['EVC', 'EVC Plus', '1003'], ['EDAHAB', 'eDahab', '1004'], ['MERCHANT', 'Merchant', '1005'], ['IBS', 'IBS', '1006']]) await prisma.payment_methods.upsert({ where: { code }, update: { name, gl_account_id: accounts[account].id, is_active: true }, create: { code, name, payment_type: 'both', gl_account_id: accounts[account].id } })
   const term = await prisma.payment_terms.upsert({ where: { name: 'Due on Receipt' }, update: { is_active: true }, create: { name: 'Due on Receipt', description: 'Payment is due immediately.' } })
   if (!await prisma.payment_term_lines.findFirst({ where: { payment_term_id: term.id } })) await prisma.payment_term_lines.create({ data: { payment_term_id: term.id, value_type: 'balance', due_days: 0 } })
   await prisma.taxes.upsert({ where: { name: 'No Tax' }, update: { rate_percent: 0, is_active: true }, create: { name: 'No Tax', rate_percent: 0 } })

@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import prisma from '../../../../config/db.js'
 import { logAudit } from '../../../../utils/auditHelper.js'
-
-const prisma = new PrismaClient()
 const include = {
   vendors: { select: { id: true, name: true, phone: true, email: true, vendor_code: true, company_id: true } },
   currencies: { select: { id: true, code: true, symbol: true } },
@@ -115,18 +113,27 @@ async function prepareBill(input, documentType = 'bill') {
   if (!fiscalPeriod) throw inputError('No open fiscal period covers the bill date')
 
   const currencyId = parseId(input.currency_id) || company.currency_id
-  const [currency, payableAccount] = await Promise.all([
+  const [currency, payableAccount, expenseAccount] = await Promise.all([
     prisma.currencies.findUnique({ where: { id: currencyId } }),
     prisma.chart_of_accounts.findFirst({
       where: {
-        company_id: vendor.company_id, is_active: true,
-        code: '2000',
+        company_id: vendor.company_id, code: '2000', is_active: true,
+        allow_manual_entry: true, account_types: { internal_group: 'liability' },
+        other_chart_of_accounts: { none: {} },
       },
       orderBy: { code: 'asc' },
+    }),
+    prisma.chart_of_accounts.findFirst({
+      where: {
+        company_id: vendor.company_id, code: '5005', is_active: true,
+        allow_manual_entry: true, account_types: { internal_group: 'expense' },
+        other_chart_of_accounts: { none: {} },
+      },
     }),
   ])
   if (!currency?.is_active) throw inputError('Bill currency is inactive or missing')
   if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
+  if (!expenseAccount) throw inputError('Default purchase expense account 5005 – Cafeteria Expense was not found or is not a posting account')
   if (reversedBillId) {
     const original = await prisma.vendor_bills.findFirst({ where: { id: reversedBillId, document_type: 'bill', vendor_id: vendorId, state: 'posted' } })
     if (!original) throw inputError('Original posted vendor bill was not found for this vendor')
@@ -134,14 +141,12 @@ async function prepareBill(input, documentType = 'bill') {
 
   const productIds = [...new Set(lines.map((line) => parseId(line.product_id)).filter(Boolean))]
   const taxIds = [...new Set(lines.map((line) => parseId(line.tax_id)).filter(Boolean))]
-  const [products, taxes, accounts] = await Promise.all([
+  const [products, taxes] = await Promise.all([
     prisma.products.findMany({ where: { id: { in: productIds } } }),
     prisma.taxes.findMany({ where: { id: { in: taxIds } } }),
-    prisma.chart_of_accounts.findMany({ where: { company_id: vendor.company_id, is_active: true } }),
   ])
   const productMap = new Map(products.map((row) => [row.id, row]))
   const taxMap = new Map(taxes.map((row) => [row.id, row]))
-  const accountMap = new Map(accounts.map((row) => [row.id, row]))
   let amountUntaxed = 0
   let amountTax = 0
   const preparedLines = lines.map((line, index) => {
@@ -149,16 +154,15 @@ async function prepareBill(input, documentType = 'bill') {
     const product = productId ? productMap.get(productId) : null
     const taxId = parseId(line.tax_id)
     const tax = taxId ? taxMap.get(taxId) : null
-    const expenseAccountId = parseId(line.expense_account_id) || product?.expense_account_id
     const quantity = Number(line.quantity)
     const unitPrice = Number(line.unit_price)
     const discount = Number(line.discount_percent || 0)
     const description = String(line.description || product?.name || '').trim()
+    if (productId && (!product || !product.is_active || !product.can_be_purchased)) throw inputError(`Line ${index + 1}: product is not active and purchasable`)
     if (!description) throw inputError(`Line ${index + 1}: description is required`)
     if (!Number.isFinite(quantity) || quantity <= 0) throw inputError(`Line ${index + 1}: quantity must be greater than zero`)
     if (!Number.isFinite(unitPrice) || unitPrice < 0) throw inputError(`Line ${index + 1}: unit price cannot be negative`)
     if (!Number.isFinite(discount) || discount < 0 || discount > 100) throw inputError(`Line ${index + 1}: discount must be between 0 and 100`)
-    if (!expenseAccountId || !accountMap.has(expenseAccountId)) throw inputError(`Line ${index + 1}: a valid company expense account is required`)
     if (taxId && !tax) throw inputError(`Line ${index + 1}: tax not found`)
     const discounted = quantity * unitPrice * (1 - discount / 100)
     const rate = tax ? Number(tax.rate_percent) / 100 : 0
@@ -166,7 +170,7 @@ async function prepareBill(input, documentType = 'bill') {
     const taxAmount = tax ? (tax.price_includes_tax ? discounted - untaxed : untaxed * rate) : 0
     amountUntaxed += Math.round(untaxed * 100) / 100
     amountTax += Math.round(taxAmount * 100) / 100
-    return { sequence: (index + 1) * 10, product_id: productId, description, quantity, unit_price: unitPrice, discount_percent: discount, tax_id: taxId, expense_account_id: expenseAccountId, subtotal: Math.round(untaxed * 100) / 100 }
+    return { sequence: (index + 1) * 10, product_id: productId, description, quantity, unit_price: unitPrice, discount_percent: discount, tax_id: taxId, expense_account_id: expenseAccount.id, subtotal: Math.round(untaxed * 100) / 100 }
   })
   amountUntaxed = Math.round(amountUntaxed * 100) / 100
   amountTax = Math.round(amountTax * 100) / 100
@@ -184,7 +188,7 @@ async function prepareBill(input, documentType = 'bill') {
       due_date: dueDate, payment_term_id: paymentTerm?.id || null, currency_id: currencyId,
       exchange_rate: exchangeRate, payable_account_id: payableAccount.id, reversed_bill_id: reversedBillId, state: 'draft',
       payment_state: 'not_paid', amount_untaxed: amountUntaxed, amount_tax: amountTax,
-      amount_total: amountTotal, amount_due: amountTotal, notes: String(input.notes || '').trim() || null,
+      amount_total: amountTotal, amount_paid: 0, amount_due: amountTotal, notes: String(input.notes || '').trim() || null,
     },
     lines: preparedLines,
   }

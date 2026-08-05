@@ -1,6 +1,6 @@
 import api from '../axios';
 
-export interface PurchaseLineInput { description: string; quantity: number; unit: string; unitCost: number; }
+export interface PurchaseLineInput { menuItemId?: number | null; description: string; quantity: number; unit: string; unitCost: number; }
 export interface PurchaseLine extends PurchaseLineInput { id: number; lineTotal: number; ingredientId?: number | null; }
 export interface Purchase {
   id: number;

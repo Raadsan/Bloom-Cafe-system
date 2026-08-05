@@ -31,7 +31,7 @@ async function postPurchaseAccounting(tx, purchase, supplier, purchaseLines) {
   if (!journal) throw Object.assign(new Error('Active Vendor Bills journal (BILL) was not found'), { status: 400 })
   if (!fiscalPeriod) throw Object.assign(new Error('No open fiscal period covers the purchase date'), { status: 400 })
   if (!payableAccount) throw Object.assign(new Error('Accounts Payable account 2000 was not found'), { status: 400 })
-  if (!expenseAccount) throw Object.assign(new Error('Ingredients Purchase Expense account 5005 was not found'), { status: 400 })
+  if (!expenseAccount) throw Object.assign(new Error('Cafeteria Expense account 5005 was not found'), { status: 400 })
 
   const amount = Number(purchase.totalAmount)
   const postedAt = new Date()
@@ -96,6 +96,7 @@ async function postPurchaseAccounting(tx, purchase, supplier, purchaseLines) {
 function parseLines(lines) {
   if (!Array.isArray(lines) || !lines.length) throw Object.assign(new Error('Add at least one purchase line'), { status: 400 })
   return lines.map((line) => {
+    const menuItemId = validId(line?.menuItemId)
     const description = String(line?.description || '').trim()
     const unit = String(line?.unit || '').trim()
     const quantity = Number(line?.quantity)
@@ -103,7 +104,20 @@ function parseLines(lines) {
     if (!description || description.length > 255 || !unit || unit.length > 32 || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitCost) || unitCost < 0) {
       throw Object.assign(new Error('Each line needs a description, unit, positive quantity, and valid unit cost'), { status: 400 })
     }
-    return { description, unit, quantity, unitCost, lineTotal: money(quantity * unitCost) }
+    return { menuItemId, description, unit, quantity, unitCost, lineTotal: money(quantity * unitCost) }
+  })
+}
+
+async function validatePurchasableItems(lines) {
+  const ids = [...new Set(lines.map((line) => line.menuItemId).filter(Boolean))]
+  if (!ids.length) return lines
+  const items = await prisma.menuitem.findMany({ where: { id: { in: ids }, isPurchasable: true }, select: { id: true, name: true, costPrice: true } })
+  const map = new Map(items.map((item) => [item.id, item]))
+  return lines.map((line) => {
+    if (!line.menuItemId) return line
+    const item = map.get(line.menuItemId)
+    if (!item) throw Object.assign(new Error('Every selected purchase item must be marked Purchasable'), { status: 400 })
+    return { ...line, description: item.name }
   })
 }
 
@@ -134,7 +148,7 @@ export async function createPurchase(req, res) {
   if (!supplierId || Number.isNaN(purchaseDate.getTime())) return res.status(400).json({ success: false, message: 'Supplier and purchase date are required' })
 
   let lines
-  try { lines = parseLines(req.body?.lines) } catch (error) { return res.status(error.status || 400).json({ success: false, message: error.message }) }
+  try { lines = await validatePurchasableItems(parseLines(req.body?.lines)) } catch (error) { return res.status(error.status || 400).json({ success: false, message: error.message }) }
   try {
     // Creating the purchase, vendor bill, and journal entry can exceed Prisma's
     // default 5-second interactive transaction limit on a remote database.

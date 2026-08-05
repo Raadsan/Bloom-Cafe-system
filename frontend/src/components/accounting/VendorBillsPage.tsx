@@ -11,7 +11,6 @@ import { accountingTaxApi } from '@/lib/api/accounting/configuration/taxApi';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
 import { paymentTermApi } from '@/lib/api/accounting/configuration/paymentTermApi';
 import { companyApi } from '@/lib/api/accounting/configuration/companyApi';
-import { chartOfAccountApi } from '@/lib/api/accounting/ledger/chartOfAccountApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
@@ -19,13 +18,13 @@ import AccountingConfirmDialog from './AccountingConfirmDialog';
 import { actionBtnDelete, actionBtnEdit, actionBtnView, btnCreatePage, dashboardSelectClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Row = { id: number; [key: string]: unknown };
-type Line = Omit<VendorBillLine, 'id' | 'subtotal'>;
+type Line = Omit<VendorBillLine, 'id' | 'subtotal' | 'expense_account_id'>;
 type Form = {
   vendor_id: string; reversed_bill_id: string; bill_date: string; received_date: string; currency_id: string; exchange_rate: string;
   payment_term_id: string; vendor_reference: string; notes: string; lines: Line[];
 };
 const today = () => new Date().toISOString().slice(0, 10);
-const emptyLine = (): Line => ({ product_id: null, description: 'Custom line', quantity: 1, unit_price: 0, discount_percent: 0, tax_id: null, expense_account_id: 0 });
+const emptyLine = (): Line => ({ product_id: null, description: 'Custom line', quantity: 1, unit_price: 0, discount_percent: 0, tax_id: null });
 const emptyForm = (): Form => ({ vendor_id: '', reversed_bill_id: '', bill_date: today(), received_date: today(), currency_id: '', exchange_rate: '1', payment_term_id: '', vendor_reference: '', notes: '', lines: [emptyLine()] });
 const dateValue = (value: unknown) => value ? new Date(String(value)).toISOString().slice(0, 10) : '';
 const apiDate = (value: string) => new Date(`${value}T00:00:00.000Z`).toISOString();
@@ -44,7 +43,6 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   const [currencies, setCurrencies] = useState<Row[]>([]);
   const [terms, setTerms] = useState<Row[]>([]);
   const [companies, setCompanies] = useState<Row[]>([]);
-  const [accounts, setAccounts] = useState<Row[]>([]);
   const [form, setForm] = useState<Form>(emptyForm);
   const [selected, setSelected] = useState<VendorBill | null>(null);
   const [open, setOpen] = useState(false);
@@ -65,18 +63,16 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [billRows, sourceRows, vendorRows, productRows, taxRows, currencyRows, termRows, companyRows, accountRows] = await Promise.all([
+      const [billRows, sourceRows, vendorRows, productRows, taxRows, currencyRows, termRows, companyRows] = await Promise.all([
         recordsApi.getAll(), isRefund ? vendorBillApi.getAll() : Promise.resolve([]), vendorApi.getAll(), accountingProductApi.getAll(), accountingTaxApi.getAll(),
-        currencyApi.getAll(), paymentTermApi.getAll(), companyApi.getAll(), chartOfAccountApi.getAll(),
+        currencyApi.getAll(), paymentTermApi.getAll(), companyApi.getAll(),
       ]);
       setBills(billRows); setSourceBills(sourceRows); setVendors(vendorRows); setProducts(productRows); setTaxes(taxRows);
-      setCurrencies(currencyRows); setTerms(termRows); setCompanies(companyRows); setAccounts(accountRows);
+      setCurrencies(currencyRows); setTerms(termRows); setCompanies(companyRows);
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setLoading(false); }
   }, [showToast, recordsApi, isRefund]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
-  const vendor = vendors.find((row) => row.id === Number(form.vendor_id));
-  const companyAccounts = accounts.filter((row) => !vendor || Number(row.company_id) === Number(vendor.company_id));
   const totals = useMemo(() => form.lines.reduce((sum, line) => {
     const gross = Number(line.quantity) * Number(line.unit_price);
     const discounted = gross * (1 - Number(line.discount_percent) / 100);
@@ -109,7 +105,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
       notes: '', lines: (bill.vendor_bill_lines || []).map((line) => ({
         product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity),
         unit_price: Number(line.unit_price), discount_percent: Number(line.discount_percent),
-        tax_id: line.tax_id || null, expense_account_id: Number(line.expense_account_id),
+        tax_id: line.tax_id || null,
       })),
     });
     if (isRefund) { setRefundMode('partial'); setRefundReason(''); setMoreNotes(String(bill.notes || '')); }
@@ -128,7 +124,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
       ...current, vendor_id: value, currency_id: String(nextVendor?.currency_id || nextCompany?.currency_id || current.currency_id),
       payment_term_id: String(nextVendor?.payment_term_id || current.payment_term_id), exchange_rate: '1',
       ...(isRefund ? { reversed_bill_id: '', payment_term_id: '' } : {}),
-      lines: isRefund ? [emptyLine()] : current.lines.map((line) => ({ ...line, expense_account_id: Number(nextVendor?.expense_account_id || line.expense_account_id) })),
+      lines: isRefund ? [emptyLine()] : current.lines,
     }));
     if (isRefund) { setRefundMode('full'); setRefundReason(''); setMoreNotes(''); }
     if (!isRefund) void loadVendorAdvance(Number(value), Number(nextVendor?.currency_id || nextCompany?.currency_id || 0));
@@ -138,7 +134,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     if (!original) { setForm((current) => ({ ...current, reversed_bill_id: value })); return; }
     const lines = (original.vendor_bill_lines || []).map((line) => ({
       product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity), unit_price: Number(line.unit_price),
-      discount_percent: Number(line.discount_percent), tax_id: line.tax_id || null, expense_account_id: Number(line.expense_account_id),
+      discount_percent: Number(line.discount_percent), tax_id: line.tax_id || null,
     }));
     setForm((current) => ({ ...current, vendor_id: String(original.vendor_id), reversed_bill_id: value, currency_id: String(original.currency_id), exchange_rate: String(original.exchange_rate || 1), payment_term_id: '', bill_date: today(), received_date: today(), lines }));
     setRefundMode('full'); setRefundReason(''); setMoreNotes('');
@@ -150,7 +146,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     const product = products.find((row) => row.id === Number(value));
     updateLine(index, product ? {
       product_id: product.id, description: String(product.name), unit_price: Number(product.standard_cost || 0),
-      expense_account_id: Number(product.expense_account_id || 0), tax_id: Number(product.purchase_tax_id) || null,
+      tax_id: Number(product.purchase_tax_id) || null,
     } : { product_id: null });
   }
   async function save(postAfterSave = false) {
@@ -215,13 +211,13 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
         </div>
         {isRefund && form.reversed_bill_id && <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 sm:grid-cols-[220px_1fr]"><label className="text-xs font-semibold">Refund Type *<select value={refundMode} onChange={(event) => setRefundMode(event.target.value as 'full' | 'partial')} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3"><option value="full">Full Refund</option><option value="partial">Partial Refund</option></select></label><label className="text-xs font-semibold">Refund Reason *<input required value={refundReason} onChange={(event) => setRefundReason(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3" placeholder="Reason for this refund" /></label>{refundMode === 'full' && <label className="text-xs font-semibold sm:col-span-2">Refund Amount<input readOnly value={money(totals.total)} className="mt-1.5 h-10 w-full rounded-xl border bg-muted px-3 font-semibold" /></label>}</div>}
         {!isRefund && form.vendor_id && availableAdvance > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"><div><b>Available Vendor Advance: ${money(availableAdvance)}</b><p className="text-xs text-emerald-700">Apply it now to reduce this bill&apos;s outstanding balance after posting.</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => setAdvanceAmount(Math.min(availableAdvance, totals.total))} className="h-9 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-semibold">Apply All</button><label className="flex items-center gap-2 text-xs font-semibold">Partial<input aria-label="Partial Vendor Advance" type="number" min="0" max={Math.min(availableAdvance, totals.total)} step="0.01" value={advanceAmount} onChange={(event) => setAdvanceAmount(Math.min(Math.max(0, Number(event.target.value) || 0), availableAdvance, totals.total))} className="h-9 w-28 rounded-lg border bg-white px-2 text-right" /></label><button type="button" onClick={() => setAdvanceAmount(0)} className="h-9 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-semibold">Ignore</button></div></div>}
-        {(!isRefund || refundMode === 'partial') && <div className="rounded-xl border"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[20%]" /><col className="w-[12%]" /><col className="w-[15%]" /><col className="w-[13%]" /><col className="w-[15%]" /><col className="w-[20%]" /><col className="w-[5%]" /></colgroup><thead className="bg-muted/50"><tr><th className="p-2.5 text-left">Product</th><th className="p-2.5">Qty</th><th className="p-2.5">Unit cost</th><th className="p-2.5">Discount</th><th className="p-2.5">Tax</th><th className="p-2.5">Expense account</th><th /></tr></thead><tbody>{form.lines.map((line, index) => <tr key={index} className="border-t">
+        {(!isRefund || refundMode === 'partial') && <div className="rounded-xl border"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[18%]" /><col className="w-[22%]" /><col className="w-[8%]" /><col className="w-[12%]" /><col className="w-[12%]" /><col className="w-[18%]" /><col className="w-[5%]" /></colgroup><thead className="bg-muted/50"><tr><th className="p-2.5 text-left">Product</th><th className="p-2.5 text-left">Description</th><th className="p-2.5">Qty</th><th className="p-2.5">Unit cost</th><th className="p-2.5">Discount</th><th className="p-2.5">Tax</th><th /></tr></thead><tbody>{form.lines.map((line, index) => <tr key={index} className="border-t">
           <td className="p-2"><select value={line.product_id || ''} onChange={(event) => chooseProduct(index, event.target.value)} className="h-9 w-full rounded-lg border px-2"><option value="">Custom line</option>{products.filter((row) => row.can_be_purchased !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
+          <td className="p-2"><input required value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} className="h-9 w-full rounded-lg border px-2" placeholder="Product or service description" /></td>
           <td className="p-2"><input required type="number" min="1" step="1" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
-          <td className="p-2"><input required type="number" min="0" step="1" value={line.unit_price} onChange={(event) => updateLine(index, { unit_price: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
+          <td className="p-2"><input required type="number" min="0" step="0.01" value={line.unit_price} onChange={(event) => updateLine(index, { unit_price: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
           <td className="p-2"><input type="number" min="0" max="100" step=".01" value={line.discount_percent} onChange={(event) => updateLine(index, { discount_percent: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
           <td className="p-2"><select value={line.tax_id || ''} onChange={(event) => updateLine(index, { tax_id: Number(event.target.value) || null })} className="h-9 w-full rounded-lg border px-2"><option value="">No tax</option>{taxes.filter((row) => row.is_active !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
-          <td className="p-2"><select required value={line.expense_account_id || ''} onChange={(event) => updateLine(index, { expense_account_id: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2"><option value="">Select account</option>{companyAccounts.map((row) => <option key={row.id} value={row.id}>{String(row.code)} — {String(row.name)}</option>)}</select></td>
           <td className="p-2"><button type="button" disabled={form.lines.length === 1} onClick={() => setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) })} className="text-rose-600 disabled:opacity-30"><X className="size-4" /></button></td>
         </tr>)}</tbody></table><button type="button" onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })} className="m-3 flex items-center gap-1 text-xs font-semibold text-primary"><Plus className="size-3" /> Add line</button></div>}
         <div className="mt-4 grid items-stretch gap-4 lg:min-h-[170px] lg:grid-cols-[minmax(0,1fr)_260px]">{isRefund ? <details className="h-fit rounded-xl border p-4"><summary className="cursor-pointer text-xs font-semibold">More Options</summary><label className="mt-3 flex flex-col text-xs font-semibold">Notes<textarea value={moreNotes} onChange={(event) => setMoreNotes(event.target.value)} className="mt-1 min-h-[100px] w-full resize-none rounded-lg border p-2 text-sm" placeholder="Optional internal notes..." /></label></details> : <label className="flex h-full flex-col text-xs font-semibold">Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 min-h-[140px] w-full flex-1 resize-none rounded-lg border p-2 text-sm" placeholder="Add any notes for this bill..." /></label>}<aside className="h-full rounded-xl border bg-muted/20 p-4 text-sm"><p className="mb-3 font-semibold">Invoice summary</p><Total label="Subtotal" value={totals.subtotal} /><Total label="Tax" value={totals.tax} /><div className="my-2 border-t" /><Total label="Grand total" value={totals.total} strong /></aside></div>

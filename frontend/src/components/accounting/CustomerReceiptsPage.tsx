@@ -26,6 +26,18 @@ const dateValue = (value: unknown) => value ? new Date(String(value)).toISOStrin
 const money = (value: unknown, code = '') => `${code ? `${code} ` : ''}${Number(value || 0).toFixed(2)}`;
 const message = (error: unknown) => axios.isAxiosError(error) ? error.response?.data?.message || error.message : error instanceof Error ? error.message : 'Something went wrong';
 
+function allocateOldestInvoices(invoices: CustomerInvoice[], receiptAmount: number): Allocation[] {
+  let remaining = Math.max(0, receiptAmount);
+  return [...invoices]
+    .sort((a, b) => dateValue(a.invoice_date).localeCompare(dateValue(b.invoice_date)) || a.id - b.id)
+    .flatMap((invoice) => {
+      if (remaining <= 0) return [];
+      const applied = Math.min(remaining, Number(invoice.amount_due || 0));
+      remaining = Math.round((remaining - applied) * 100) / 100;
+      return applied > 0 ? [{ invoice_id: invoice.id, allocated_amount: Math.round(applied * 100) / 100 }] : [];
+    });
+}
+
 export default function CustomerReceiptsPage() {
   const { showToast } = useToast();
   const [receipts, setReceipts] = useState<CustomerReceipt[]>([]);
@@ -115,54 +127,22 @@ export default function CustomerReceiptsPage() {
     setInvoices([]);
     setForm((current) => ({ ...current, customer_id: value, journal_id: '', cash_bank_account_id: '', payment_method_id: '', currency_id: '', exchange_rate: '1', allocations: [] }));
     if (!value) return;
-    try { setInvoices(await customerReceiptApi.outstandingInvoices(Number(value))); }
+    try {
+      const rows = await customerReceiptApi.outstandingInvoices(Number(value));
+      setInvoices(rows);
+      setForm((current) => ({ ...current, allocations: allocateOldestInvoices(rows, Number(current.amount || 0)) }));
+    }
     catch (error) { showToast(message(error), 'error'); }
   }
   function selectPaymentMethod(value: string) {
     setForm((current) => ({ ...current, payment_method_id: value, journal_id: '', cash_bank_account_id: '' }));
   }
-  function toggleInvoice(invoice: CustomerInvoice) {
-    const exists = form.allocations.some((row) => row.invoice_id === invoice.id);
-    setForm((current) => ({ ...current, allocations: exists
-      ? current.allocations.filter((row) => row.invoice_id !== invoice.id)
-      : [...current.allocations, { invoice_id: invoice.id, allocated_amount: Math.min(Number(invoice.amount_due), Math.max(0, Number(current.amount) - current.allocations.reduce((sum, row) => sum + Number(row.allocated_amount), 0))) }],
-    }));
-  }
-  function updateAllocation(invoiceId: number, value: string) {
-    setForm((current) => {
-      const invoice = invoices.find((row) => row.id === invoiceId);
-      const allocatedToOthers = current.allocations.reduce((sum, row) => row.invoice_id === invoiceId ? sum : sum + Number(row.allocated_amount || 0), 0);
-      const availableReceipt = Math.max(0, Number(current.amount || 0) - allocatedToOthers);
-      const amount = Math.min(Math.max(0, Number(value) || 0), Number(invoice?.amount_due || 0), availableReceipt);
-      return { ...current, allocations: current.allocations.map((row) => row.invoice_id === invoiceId ? { ...row, allocated_amount: Math.round(amount * 100) / 100 } : row) };
-    });
-  }
   function changeReceiptAmount(value: string) {
     const amount = Math.max(0, Number(value) || 0);
-    setForm((current) => {
-      let remaining = amount;
-      const selectedIds = new Set(current.allocations.map((row) => row.invoice_id));
-      const allocations = invoices
-        .filter((invoice) => selectedIds.has(invoice.id))
-        .sort((a, b) => dateValue(a.invoice_date).localeCompare(dateValue(b.invoice_date)))
-        .flatMap((invoice) => {
-          const applied = Math.min(remaining, Number(invoice.amount_due));
-          remaining = Math.round((remaining - applied) * 100) / 100;
-          return applied > 0 ? [{ invoice_id: invoice.id, allocated_amount: Math.round(applied * 100) / 100 }] : [];
-        });
-      return { ...current, amount: value, allocations };
-    });
+    setForm((current) => ({ ...current, amount: value, allocations: allocateOldestInvoices(openInvoices, amount) }));
   }
   function autoAllocate() {
-    let remaining = Number(form.amount || 0);
-    const allocations: Allocation[] = [];
-    [...openInvoices].sort((a, b) => dateValue(a.invoice_date).localeCompare(dateValue(b.invoice_date))).forEach((invoice) => {
-      if (remaining <= 0) return;
-      const amount = Math.min(remaining, Number(invoice.amount_due));
-      if (amount > 0) allocations.push({ invoice_id: invoice.id, allocated_amount: Math.round(amount * 100) / 100 });
-      remaining = Math.round((remaining - amount) * 100) / 100;
-    });
-    setForm((current) => ({ ...current, allocations }));
+    setForm((current) => ({ ...current, allocations: allocateOldestInvoices(openInvoices, Number(current.amount || 0)) }));
   }
   async function save(event?: FormEvent, postAfterSave = false) {
     event?.preventDefault();
@@ -224,8 +204,8 @@ export default function CustomerReceiptsPage() {
             <label className="text-sm font-medium">Reference<input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label>
             <label className="text-sm font-medium md:col-span-3">Notes<textarea value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} className="mt-1 min-h-24 w-full rounded-xl border bg-background p-3" /></label>
           </fieldset>
-          <div className="rounded-2xl border"><div className="flex items-center justify-between gap-4 border-b p-4"><div><h3 className="font-semibold">Outstanding Invoices</h3><p className="text-xs text-muted-foreground">Select the invoices covered by this receipt.</p></div>{openInvoices.length > 0 && <button disabled={viewOnly || !form.amount} type="button" onClick={autoAllocate} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50">Auto Allocate</button>}</div>
-            <div className="max-h-64 overflow-auto">{!form.customer_id ? <p className="p-6 text-center text-sm text-muted-foreground">Select a customer first.</p> : openInvoices.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No outstanding posted invoices found for this customer.</p> : <><div className="grid min-w-[850px] grid-cols-[auto_1.3fr_repeat(5,auto)] items-center gap-4 bg-muted/40 px-3 py-2 text-xs font-semibold"><span /><span>Invoice</span><span className="text-right">Total</span><span className="text-right">Already Paid</span><span className="text-right">Balance Due</span><span>Status</span><span className="w-32 text-right">Allocated</span></div>{openInvoices.map((invoice) => { const allocation = form.allocations.find((row) => row.invoice_id === invoice.id); const transactionOutstanding = Number(invoice.amount_due) + (viewOnly && selected?.state === 'posted' && allocation ? Number(allocation.allocated_amount) : 0); const otherAllocated = form.allocations.reduce((sum, row) => row.invoice_id === invoice.id ? sum : sum + Number(row.allocated_amount || 0), 0); const maxAllocation = Math.max(0, Math.min(Number(invoice.amount_due), Number(form.amount || 0) - otherAllocated)); return <div key={invoice.id} className="grid min-w-[850px] grid-cols-[auto_1.3fr_repeat(5,auto)] items-center gap-4 border-t p-3 text-sm"><input disabled={viewOnly} type="checkbox" checked={Boolean(allocation)} onChange={() => toggleInvoice(invoice)} /><div><b>{invoice.invoice_number}</b><p className="text-xs text-muted-foreground">Invoice {dateValue(invoice.invoice_date)} · Due {dateValue(invoice.due_date)}</p></div><div className="text-right"><b>{money(invoice.amount_total, invoice.currencies?.code)}</b></div><div className="text-right"><b>{money(Number(invoice.amount_total) - transactionOutstanding)}</b></div><div className="text-right"><b>{money(transactionOutstanding)}</b></div><span className="capitalize">{invoice.payment_state === 'partial' ? 'Partially Paid' : invoice.payment_state === 'paid' ? 'Paid' : 'Posted'}</span><input aria-label={`Allocated amount for ${invoice.invoice_number}`} disabled={!allocation || viewOnly} type="number" min="0" max={maxAllocation} step="0.01" value={allocation?.allocated_amount ?? ''} onChange={(e) => updateAllocation(invoice.id, e.target.value)} className="h-10 w-32 rounded-lg border px-3 text-right" /></div>; })}</>}</div>
+          <div className="rounded-2xl border"><div className="flex items-center justify-between gap-4 border-b p-4"><div><h3 className="font-semibold">Outstanding Invoices</h3><p className="text-xs text-muted-foreground">The receipt amount is allocated automatically to the oldest balances first.</p></div>{openInvoices.length > 0 && <button disabled={viewOnly || !form.amount} type="button" onClick={autoAllocate} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50">Recalculate</button>}</div>
+            <div className="max-h-64 overflow-auto">{!form.customer_id ? <p className="p-6 text-center text-sm text-muted-foreground">Select a customer first.</p> : openInvoices.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No outstanding posted invoices found for this customer.</p> : <><div className="grid min-w-[760px] grid-cols-[1.4fr_repeat(5,auto)] items-center gap-4 bg-muted/40 px-3 py-2 text-xs font-semibold"><span>Invoice</span><span className="text-right">Total</span><span className="text-right">Already Paid</span><span className="text-right">Balance</span><span>Status</span><span className="w-32 text-right">Amount to Receive</span></div>{openInvoices.map((invoice) => { const allocation = form.allocations.find((row) => row.invoice_id === invoice.id); const transactionOutstanding = Number(invoice.amount_due) + (viewOnly && selected?.state === 'posted' && allocation ? Number(allocation.allocated_amount) : 0); return <div key={invoice.id} className="grid min-w-[760px] grid-cols-[1.4fr_repeat(5,auto)] items-center gap-4 border-t p-3 text-sm"><div><b>{invoice.invoice_number}</b><p className="text-xs text-muted-foreground">Invoice {dateValue(invoice.invoice_date)} · Due {dateValue(invoice.due_date)}</p></div><div className="text-right"><b>{money(invoice.amount_total, invoice.currencies?.code)}</b></div><div className="text-right"><b>{money(Number(invoice.amount_total) - transactionOutstanding)}</b></div><div className="text-right"><b>{money(transactionOutstanding)}</b></div><span className="capitalize">{invoice.payment_state === 'partial' ? 'Partially Paid' : invoice.payment_state === 'paid' ? 'Paid' : 'Posted'}</span><div className="w-32 rounded-lg bg-muted px-3 py-2 text-right font-semibold">{money(allocation?.allocated_amount || 0)}</div></div>; })}</>}</div>
           </div>
           {allocationInvalid && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">The allocated amount cannot exceed the invoice outstanding balance or the receipt amount.</div>}
           <div className="ml-auto w-full rounded-2xl border p-4 sm:max-w-sm"><h3 className="mb-3 font-semibold">Summary</h3><div className="space-y-2 text-sm"><div className="flex justify-between"><span>Receipt Amount</span><b>{money(form.amount)}</b></div><div className="flex justify-between"><span>Outstanding Before</span><b>{money(selectedOutstandingBefore)}</b></div><div className="flex justify-between"><span>Allocated</span><b>{money(allocated)}</b></div><div className={`flex justify-between ${unallocated < -0.005 ? 'text-rose-600' : ''}`}><span>Remaining</span><b>{money(unallocated)}</b></div><div className="flex justify-between border-t pt-2"><span>Outstanding After Payment</span><b>{money(outstandingAfterPayment)}</b></div></div></div>

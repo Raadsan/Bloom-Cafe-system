@@ -17,12 +17,17 @@ const fail = (res, error, fallback) => {
   console.error(fallback, error)
   return res.status(error.status || (error.code === 'P2025' ? 404 : 500)).json({ success: false, message: error.message || fallback })
 }
-async function ensureVendorAdvanceAccount(db, companyId) {
-  const existing = await db.chart_of_accounts.findFirst({ where: { company_id: companyId, is_active: true, OR: [{ code: '1400' }, { code: 'VA1400' }, { name: 'Vendor Advances' }] } })
-  if (existing) return existing
-  const assetType = await db.account_types.findFirst({ where: { internal_group: 'asset' }, orderBy: { sequence: 'asc' } })
-  if (!assetType) throw inputError('An asset account type is required to configure Vendor Advances')
-  return db.chart_of_accounts.create({ data: { company_id: companyId, code: '1400', name: 'Vendor Advances', account_type_id: assetType.id, is_reconcilable: true, allow_manual_entry: false, is_active: true } })
+function paymentChannel(method, account) {
+  const code = String(account.code || '')
+  const identity = `${method.code || ''} ${method.name || ''} ${account.name || ''}`.toLowerCase()
+  if (code === '1001' || /\bcash\b/.test(identity)) return { journalCode: 'CASH', journalName: 'Cash', journalType: 'cash', label: 'Cash Payment' }
+  if (code === '1002' || /\bbank\b|transfer/.test(identity)) return { journalCode: 'BANK', journalName: 'Bank', journalType: 'bank', label: 'Bank Payment' }
+  const label = /edahab/.test(identity) ? 'eDahab Payment'
+    : /merchant/.test(identity) ? 'Merchant Payment'
+      : /\bibs\b/.test(identity) ? 'IBS Payment'
+        : /evc/.test(identity) ? 'EVC Payment'
+          : `${method.name || 'Mobile Wallet'} Payment`
+  return { journalCode: 'WALLET', journalName: 'Mobile Wallet', journalType: 'bank', label }
 }
 async function resolvePaymentAccount({ vendor, method, bankAccountId, currencyId }) {
   let bank = null
@@ -48,21 +53,23 @@ async function resolvePaymentAccount({ vendor, method, bankAccountId, currencyId
     },
   })
   if (!account) throw inputError('The selected payment method GL account is inactive, a parent, or incompatible')
-  const journal = bank?.journal_id
-    ? await prisma.journals.findUnique({ where: { id: bank.journal_id } })
-    : await prisma.journals.findFirst({
-      where: {
-        company_id: vendor.company_id, is_active: true, journal_type: 'bank',
-        OR: [{ default_debit_account_id: account.id }, { default_credit_account_id: account.id }, { default_debit_account_id: null }],
-      },
-      orderBy: [{ default_debit_account_id: 'desc' }, { code: 'asc' }, { id: 'asc' }],
-    }) || await prisma.journals.findFirst({
-      where: { company_id: vendor.company_id, is_active: true, journal_type: 'bank' },
-      orderBy: [{ code: 'asc' }, { id: 'asc' }],
-    })
+  const channel = paymentChannel(method, account)
+  let journal = bank?.journal_id ? await prisma.journals.findUnique({ where: { id: bank.journal_id } }) : null
+  if (journal) journal = await prisma.journals.update({ where: { id: journal.id }, data: { name: channel.journalName, journal_type: channel.journalType, default_credit_account_id: account.id, is_active: true } })
+  if (!journal) journal = await prisma.journals.upsert({
+    where: { company_id_code: { company_id: vendor.company_id, code: channel.journalCode } },
+    update: { name: channel.journalName, journal_type: channel.journalType, default_credit_account_id: account.id, is_active: true },
+    create: {
+      company_id: vendor.company_id, code: channel.journalCode, name: channel.journalName,
+      journal_type: channel.journalType, default_credit_account_id: account.id,
+      currency_id: currencyId, sequence_prefix: channel.journalCode, is_active: true,
+    },
+  })
   if (!journal?.is_active || journal.company_id !== vendor.company_id) throw inputError('Configure an active payment journal for this company')
   if (bank && journal.id !== bank.journal_id) throw inputError('The selected bank account journal is inactive or invalid')
-  return { bank, journal, account }
+  if (channel.journalCode === 'CASH' && journal.journal_type !== 'cash') throw inputError('The Cash journal is not configured as a cash journal')
+  if (channel.journalCode !== 'CASH' && journal.journal_type !== 'bank') throw inputError(`The ${channel.journalName} journal is not configured as a bank-type journal`)
+  return { bank, journal, account, channel }
 }
 async function prepare(input) {
   const vendorId = id(input.vendor_id)
@@ -82,7 +89,7 @@ async function prepare(input) {
   const fiscalPeriod = await prisma.fiscal_periods.findFirst({ where: { state: 'open', fiscal_years: { company_id: vendor.company_id, state: 'open' }, start_date: { lte: paymentDate }, end_date: { gte: paymentDate } } })
   if (!fiscalPeriod) throw inputError('No open fiscal period covers the payment date')
   const currencyId = id(input.currency_id) || vendor.currency_id || vendor.companies.currency_id
-  const { bank, journal, account } = await resolvePaymentAccount({ vendor, method, bankAccountId, currencyId })
+  const { bank, journal, account, channel } = await resolvePaymentAccount({ vendor, method, bankAccountId, currencyId })
   if (bank && currencyId !== bank.currency_id) throw inputError('Payment currency must match the selected bank account')
   const exchangeRate = Number(input.exchange_rate || 1)
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw inputError('A positive exchange rate is required')
@@ -95,47 +102,59 @@ async function prepare(input) {
     if (!bill || bill.vendor_id !== vendorId || bill.document_type !== 'bill' || bill.state !== 'posted' || bill.currency_id !== currencyId) throw inputError('Allocation contains an invalid vendor bill')
     if (allocation.allocated_amount > Number(bill.amount_due) + 0.005) throw inputError(`Allocation exceeds the balance of ${bill.bill_number}`)
   }
-  const allocated = allocations.reduce((sum, row) => sum + row.allocated_amount, 0)
-  if (allocated > amount + 0.005) throw inputError('Allocated amount cannot exceed payment amount')
-  const payableAccount = await prisma.chart_of_accounts.findFirst({ where: { company_id: vendor.company_id, code: '2000', is_active: true } })
+  const allocated = Math.round(allocations.reduce((sum, row) => sum + row.allocated_amount, 0) * 100) / 100
+  if (!allocations.length) throw inputError('Allocate the payment to at least one outstanding bill')
+  if (Math.abs(allocated - amount) > 0.005) throw inputError('Payment amount must be fully allocated to outstanding bills')
+  const payableAccount = await prisma.chart_of_accounts.findFirst({ where: {
+    company_id: vendor.company_id, code: '2000', is_active: true, allow_manual_entry: true,
+    account_types: { internal_group: 'liability' }, other_chart_of_accounts: { none: {} },
+  } })
   if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
-  const advanceAccount = amount - allocated > 0.005 ? await ensureVendorAdvanceAccount(prisma, vendor.company_id) : null
   return {
-    header: { company_id: vendor.company_id, vendor_id: vendorId, journal_id: journal.id, payment_method_id: paymentMethodId, bank_account_id: bank?.id || null, fiscal_period_id: fiscalPeriod.id, payment_date: paymentDate, currency_id: currencyId, exchange_rate: exchangeRate, amount, unallocated_amount: Math.round((amount - allocated) * 100) / 100, reference: String(input.reference || '').trim() || null, memo: String(input.memo || '').trim() || null, state: 'draft' },
+    header: { company_id: vendor.company_id, vendor_id: vendorId, journal_id: journal.id, payment_method_id: paymentMethodId, bank_account_id: bank?.id || null, fiscal_period_id: fiscalPeriod.id, payment_date: paymentDate, currency_id: currencyId, exchange_rate: exchangeRate, amount, unallocated_amount: 0, reference: String(input.reference || '').trim() || null, memo: String(input.memo || '').trim() || null, state: 'draft' },
     allocations,
     payableAccountId: payableAccount.id,
-    advanceAccountId: advanceAccount?.id || null,
     allocatedAmount: allocated,
     paymentAccountId: account.id,
+    paymentLabel: channel.label,
+    vendorName: vendor.name,
   }
 }
 
 function paymentEntryData(prepared, paymentNumber, paymentId, state = 'draft', postedAt = null) {
   const baseAmount = Math.round(Number(prepared.header.amount) * Number(prepared.header.exchange_rate) * 100) / 100
   const allocatedBase = Math.round(Number(prepared.allocatedAmount) * Number(prepared.header.exchange_rate) * 100) / 100
-  const advanceBase = Math.round((baseAmount - allocatedBase) * 100) / 100
-  const debitLines = [
-    ...(allocatedBase > 0 ? [{ sequence: 10, account_id: prepared.payableAccountId, label: 'Accounts Payable', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: allocatedBase, credit: 0, currency_id: prepared.header.currency_id, amount_currency: Number(prepared.allocatedAmount) }] : []),
-    ...(advanceBase > 0 ? [{ sequence: 20, account_id: prepared.advanceAccountId, label: 'Vendor Advance', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: advanceBase, credit: 0, currency_id: prepared.header.currency_id, amount_currency: Number(prepared.header.amount) - Number(prepared.allocatedAmount) }] : []),
-  ]
+  const debitLines = [{ sequence: 10, account_id: prepared.payableAccountId, label: 'Accounts Payable', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: allocatedBase, credit: 0, currency_id: prepared.header.currency_id, amount_currency: Number(prepared.allocatedAmount) }]
   return {
     company_id: prepared.header.company_id,
     journal_id: prepared.header.journal_id,
     entry_number: paymentNumber,
     entry_date: prepared.header.payment_date,
     fiscal_period_id: prepared.header.fiscal_period_id,
-    reference: prepared.header.reference || paymentNumber,
-    narration: prepared.header.memo || `${state === 'posted' ? 'Posted' : 'Draft'} vendor payment ${paymentNumber}`,
+    reference: paymentNumber,
+    narration: `Vendor payment ${paymentNumber} to ${prepared.vendorName}`,
     state,
     source_type: 'vendor_payment',
     source_id: paymentId,
     posted_at: postedAt,
-    journal_items: { create: [...debitLines, { sequence: 30, account_id: prepared.paymentAccountId, label: 'Payment method clearing', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -Number(prepared.header.amount) }] },
+    journal_items: { create: [...debitLines, { sequence: 20, account_id: prepared.paymentAccountId, label: prepared.paymentLabel, partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -Number(prepared.header.amount) }] },
   }
 }
-async function number(tx, journalId) {
-  const journal = await tx.journals.update({ where: { id: journalId }, data: { next_sequence: { increment: 1 } }, select: { next_sequence: true } })
-  return `PAY${String(journal.next_sequence - 1).padStart(4, '0')}`
+async function number(tx, journalId, companyId) {
+  const [journal, existing] = await Promise.all([
+    tx.journals.findUnique({ where: { id: journalId }, select: { next_sequence: true } }),
+    tx.vendor_payments.findMany({ where: { company_id: companyId, payment_number: { startsWith: 'PAY' } }, select: { payment_number: true } }),
+  ])
+  let sequence = Math.max(Number(journal.next_sequence), ...existing.map((row) => Number(String(row.payment_number).slice(3)) + 1).filter(Number.isFinite))
+  for (;;) {
+    const paymentNumber = `PAY${String(sequence).padStart(4, '0')}`
+    const duplicate = await tx.vendor_payments.findFirst({ where: { company_id: companyId, payment_number: paymentNumber }, select: { id: true } })
+    if (!duplicate) {
+      await tx.journals.update({ where: { id: journalId }, data: { next_sequence: sequence + 1 } })
+      return paymentNumber
+    }
+    sequence += 1
+  }
 }
 export const getAll = async (_req, res) => {
   try { res.json({ success: true, data: await prisma.vendor_payments.findMany({ include, orderBy: { created_at: 'desc' } }) }) }
@@ -168,7 +187,7 @@ export const create = async (req, res) => {
   try {
     const prepared = await prepare(req.body)
     const data = await prisma.$transaction(async (tx) => {
-      const paymentNumber = await number(tx, prepared.header.journal_id)
+      const paymentNumber = await number(tx, prepared.header.journal_id, prepared.header.company_id)
       const payment = await tx.vendor_payments.create({ data: { ...prepared.header, payment_number: paymentNumber, payment_allocations: { create: prepared.allocations } } })
       const entry = await tx.journal_entries.create({ data: paymentEntryData(prepared, paymentNumber, payment.id) })
       return tx.vendor_payments.update({ where: { id: payment.id }, data: { journal_entry_id: entry.id }, include })
@@ -221,8 +240,7 @@ export const post = async (req, res) => {
       if (!payment || payment.state !== 'draft') throw inputError('Draft vendor payment not found')
       if (!payment.fiscal_period_id) throw inputError('Vendor payment is missing its fiscal period')
       const allocated = payment.payment_allocations.reduce((sum, allocation) => sum + Number(allocation.allocated_amount), 0)
-      if (allocated > Number(payment.amount) + 0.005) throw inputError('Allocated amount cannot exceed payment amount')
-      const advanceAmount = Math.max(0, Math.round((Number(payment.amount) - allocated) * 100) / 100)
+      if (!payment.payment_allocations.length || Math.abs(allocated - Number(payment.amount)) > 0.005) throw inputError('Payment amount must be fully allocated to outstanding bills')
       const [vendor, bank, journal, payableAccount] = await Promise.all([
         tx.vendors.findUnique({ where: { id: payment.vendor_id }, include: { companies: true } }),
         payment.bank_account_id ? tx.bank_accounts.findUnique({ where: { id: payment.bank_account_id } }) : Promise.resolve(null),
@@ -249,10 +267,10 @@ export const post = async (req, res) => {
         include: { account_types: true, other_chart_of_accounts: { select: { id: true } } },
       })
       if (!paymentAccount) throw inputError('The selected payment method GL account is inactive, a parent, or incompatible')
+      const channel = paymentChannel(payment.payment_methods, paymentAccount)
       if (bank && (!bank.is_active || bank.company_id !== payment.company_id || bank.gl_account_id !== paymentAccountId)) throw inputError('The selected bank account is inactive or inconsistent with the payment method')
       if (!journal?.is_active || journal.company_id !== payment.company_id || (bank && journal.id !== bank.journal_id)) throw inputError('The selected payment journal is inactive or invalid')
       if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
-      const advanceAccount = advanceAmount > 0 ? await ensureVendorAdvanceAccount(tx, payment.company_id) : null
       const fiscalPeriod = await tx.fiscal_periods.findUnique({ where: { id: payment.fiscal_period_id } })
       if (!fiscalPeriod || fiscalPeriod.state !== 'open') throw inputError('Payment fiscal period is closed or invalid')
       const existingEntry = await tx.journal_entries.findFirst({ where: { source_type: 'vendor_payment', source_id: paymentId }, select: { id: true, state: true } })
@@ -262,24 +280,33 @@ export const post = async (req, res) => {
         if (!bill || bill.state !== 'posted' || bill.vendor_id !== payment.vendor_id) throw inputError('An allocated bill is no longer available')
         if (bill.currency_id !== payment.currency_id) throw inputError('An allocated bill has a different currency')
         if (Number(allocation.allocated_amount) > Number(bill.amount_due) + 0.005) throw inputError(`Allocation exceeds the balance of ${bill.bill_number}`)
-        const due = Math.max(0, Number(bill.amount_due) - Number(allocation.allocated_amount))
-        await tx.vendor_bills.update({ where: { id: bill.id }, data: { amount_due: due, payment_state: due <= 0.005 ? 'paid' : 'partial', updated_at: new Date() } })
+        const applied = Number(allocation.allocated_amount)
+        const changed = await tx.vendor_bills.updateMany({
+          where: { id: bill.id, amount_due: { gte: applied } },
+          data: { amount_paid: { increment: applied }, amount_due: { decrement: applied }, updated_at: new Date() },
+        })
+        if (changed.count !== 1) throw inputError(`The balance of ${bill.bill_number} changed; reload the outstanding bills and try again`)
+        const updatedBill = await tx.vendor_bills.findUnique({ where: { id: bill.id }, select: { amount_total: true, amount_paid: true, amount_due: true } })
+        const paid = Math.min(Number(updatedBill.amount_total), Number(updatedBill.amount_paid))
+        const due = Math.max(0, Number(updatedBill.amount_due))
+        await tx.vendor_bills.update({ where: { id: bill.id }, data: { amount_paid: due <= 0.005 ? Number(updatedBill.amount_total) : paid, amount_due: due <= 0.005 ? 0 : due, payment_state: due <= 0.005 ? 'paid' : 'partial' } })
       }
       const postedAt = new Date()
+      const narration = `Vendor payment ${payment.payment_number} to ${vendor.name}`
+      const journalItems = [
+        { sequence: 10, account_id: payableAccount.id, label: 'Accounts Payable', partner_type: 'vendor', partner_id: payment.vendor_id, debit: Math.round(allocated * Number(payment.exchange_rate) * 100) / 100, credit: 0, currency_id: payment.currency_id, amount_currency: allocated },
+        { sequence: 20, account_id: paymentAccountId, label: channel.label, partner_type: 'vendor', partner_id: payment.vendor_id, debit: 0, credit: Math.round(Number(payment.amount) * Number(payment.exchange_rate) * 100) / 100, currency_id: payment.currency_id, amount_currency: -Number(payment.amount) },
+      ]
+      if (existingEntry) await tx.journal_items.deleteMany({ where: { entry_id: existingEntry.id } })
       const entry = existingEntry
-        ? await tx.journal_entries.update({ where: { id: existingEntry.id }, data: { state: 'posted', posted_at: postedAt, narration: payment.memo || `Vendor payment ${payment.payment_number}` } })
+        ? await tx.journal_entries.update({ where: { id: existingEntry.id }, data: { journal_id: journal.id, reference: payment.payment_number, narration, state: 'posted', posted_at: postedAt, journal_items: { create: journalItems } } })
         : await tx.journal_entries.create({ data: {
           company_id: payment.company_id, journal_id: payment.journal_id, entry_number: payment.payment_number,
           entry_date: payment.payment_date, fiscal_period_id: payment.fiscal_period_id,
-          reference: payment.reference || payment.payment_number, narration: payment.memo || `Vendor payment ${payment.payment_number}`,
+          reference: payment.payment_number, narration,
           state: 'posted', source_type: 'vendor_payment', source_id: payment.id, posted_at: postedAt,
-          journal_items: { create: [
-            ...(allocated > 0 ? [{ sequence: 10, account_id: payableAccount.id, label: 'Accounts Payable', partner_type: 'vendor', partner_id: payment.vendor_id, debit: Math.round(allocated * Number(payment.exchange_rate) * 100) / 100, credit: 0, currency_id: payment.currency_id, amount_currency: allocated }] : []),
-            ...(advanceAmount > 0 ? [{ sequence: 20, account_id: advanceAccount.id, label: 'Vendor Advance', partner_type: 'vendor', partner_id: payment.vendor_id, debit: Math.round(advanceAmount * Number(payment.exchange_rate) * 100) / 100, credit: 0, currency_id: payment.currency_id, amount_currency: advanceAmount }] : []),
-            { sequence: 30, account_id: paymentAccountId, label: 'Payment method clearing', partner_type: 'vendor', partner_id: payment.vendor_id, debit: 0, credit: Math.round(Number(payment.amount) * Number(payment.exchange_rate) * 100) / 100, currency_id: payment.currency_id, amount_currency: -Number(payment.amount) },
-          ] },
+          journal_items: { create: journalItems },
         } })
-      if (advanceAmount > 0) await tx.vendor_advances.create({ data: { company_id: payment.company_id, vendor_id: payment.vendor_id, currency_id: payment.currency_id, payment_id: payment.id, advance_account_id: advanceAccount.id, original_amount: advanceAmount, remaining_amount: advanceAmount, state: 'open' } })
       await tx.vendor_payments.update({ where: { id: paymentId }, data: { state: 'posted', journal_entry_id: entry.id, posted_at: postedAt, updated_at: postedAt } })
       return tx.vendor_payments.findUnique({ where: { id: paymentId }, include })
     }, { maxWait: 10000, timeout: 30000 })

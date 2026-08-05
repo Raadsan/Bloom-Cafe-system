@@ -7,7 +7,7 @@ export type VendorBillLine = {
   unit_price: number;
   discount_percent: number;
   tax_id?: number | null;
-  expense_account_id: number;
+  expense_account_id?: number;
   subtotal?: number;
 };
 export type VendorBill = AccountingRecord & {
@@ -24,6 +24,7 @@ export type VendorBill = AccountingRecord & {
   amount_untaxed: number;
   amount_tax: number;
   amount_total: number;
+  amount_paid?: number;
   amount_due: number;
   vendors?: { id: number; name: string; phone?: string; email?: string; vendor_code?: string };
   currencies?: { id: number; code: string; symbol?: string };

@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import prisma from '../../../../config/db.js'
 const include = { chart_of_accounts: { select: { id: true, code: true, name: true, company_id: true } } }
 const inputError = (message) => Object.assign(new Error(message), { status: 400 })
 const fail = (res, error) => res.status(error.status || (error.code === 'P2025' ? 404 : 500)).json({ success: false, message: error.message })

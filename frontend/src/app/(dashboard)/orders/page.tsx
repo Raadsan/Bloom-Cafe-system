@@ -347,7 +347,7 @@ export default function AllOrdersPage() {
   const fetchMenuItems = async () => {
     try {
       const data = await menuItemApi.getAllMenuItems();
-      setMenuItems((data || []).filter(item => item.isAvailable));
+      setMenuItems((data || []).filter(item => item.isAvailable && item.isSellable !== false));
     } catch (err) {
       console.error("Failed to fetch menu items", err);
     }

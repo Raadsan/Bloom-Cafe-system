@@ -86,6 +86,8 @@ export default function MenuPage() {
   const [formPrice, setFormPrice] = useState("");
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formIsAvailable, setFormIsAvailable] = useState(true);
+  const [formIsSellable, setFormIsSellable] = useState(true);
+  const [formIsPurchasable, setFormIsPurchasable] = useState(false);
   const [formIsRecommended, setFormIsRecommended] = useState(false);
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formTax, setFormTax] = useState("");
@@ -166,6 +168,8 @@ export default function MenuPage() {
     setFormPrice("");
     setFormCategoryId("");
     setFormIsAvailable(true);
+    setFormIsSellable(true);
+    setFormIsPurchasable(false);
     setFormIsRecommended(false);
     setFormImageUrl("");
     setFormTax("0");
@@ -183,6 +187,8 @@ export default function MenuPage() {
     setFormPrice(String(item.price));
     setFormCategoryId(String(item.categoryId));
     setFormIsAvailable(item.isAvailable);
+    setFormIsSellable(item.isSellable !== false);
+    setFormIsPurchasable(item.isPurchasable === true);
     setFormIsRecommended(item.isRecommended || false);
     setFormImageUrl(item.imageUrl || "");
     setFormTax(String(item.tax || 0));
@@ -243,6 +249,8 @@ export default function MenuPage() {
         tax: Number(formTax || 0),
         categoryId: Number(formCategoryId),
         isAvailable: formIsAvailable,
+        isSellable: formIsSellable,
+        isPurchasable: formIsPurchasable,
         isRecommended: formIsRecommended,
         imageUrl: formImageUrl.trim() || undefined,
         options: formOptions.trim()
@@ -613,6 +621,11 @@ export default function MenuPage() {
                     <ChevronDown className="size-4 absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                   </div>
                 </div>
+              </div>
+
+              <div className="flex flex-wrap gap-6 rounded-lg border border-zinc-200 p-3 dark:border-[#2a2a2a]">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" checked={formIsSellable} onChange={(e) => setFormIsSellable(e.target.checked)} className="size-4 accent-primary" /> Sellable</label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" checked={formIsPurchasable} onChange={(e) => setFormIsPurchasable(e.target.checked)} className="size-4 accent-primary" /> Purchasable</label>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

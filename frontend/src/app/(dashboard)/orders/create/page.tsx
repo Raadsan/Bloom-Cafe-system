@@ -192,7 +192,7 @@ export default function WaiterCreateOrderPage() {
           receiptSettingsApi.getSettings(),
           tableApi.getAllTables(),
         ]);
-        const available = (items || []).filter(i => i.isAvailable);
+        const available = (items || []).filter(i => i.isAvailable && i.isSellable !== false);
         setCategories(cats || []);
         setMenuItems(available);
         setReceiptSettings(settings);

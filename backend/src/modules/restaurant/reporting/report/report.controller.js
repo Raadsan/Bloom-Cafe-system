@@ -317,13 +317,10 @@ export const getTopSellingItems = async (req, res) => {
         quantity: true,
         unitPrice: true
       },
-      where: dateRange
-        ? {
-            order: {
-              createdAt: dateRange
-            }
-          }
-        : {},
+      where: {
+        menuitem: { isSellable: true },
+        ...(dateRange ? { order: { createdAt: dateRange } } : {}),
+      },
       orderBy: {
         _sum: {
           quantity: 'desc'
@@ -669,6 +666,7 @@ export const getFinanceReport = async (req, res) => {
         order: {
           include: {
             orderitem: {
+              where: { menuitem: { isSellable: true } },
               include: {
                 menuitem: {
                   select: {

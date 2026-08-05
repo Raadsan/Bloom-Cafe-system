@@ -125,6 +125,8 @@ model menuitem {
   discountValue                Float                          @default(0)
   imageUrl                     String?                        @db.LongText
   isAvailable                  Boolean                        @default(true)
+  isSellable                   Boolean                        @default(true)
+  isPurchasable                Boolean                        @default(false)
   isRecommended                Boolean                        @default(false)
   isComposite                  Boolean                        @default(false)
   compositePricing             String                         @default("fixed") // sum | fixed
@@ -139,6 +141,7 @@ model menuitem {
   compositeComponents          menuitemcomponent[]            @relation("CompositeParent")
   usedInComposites             menuitemcomponent[]            @relation("CompositeChild")
   cartitem                     cartitem[]
+  purchaseLines                purchaseline[]
 
   @@index([categoryId], map: "MenuItem_categoryId_fkey")
 }
@@ -381,6 +384,7 @@ model purchaseline {
   id           Int        @id @default(autoincrement())
   purchaseId   Int
   ingredientId Int?
+  menuItemId   Int?
   description  String     @db.VarChar(255)
   unit         String     @db.VarChar(32)
   quantity     Float
@@ -388,9 +392,11 @@ model purchaseline {
   lineTotal    Float
   purchase     purchase   @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
   ingredient   ingredient? @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
+  menuItem     menuitem?    @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
 
   @@index([purchaseId])
   @@index([ingredientId])
+  @@index([menuItemId])
 }
 
 model submenu {
@@ -995,7 +1001,7 @@ model products {
   category_id                                                      Int?                     @db.UnsignedInt
   uom                                                              String                   @default("unit") @db.VarChar(16)
   can_be_sold                                                      Boolean                  @default(true)
-  can_be_purchased                                                 Boolean                  @default(true)
+  can_be_purchased                                                 Boolean                  @default(false)
   list_price                                                       Decimal                  @default(0.00) @db.Decimal(15, 2)
   standard_cost                                                    Decimal                  @default(0.00) @db.Decimal(15, 2)
   income_account_id                                                Int?                     @db.UnsignedInt
@@ -1099,6 +1105,7 @@ model vendor_bills {
   amount_untaxed              Decimal                       @default(0.00) @db.Decimal(15, 2)
   amount_tax                  Decimal                       @default(0.00) @db.Decimal(15, 2)
   amount_total                Decimal                       @default(0.00) @db.Decimal(15, 2)
+  amount_paid                 Decimal                       @default(0.00) @db.Decimal(15, 2)
   amount_due                  Decimal                       @default(0.00) @db.Decimal(15, 2)
   journal_entry_id            Int?                          @db.UnsignedInt
   notes                       String?                       @db.Text

@@ -145,10 +145,21 @@ function normalizeOptionsInput(raw) {
   return null
 }
 
+async function syncAccountingProduct(item) {
+  const sku = `MENU-${item.id}`
+  const data = {
+    name: item.name, description: item.description, product_type: 'goods',
+    can_be_sold: item.isSellable, can_be_purchased: item.isPurchasable,
+    list_price: item.price, standard_cost: item.costPrice || 0,
+    is_active: item.isSellable || item.isPurchasable,
+  }
+  await prisma.products.upsert({ where: { sku }, update: data, create: { sku, ...data } })
+}
+
 // CREATE MENU ITEM
 export const createMenuItem = async (req, res) => {
   try {
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended, options, discountType, discountValue } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isSellable, isPurchasable, isRecommended, options, discountType, discountValue } = req.body
 
     if (!name || price === undefined || !categoryId) {
       return res.status(400).json({
@@ -183,6 +194,8 @@ export const createMenuItem = async (req, res) => {
         imageUrl: null,
         categoryId: Number(categoryId),
         isAvailable: typeof isAvailable === 'boolean' ? isAvailable : true,
+        isSellable: typeof isSellable === 'boolean' ? isSellable : true,
+        isPurchasable: typeof isPurchasable === 'boolean' ? isPurchasable : false,
         isRecommended: typeof isRecommended === 'boolean' ? isRecommended : false,
         options: normalizeOptionsInput(options),
       },
@@ -206,6 +219,7 @@ export const createMenuItem = async (req, res) => {
       }
     }
 
+    await syncAccountingProduct(savedItem)
     logAudit({ userId: req.user?.id, action: 'Created', entity: 'MenuItem', entityId: savedItem.id, description: `Created menu item "${savedItem.name}"` })
     invalidatePosMenuCatalogCache()
     emitMenuChanged({ action: 'create', id: savedItem.id })
@@ -249,6 +263,7 @@ export const getPosMenuCatalog = async (req, res) => {
     const origin = getApiPublicOrigin(req)
 
     const items = await prisma.menuitem.findMany({
+      where: { isAvailable: true, isSellable: true },
       select: {
         id: true,
         name: true,
@@ -257,6 +272,8 @@ export const getPosMenuCatalog = async (req, res) => {
         discountType: true,
         discountValue: true,
         isAvailable: true,
+        isSellable: true,
+        isPurchasable: true,
         isRecommended: true,
         categoryId: true,
         options: true,
@@ -390,7 +407,7 @@ export const getMenuItemsByCategory = async (req, res) => {
 export const updateMenuItem = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isRecommended, options, discountType, discountValue } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isSellable, isPurchasable, isRecommended, options, discountType, discountValue } = req.body
 
     const itemId = Number(id)
     if (isNaN(itemId)) {
@@ -465,6 +482,8 @@ export const updateMenuItem = async (req, res) => {
         imageUrl: nextImageUrl,
         categoryId: categoryId ? Number(categoryId) : existing.categoryId,
         isAvailable: typeof isAvailable === 'boolean' ? isAvailable : existing.isAvailable,
+        isSellable: typeof isSellable === 'boolean' ? isSellable : existing.isSellable,
+        isPurchasable: typeof isPurchasable === 'boolean' ? isPurchasable : existing.isPurchasable,
         isRecommended: typeof isRecommended === 'boolean' ? isRecommended : (existing.isRecommended ?? false),
         ...(options !== undefined ? { options: normalizeOptionsInput(options) } : {}),
       },
@@ -473,6 +492,7 @@ export const updateMenuItem = async (req, res) => {
       }
     })
 
+    await syncAccountingProduct(updated)
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'MenuItem', entityId: updated.id, description: `Updated menu item "${updated.name}"` })
     invalidatePosMenuCatalogCache()
     emitMenuChanged({ action: 'update', id: updated.id })
@@ -561,7 +581,7 @@ export const getPublicMenuByQrCode = async (req, res) => {
       where: { isActive: true },
       include: {
         menuitem: {
-          where: { isAvailable: true },
+          where: { isAvailable: true, isSellable: true },
           orderBy: { id: 'asc' },
         },
       },
