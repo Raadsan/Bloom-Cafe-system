@@ -25,6 +25,8 @@ import {
   Eye,
   Edit,
   Pencil,
+  Calendar,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -121,7 +123,33 @@ function getOrderLocationLabel(
 const LIVE_STATUSES = ["pending", "preparing", "ready"] as const;
 const HISTORY_STATUSES = ["paid", "served", "cancelled"] as const;
 type OrderViewTab = "pending" | "preparing" | "ready" | "history";
+type DatePreset = "today" | "yesterday" | "week" | "last-month" | "custom";
 const ORDER_VIEW_TABS: OrderViewTab[] = ["pending", "preparing", "ready", "history"];
+
+function formatDateInput(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().split("T")[0];
+}
+
+function getPresetRange(preset: Exclude<DatePreset, "custom">) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (preset === "today") return { startDate: formatDateInput(today), endDate: formatDateInput(today) };
+  if (preset === "yesterday") {
+    const date = new Date(today);
+    date.setDate(date.getDate() - 1);
+    return { startDate: formatDateInput(date), endDate: formatDateInput(date) };
+  }
+  if (preset === "week") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    return { startDate: formatDateInput(start), endDate: formatDateInput(today) };
+  }
+  return {
+    startDate: formatDateInput(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+    endDate: formatDateInput(new Date(today.getFullYear(), today.getMonth(), 0)),
+  };
+}
 
 function isLiveStatus(status: OrderStatus) {
   return (LIVE_STATUSES as readonly OrderStatus[]).includes(status);
@@ -252,6 +280,8 @@ export default function AllOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [viewTab, setViewTab] = useState<OrderViewTab>("pending");
+  const [datePreset, setDatePreset] = useState<DatePreset>("today");
+  const [dateRange, setDateRange] = useState(() => getPresetRange("today"));
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
@@ -308,10 +338,21 @@ export default function AllOrdersPage() {
     userRole === "waiter" ||
     checkDelete("/orders");
 
+  const orderRangeParams = useMemo(() => ({
+    startDate: new Date(`${dateRange.startDate}T00:00:00`).toISOString(),
+    endDate: new Date(`${dateRange.endDate}T23:59:59.999`).toISOString(),
+  }), [dateRange]);
+
+  const applyDatePreset = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset !== "custom") setDateRange(getPresetRange(preset));
+  };
+
   // fetch data
   const fetchOrders = useCallback(async (forceRefresh = false) => {
+    setLoading(true);
     try {
-      const data = await orderApi.getAllOrders({ limit: 100 }, forceRefresh);
+      const data = await orderApi.getAllOrders({ limit: 200, ...orderRangeParams }, forceRefresh);
       setOrders(data || []);
     } catch (err) {
       console.error("Failed to fetch orders", err);
@@ -319,13 +360,13 @@ export default function AllOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [orderRangeParams, showToast]);
 
   const fetchHistoryOrders = useCallback(async (force = false) => {
     if (userRole !== "waiter") return;
     setHistoryLoading(true);
     try {
-      const data = await orderApi.getAllOrders({ waiterHistory: true }, force);
+      const data = await orderApi.getAllOrders({ waiterHistory: true, limit: 200, ...orderRangeParams }, force);
       setHistoryOrders(data || []);
     } catch (err) {
       console.error("Failed to fetch pickup history", err);
@@ -333,7 +374,7 @@ export default function AllOrdersPage() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [showToast, userRole]);
+  }, [orderRangeParams, showToast, userRole]);
 
   const fetchTables = async () => {
     try {
@@ -771,7 +812,7 @@ export default function AllOrdersPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, viewTab]);
+  }, [search, viewTab, dateRange]);
 
   const openViewModal = (order: Order) => {
     setSelectedOrder(order);
@@ -992,8 +1033,8 @@ export default function AllOrdersPage() {
         </div>
       </div>
 
-      {/* Tab Switch + section header */}
-      <div className="px-4 mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Tabs and date filters */}
+      <div className="px-4 mb-2 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap gap-2">
           {ORDER_VIEW_TABS.map(tab => (
             <Button
@@ -1006,14 +1047,33 @@ export default function AllOrdersPage() {
             </Button>
           ))}
         </div>
-        {/* {stats.todayRevenue > 0 && viewTab === "live" && (
-          <p className="text-[12px] text-zinc-500 font-medium">
-            Today&apos;s revenue:{" "}
-            <span className="font-bold text-primary">
-              ${stats.todayRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </span>
-          </p>
-        )} */}
+
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-white p-2 shadow-sm xl:ml-auto">
+          <div className="flex items-center gap-1 rounded-lg bg-zinc-50 p-1 overflow-x-auto max-w-full">
+            {([['today', 'Today'], ['yesterday', 'Yesterday'], ['week', '1 Week'], ['last-month', 'Last Month'], ['custom', 'Custom']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => applyDatePreset(value)}
+                className={cn("h-8 px-3 rounded-md text-[11px] font-bold whitespace-nowrap transition-colors", datePreset === value ? "bg-primary text-white shadow-sm" : "text-zinc-500 hover:bg-white hover:text-primary")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {datePreset === "custom" && (
+            <div className="flex flex-wrap items-center gap-2 px-2">
+              <Calendar className="size-3.5 text-zinc-400" />
+              <input aria-label="Start date" type="date" value={dateRange.startDate} max={dateRange.endDate} onChange={event => setDateRange(previous => ({ ...previous, startDate: event.target.value }))} className="bg-transparent text-xs font-semibold text-zinc-700 outline-none" />
+              <span className="text-xs text-zinc-400">to</span>
+              <input aria-label="End date" type="date" value={dateRange.endDate} min={dateRange.startDate} onChange={event => setDateRange(previous => ({ ...previous, endDate: event.target.value }))} className="bg-transparent text-xs font-semibold text-zinc-700 outline-none" />
+            </div>
+          )}
+          <Button type="button" onClick={() => { fetchOrders(true); if (viewTab === "history" && isWaiter) fetchHistoryOrders(true); }} disabled={loading || historyLoading} className="h-9 gap-1.5 rounded-lg bg-primary px-4 text-xs font-bold !text-white hover:bg-primary/90">
+            <RefreshCw className={cn("size-3.5", (loading || historyLoading) && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Live cards or History table */}
@@ -1027,8 +1087,8 @@ export default function AllOrdersPage() {
           title={isWaiter ? "Pickup History" : "Past Orders"}
         />
       ) : (
-      <div className="px-4 py-2">
-        <div className="flex items-center justify-between mb-4">
+      <div className="px-4 pt-0 pb-2">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
             <h2 className="text-lg font-bold text-[#1e293b]">{VIEW_TAB_CONFIG[viewTab].sectionTitle}</h2>
             <span className="px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 text-xs font-semibold">
