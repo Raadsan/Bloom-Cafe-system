@@ -9,6 +9,7 @@ import restaurantRoutes from './modules/restaurant/restaurant.routes.js';
 import accountingRoutes from './modules/accounting/accounting.routes.js';
 import customerRoutes from './modules/shared/customers/customer.routes.js';
 import vendorRoutes from './modules/shared/vendors/vendor.routes.js';
+import { serveMenuImage } from './utils/menuImageStorage.js';
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,7 +29,8 @@ app.use(cors({
   credentials: true
 }));
 
-
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { fallthrough: true, maxAge: '1d' }));
+app.get('/uploads/menu/:filename', serveMenuImage);
 
 app.use('/api', authRoutes)
 app.use('/api/customers', customerRoutes)

@@ -34,7 +34,7 @@ async function seedAccess() {
   const roles = {}
   for (const row of [
     ['admin', 'System Administrator'], ['manager', 'Restaurant Manager'], ['kitchen', 'Kitchen Staff'],
-    ['waiter', 'Wait Staff'], ['accountant', 'Accounting Staff'],
+    ['waiter', 'Wait Staff'], ['accountant', 'Accounting Staff'], ['pos', 'Point of Sale Staff'],
   ]) roles[row[0]] = await prisma.role.upsert({ where: { name: row[0] }, update: { description: row[1] }, create: { name: row[0], description: row[1] } })
 
   const password = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD || 'password123', 10)

@@ -3,9 +3,12 @@ import { logAudit } from '../../../utils/auditHelper.js'
 
 // Backend in-memory cache to completely bypass remote DB latency for fetching the roles list
 let cachedRolesList = null;
+let cachedRolesAt = 0;
+const ROLES_LIST_TTL = 60 * 1000;
 
 export const clearRolesCache = () => {
   cachedRolesList = null;
+  cachedRolesAt = 0;
 };
 
 // CREATE ROLE
@@ -62,7 +65,7 @@ export const createRole = async (req, res) => {
 // GET ALL ROLES
 export const getAllRoles = async (req, res) => {
   try {
-    if (cachedRolesList) {
+    if (cachedRolesList && Date.now() - cachedRolesAt < ROLES_LIST_TTL) {
       return res.status(200).json({
         success: true,
         count: cachedRolesList.length,
@@ -77,6 +80,7 @@ export const getAllRoles = async (req, res) => {
     })
 
     cachedRolesList = roles // populate cache
+    cachedRolesAt = Date.now()
 
     res.status(200).json({
       success: true,

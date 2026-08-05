@@ -20,12 +20,12 @@
     "db:test": "node prisma/test-db.mjs",
     "create-admin": "node prisma/create-admin.js"
   },
-  
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1103.0",
     "bcryptjs": "^3.0.3",
     "concurrently": "^10.0.3",
     "cors": "^2.8.6",

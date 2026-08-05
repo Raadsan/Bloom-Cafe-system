@@ -213,7 +213,7 @@ export const createMenuItem = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: 'Menu item created successfully',
-      data: savedItem
+      data: mapMenuItemsForApi([savedItem], getApiPublicOrigin(req))[0]
     })
   } catch (error) {
     console.error('Create MenuItem Error:', error)
@@ -429,7 +429,7 @@ export const updateMenuItem = async (req, res) => {
         const persisted = await persistMenuImageUrl(imageUrl, itemId)
         if (persisted) {
           if (
-            existing.imageUrl?.startsWith('/uploads/menu/') &&
+            existing.imageUrl &&
             existing.imageUrl !== persisted
           ) {
             await deleteMenuImageFile(existing.imageUrl)
@@ -438,7 +438,7 @@ export const updateMenuItem = async (req, res) => {
         }
       } else {
         if (
-          existing.imageUrl?.startsWith('/uploads/menu/') &&
+          existing.imageUrl &&
           existing.imageUrl !== imageUrl
         ) {
           await deleteMenuImageFile(existing.imageUrl)
@@ -483,7 +483,7 @@ export const updateMenuItem = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Menu item updated successfully',
-      data: updated
+      data: mapMenuItemsForApi([updated], getApiPublicOrigin(req))[0]
     })
   } catch (error) {
     console.error('Update MenuItem Error:', error)
