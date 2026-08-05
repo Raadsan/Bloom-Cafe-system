@@ -77,7 +77,7 @@ async function prepareInvoice(input) {
 
   const customer = await prisma.customers.findUnique({ where: { id: customerId } })
   if (!customer) throw inputError('Customer not found')
-  const [company, journal, paymentTerm, fiscalPeriod] = await Promise.all([
+  const [company, journal, paymentTerm, fiscalPeriod, revenueAccount] = await Promise.all([
     prisma.companies.findUnique({ where: { id: customer.company_id } }),
     prisma.journals.findUnique({ where: { company_id_code: { company_id: customer.company_id, code: 'INV' } } }),
     id(input.payment_term_id) ? prisma.payment_terms.findUnique({ where: { id: id(input.payment_term_id) }, include: { payment_term_lines: true } }) : null,
@@ -90,23 +90,25 @@ async function prepareInvoice(input) {
       },
       orderBy: { period_number: 'asc' },
     }),
+    prisma.chart_of_accounts.findFirst({
+      where: { company_id: customer.company_id, code: '4000', is_active: true, allow_manual_entry: true, account_types: { internal_group: 'income' }, other_chart_of_accounts: { none: {} } },
+    }),
   ])
   if (!company?.is_active) throw inputError('Customer company is inactive or missing')
   if (!journal?.is_active || journal.journal_type !== 'sale') throw inputError('Active Customer Invoices journal (INV) was not found')
+  if (!revenueAccount) throw inputError('Default Sales Revenue account 4000 was not found')
   if (!fiscalPeriod) throw inputError('No open fiscal period covers the invoice date')
 
   const currencyId = id(input.currency_id) || company.currency_id
   const receivableAccount = await prisma.chart_of_accounts.findFirst({
     where: {
       company_id: customer.company_id,
+      code: '1100',
       is_active: true,
-      OR: [
-        { code: '1100' },
-        ...(customer.receivable_account_id ? [{ id: customer.receivable_account_id }] : []),
-        ...(journal.default_debit_account_id ? [{ id: journal.default_debit_account_id }] : []),
-      ],
+      allow_manual_entry: true,
+      account_types: { internal_group: 'asset' },
+      other_chart_of_accounts: { none: {} },
     },
-    orderBy: { code: 'asc' },
   })
   const currency = await prisma.currencies.findUnique({ where: { id: currencyId } })
   if (!currency?.is_active) throw inputError('Invoice currency is inactive or missing')
@@ -115,22 +117,21 @@ async function prepareInvoice(input) {
   const dueDays = paymentTerm?.payment_term_lines?.length
     ? Math.max(...paymentTerm.payment_term_lines.map((line) => Number(line.due_days || 0)))
     : 0
-  const dueDate = new Date(invoiceDate)
-  dueDate.setUTCDate(dueDate.getUTCDate() + dueDays)
+  const dueDate = date(input.due_date) || new Date(invoiceDate)
+  if (!date(input.due_date)) dueDate.setUTCDate(dueDate.getUTCDate() + dueDays)
+  if (dueDate < invoiceDate) throw inputError('Due date cannot be before the invoice date')
 
   const exchangeRate = currencyId === company.currency_id ? 1 : Number(input.exchange_rate)
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw inputError('A positive exchange rate is required')
 
   const productIds = [...new Set(lines.map((line) => id(line.product_id)).filter(Boolean))]
   const taxIds = [...new Set(lines.map((line) => id(line.tax_id)).filter(Boolean))]
-  const [products, taxes, accounts] = await Promise.all([
+  const [products, taxes] = await Promise.all([
     prisma.products.findMany({ where: { id: { in: productIds } } }),
     prisma.taxes.findMany({ where: { id: { in: taxIds } } }),
-    prisma.chart_of_accounts.findMany({ where: { company_id: customer.company_id, is_active: true } }),
   ])
   const productMap = new Map(products.map((item) => [item.id, item]))
   const taxMap = new Map(taxes.map((item) => [item.id, item]))
-  const accountMap = new Map(accounts.map((item) => [item.id, item]))
 
   let amountUntaxed = 0
   let amountTax = 0
@@ -141,17 +142,16 @@ async function prepareInvoice(input) {
     const product = productId ? productMap.get(productId) : null
     const taxId = id(line.tax_id)
     const tax = taxId ? taxMap.get(taxId) : null
-    const incomeAccountId = id(line.income_account_id) || product?.income_account_id
-    const account = incomeAccountId ? accountMap.get(incomeAccountId) || accounts.find((item) => item.id === incomeAccountId) : null
+    const incomeAccountId = revenueAccount.id
     const quantity = Number(line.quantity)
     const unitPrice = Number(line.unit_price)
     const discount = Number(line.discount_percent || 0)
     const description = String(line.description || product?.name || '').trim()
+    if (productId && (!product || product.company_id !== customer.company_id)) throw inputError(`Line ${index + 1}: product does not belong to the customer company`)
     if (!description) throw inputError(`Line ${index + 1}: description is required`)
     if (!Number.isFinite(quantity) || quantity <= 0) throw inputError(`Line ${index + 1}: quantity must be greater than zero`)
     if (!Number.isFinite(unitPrice) || unitPrice < 0) throw inputError(`Line ${index + 1}: unit price cannot be negative`)
     if (!Number.isFinite(discount) || discount < 0 || discount > 100) throw inputError(`Line ${index + 1}: discount must be between 0 and 100`)
-    if (!incomeAccountId || !account || account.company_id !== customer.company_id) throw inputError(`Line ${index + 1}: a valid company income account is required`)
     if (taxId && !tax) throw inputError(`Line ${index + 1}: tax not found`)
 
     const discounted = quantity * unitPrice * (1 - discount / 100)
@@ -203,6 +203,7 @@ async function prepareInvoice(input) {
       amount_untaxed: amountUntaxed,
       amount_tax: amountTax,
       amount_total: amountTotal,
+      paid_amount: 0,
       amount_due: amountTotal,
       notes: String(input.notes || '').trim() || null,
     },
@@ -414,7 +415,7 @@ export const post = async (req, res) => {
       if (debit <= 0 || Math.abs(debit - credit) > 0.005) throw inputError('Invoice journal entry is unbalanced')
       const postedAt = new Date()
       await tx.journal_entries.update({ where: { id: invoice.journal_entries.id }, data: { state: 'posted', posted_at: postedAt } })
-      await tx.customer_invoices.update({ where: { id: invoiceId }, data: { state: 'posted', posted_at: postedAt, updated_at: postedAt } })
+      await tx.customer_invoices.update({ where: { id: invoiceId }, data: { state: 'posted', payment_state: 'not_paid', paid_amount: 0, amount_due: invoice.amount_total, posted_at: postedAt, updated_at: postedAt } })
       return tx.customer_invoices.findUnique({ where: { id: invoiceId }, include: invoiceInclude })
     }, invoiceTransactionOptions)
     await logAudit({ userId: req.user?.id, action: 'Posted', entity: 'CustomerInvoice', entityId: invoiceId, description: `Posted invoice "${data.invoice_number}"` })

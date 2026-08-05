@@ -6,7 +6,7 @@ import { Check, Edit3, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import { createAccountingCrudApi, type AccountingRecord } from '@/lib/api/accounting/accountingCrud';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
 import { accountingProductCategoryApi } from '@/lib/api/accounting/configuration/productCategoryApi';
-import { chartOfAccountApi } from '@/lib/api/accounting/ledger/chartOfAccountApi';
+import { paymentMethodGlAccountApi } from '@/lib/api/accounting/configuration/paymentMethodApi';
 import { useToast } from '@/components/ui/toast';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -185,7 +185,7 @@ export default function ConfigurationCrudPage({ section }: { section: string }) 
     Promise.all([
       needsCurrencies ? currencyApi.getAll() : Promise.resolve([]),
       needsCategories ? accountingProductCategoryApi.getAll() : Promise.resolve([]),
-      needsAccounts ? chartOfAccountApi.getAll() : Promise.resolve([]),
+      needsAccounts ? paymentMethodGlAccountApi.getEligible() : Promise.resolve([]),
     ]).then(([currencies, categories, accounts]) => setRelations({
       currencies: new Map(currencies.map((item) => [item.id, `${String(item.code || '')} — ${String(item.name || '')}`])),
       categories: new Map(categories.map((item) => [item.id, String(item.name || '')])),

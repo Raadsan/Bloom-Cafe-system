@@ -14,3 +14,5 @@ prisma/migrations/*
 !prisma/migrations/202608030005_simplify_bank_accounts/migration.sql
 !prisma/migrations/202608040001_simplify_restaurant_purchases/
 !prisma/migrations/202608040001_simplify_restaurant_purchases/migration.sql
+!prisma/migrations/202608050001_customer_invoice_paid_amount/
+!prisma/migrations/202608050001_customer_invoice_paid_amount/migration.sql

@@ -49,7 +49,7 @@ const paymentChannel = (method) => {
 
 async function compatibleSetups({ companyId, currencyId, method }) {
   const channel = paymentChannel(method)
-  if (method?.gl_account_id && !method.allow_multiple_accounts) {
+  if (method?.gl_account_id) {
     const account = await prisma.chart_of_accounts.findFirst({
       where: {
         id: method.gl_account_id, company_id: companyId, is_active: true, allow_manual_entry: true,
@@ -123,7 +123,6 @@ async function compatibleSetups({ companyId, currencyId, method }) {
 async function prepare(input) {
   const customerId = asId(input.customer_id)
   const paymentMethodId = asId(input.payment_method_id)
-  const cashBankAccountId = asId(input.cash_bank_account_id)
   const receiptDate = asDate(input.receipt_date)
   const amount = Math.round(Number(input.amount) * 100) / 100
   if (!customerId || !paymentMethodId || !receiptDate) throw inputError('Customer, payment method, and receipt date are required')
@@ -136,6 +135,7 @@ async function prepare(input) {
   if (!customer || !customer.is_active) throw inputError('Customer is inactive or missing')
   if (!customer.companies?.is_active) throw inputError('Customer company is inactive or missing')
   if (!method?.is_active || !['inbound', 'both'].includes(method.payment_type)) throw inputError('Select an active inbound payment method')
+  if (!method.gl_account_id) throw inputError('The selected payment method must have a linked Cash, Bank, or Mobile Wallet GL account')
   const fiscalPeriod = await prisma.fiscal_periods.findFirst({
     where: {
       state: 'open', start_date: { lte: receiptDate }, end_date: { gte: receiptDate },
@@ -151,24 +151,15 @@ async function prepare(input) {
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw inputError('A positive exchange rate is required')
   const setups = await compatibleSetups({ companyId: customer.company_id, currencyId, method })
   if (!setups.length) throw inputError(`No compatible ${paymentChannel(method) === 'cash' ? 'cash' : 'bank'} journal and account are configured for this payment method`)
-  const setup = cashBankAccountId
-    ? setups.find((row) => row.account.id === cashBankAccountId)
-    : setups.find((row) => row.journal.default_debit_account_id === row.account.id) || (setups.length === 1 ? setups[0] : null)
-  if (!setup) throw inputError(method.allow_multiple_accounts ? 'Select a bank account associated with this payment method' : method.gl_account_id ? 'The selected payment method has no compatible active GL account' : `Select a valid ${paymentChannel(method) === 'cash' ? 'cash' : 'bank'} account`)
-  const submittedJournalId = asId(input.journal_id)
-  if (submittedJournalId && submittedJournalId !== setup.journal.id) throw inputError('Payment method, journal, and cash/bank account are inconsistent')
+  const setup = setups[0]
+  if (!setup) throw inputError('The selected payment method has no compatible active GL account and journal')
   const journal = setup.journal
 
   const receivable = await prisma.chart_of_accounts.findFirst({
     where: {
-      company_id: customer.company_id, is_active: true,
-      OR: [
-        ...(customer.receivable_account_id ? [{ id: customer.receivable_account_id }] : []),
-        { code: '1100' },
-        ...(journal.default_credit_account_id ? [{ id: journal.default_credit_account_id }] : []),
-      ],
+      company_id: customer.company_id, code: '1100', is_active: true, allow_manual_entry: true,
+      account_types: { internal_group: 'asset' }, other_chart_of_accounts: { none: {} },
     },
-    orderBy: { code: 'asc' },
   })
   if (!receivable) throw inputError('Accounts Receivable account 1100 was not found')
 
@@ -265,6 +256,23 @@ export const getOptions = async (req, res) => {
       },
     })
   } catch (error) { fail(res, error, 'Failed to resolve receipt payment options') }
+}
+
+export const getOutstandingInvoices = async (req, res) => {
+  const customerId = asId(req.query.customer_id)
+  if (!customerId) return res.status(400).json({ success: false, message: 'Customer is required' })
+  try {
+    const data = await prisma.customer_invoices.findMany({
+      where: { customer_id: customerId, document_type: 'invoice', state: 'posted', payment_state: { in: ['not_paid', 'partial'] }, amount_due: { gt: 0 } },
+      select: {
+        id: true, customer_id: true, currency_id: true, invoice_number: true, invoice_date: true,
+        due_date: true, amount_total: true, paid_amount: true, amount_due: true, state: true,
+        payment_state: true, currencies: { select: { code: true, symbol: true } },
+      },
+      orderBy: [{ invoice_date: 'asc' }, { id: 'asc' }],
+    })
+    res.json({ success: true, data })
+  } catch (error) { fail(res, error, 'Failed to fetch outstanding invoices') }
 }
 
 export const getById = async (req, res) => {
@@ -370,18 +378,8 @@ export const post = async (req, res) => {
       if (!debitAccount?.is_active || !debitAccount.allow_manual_entry || debitAccount.account_types.internal_group !== 'asset' || debitAccount.other_chart_of_accounts.length) {
         throw inputError('Cash/Bank account is inactive, a parent, or incompatible')
       }
-      if (receipt.payment_methods.gl_account_id && !receipt.payment_methods.allow_multiple_accounts) {
-        if (receipt.payment_methods.gl_account_id !== debitAccount.id) throw inputError('Receipt journal entry does not use the GL account linked to the payment method')
-      } else if (paymentChannel(receipt.payment_methods) === 'cash') {
-        const cashCompatible = receipt.journals.journal_type === 'cash' &&
-          (receipt.journals.default_debit_account_id === debitAccount.id || /cash/i.test(`${debitAccount.code} ${debitAccount.name}`))
-        if (!cashCompatible) throw inputError('Cash payment method requires a compatible Cash journal and account')
-      } else {
-        const bankCompatible = receipt.journals.journal_type === 'bank' && await tx.bank_accounts.findFirst({
-          where: { company_id: receipt.company_id, currency_id: receipt.currency_id, journal_id: receipt.journal_id, gl_account_id: debitAccount.id, is_active: true },
-          select: { id: true },
-        })
-        if (!bankCompatible) throw inputError('This payment method requires a compatible active Bank journal and account')
+      if (!receipt.payment_methods.gl_account_id || receipt.payment_methods.gl_account_id !== debitAccount.id) {
+        throw inputError('Receipt journal entry does not use the GL account linked to the payment method')
       }
       const postedAt = new Date()
       const claimed = await tx.customer_receipts.updateMany({
@@ -404,7 +402,8 @@ export const post = async (req, res) => {
           _sum: { allocated_amount: true },
         })
         const due = Math.max(0, Math.round((Number(invoice.amount_total) - Number(paid._sum.allocated_amount || 0)) * 100) / 100)
-        await tx.customer_invoices.update({ where: { id: invoice.id }, data: { amount_due: due, payment_state: due <= 0.005 ? 'paid' : due < Number(invoice.amount_total) ? 'partial' : 'not_paid', updated_at: postedAt } })
+        const paidAmount = Math.max(0, Math.round((Number(invoice.amount_total) - due) * 100) / 100)
+        await tx.customer_invoices.update({ where: { id: invoice.id }, data: { paid_amount: paidAmount, amount_due: due, payment_state: due <= 0.005 ? 'paid' : due < Number(invoice.amount_total) ? 'partial' : 'not_paid', updated_at: postedAt } })
       }
       await tx.journal_entries.update({ where: { id: receipt.journal_entries.id }, data: { state: 'posted', posted_at: postedAt, narration: `Customer receipt ${receipt.receipt_number}` } })
     }, transactionOptions)

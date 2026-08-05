@@ -4,6 +4,17 @@ const prisma = new PrismaClient()
 const include = { chart_of_accounts: { select: { id: true, code: true, name: true, company_id: true } } }
 const inputError = (message) => Object.assign(new Error(message), { status: 400 })
 const fail = (res, error) => res.status(error.status || (error.code === 'P2025' ? 404 : 500)).json({ success: false, message: error.message })
+const moneyAccountWhere = {
+    is_active: true,
+    allow_manual_entry: true,
+    other_chart_of_accounts: { none: {} },
+    // "Assets" is this schema's Current Assets account type (internal asset
+    // group); the code restriction below excludes receivables and advances.
+    account_types: { internal_group: 'asset' },
+    // There are no isCashAccount/isBankAccount columns in this schema. Its
+    // 10xx codes are the configured 1000-series for cash, bank, and wallets.
+    code: { startsWith: '10' },
+}
 
 function sanitize(body) {
     const allowed = ['name', 'code', 'payment_type', 'gl_account_id', 'allow_multiple_accounts', 'requires_reference', 'is_active']
@@ -16,12 +27,20 @@ function sanitize(body) {
 async function validateGlAccount(glAccountId) {
     if (!glAccountId) return
     if (!Number.isInteger(glAccountId) || glAccountId <= 0) throw inputError('Linked GL account is invalid')
-    const account = await prisma.chart_of_accounts.findUnique({
-        where: { id: glAccountId },
-        include: { account_types: true, other_chart_of_accounts: { select: { id: true } } },
-    })
-    if (!account?.is_active || !account.allow_manual_entry || account.other_chart_of_accounts.length || account.account_types.internal_group !== 'asset') {
-        throw inputError('Linked GL account must be an active posting asset account')
+    const account = await prisma.chart_of_accounts.findFirst({ where: { id: glAccountId, ...moneyAccountWhere } })
+    if (!account) throw inputError('Linked GL account must be a Cash, Bank, or Mobile Wallet Current Asset account in the 1000-series')
+}
+
+export const getEligibleGlAccounts = async (req, res) => {
+    try {
+        const data = await prisma.chart_of_accounts.findMany({
+            where: moneyAccountWhere,
+            select: { id: true, code: true, name: true, company_id: true },
+            orderBy: [{ company_id: 'asc' }, { code: 'asc' }],
+        })
+        res.status(200).json({ success: true, data })
+    } catch (error) {
+        fail(res, error)
     }
 }
 

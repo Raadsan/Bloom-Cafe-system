@@ -4,10 +4,9 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Edit3, Eye, Plus, Printer, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { customerReceiptApi, type CustomerReceipt } from '@/lib/api/accounting/receivables/customerReceiptApi';
-import { customerInvoiceApi, type CustomerInvoice } from '@/lib/api/accounting/receivables/customerInvoiceApi';
+import type { CustomerInvoice } from '@/lib/api/accounting/receivables/customerInvoiceApi';
 import { accountingCustomerApi } from '@/lib/api/accounting/receivables/customerApi';
 import { accountingPaymentMethodApi } from '@/lib/api/accounting/configuration/paymentMethodApi';
-import { companyApi } from '@/lib/api/accounting/configuration/companyApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
@@ -33,8 +32,6 @@ export default function CustomerReceiptsPage() {
   const [customers, setCustomers] = useState<Row[]>([]);
   const [invoices, setInvoices] = useState<CustomerInvoice[]>([]);
   const [methods, setMethods] = useState<Row[]>([]);
-  const [companies, setCompanies] = useState<Row[]>([]);
-  const [paymentOptions, setPaymentOptions] = useState<Array<{ id: number; code: string; name: string; account_name: string; journal_id: number; journal_name: string; journal_code: string }>>([]);
   const [form, setForm] = useState<Form>(emptyForm);
   const [selected, setSelected] = useState<CustomerReceipt | null>(null);
   const [postTarget, setPostTarget] = useState<CustomerReceipt | null>(null);
@@ -54,12 +51,10 @@ export default function CustomerReceiptsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [receiptRows, customerRows, invoiceRows, methodRows, companyRows] = await Promise.all([
-        customerReceiptApi.getAll(), accountingCustomerApi.getAll(), customerInvoiceApi.getAll(),
-        accountingPaymentMethodApi.getAll(), companyApi.getAll(),
+      const [receiptRows, customerRows, methodRows] = await Promise.all([
+        customerReceiptApi.getAll(), accountingCustomerApi.getAll(), accountingPaymentMethodApi.getAll(),
       ]);
-      setReceipts(receiptRows); setCustomers(customerRows); setInvoices(invoiceRows); setMethods(methodRows);
-      setCompanies(companyRows);
+      setReceipts(receiptRows); setCustomers(customerRows); setMethods(methodRows);
     } catch (error) { showToast(message(error), 'error'); } finally { setLoading(false); }
   }, [showToast]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
@@ -68,13 +63,10 @@ export default function CustomerReceiptsPage() {
     const alreadyAllocated = form.allocations.some((row) => row.invoice_id === invoice.id);
     return invoice.customer_id === Number(form.customer_id) && invoice.state === 'posted' &&
       (alreadyAllocated || ['not_paid', 'partial'].includes(invoice.payment_state)) &&
-      Number(invoice.currency_id) === Number(form.currency_id);
+      true;
   });
   const allocated = form.allocations.reduce((sum, row) => sum + Number(row.allocated_amount || 0), 0);
   const unallocated = Number(form.amount || 0) - allocated;
-  const selectedMethod = methods.find((row) => row.id === Number(form.payment_method_id));
-  const methodUsesMultipleAccounts = selectedMethod?.allow_multiple_accounts === true;
-  const shouldSelectBankAccount = methodUsesMultipleAccounts && paymentOptions.length > 1;
   const selectedOutstandingBefore = form.allocations.reduce((sum, allocation) => {
     const invoice = invoices.find((row) => row.id === allocation.invoice_id);
     const currentOutstanding = Number(invoice?.amount_due || 0);
@@ -102,43 +94,32 @@ export default function CustomerReceiptsPage() {
   });
 
   function newReceipt() {
-    setSelected(null); setViewOnly(false); setPaymentOptions([]); setForm(emptyForm()); setOpen(true);
+    setSelected(null); setViewOnly(false); setInvoices([]); setForm(emptyForm()); setOpen(true);
   }
   async function edit(receipt: CustomerReceipt, readOnly = false) {
     setSelected(receipt); setViewOnly(readOnly || receipt.state !== 'draft');
-    let options: Awaited<ReturnType<typeof customerReceiptApi.options>> | null = null;
-    try { options = await customerReceiptApi.options({ customer_id: receipt.customer_id, payment_method_id: receipt.payment_method_id, currency_id: receipt.currency_id }); setPaymentOptions(options.accounts); }
-    catch { setPaymentOptions([]); }
-    const accountId = receipt.journal_entries?.journal_items?.[0]?.account_id || options?.selected_account_id || '';
+    const allocationInvoices = (receipt.receipt_allocations || []).flatMap((row) => row.customer_invoices ? [{ ...row.customer_invoices, customer_id: receipt.customer_id, currency_id: receipt.currency_id, state: 'posted', paid_amount: Number(row.customer_invoices.amount_total) - Number(row.customer_invoices.amount_due), currencies: receipt.currencies }] as unknown as CustomerInvoice[] : []);
+    try {
+      const outstanding = await customerReceiptApi.outstandingInvoices(receipt.customer_id);
+      setInvoices([...new Map([...outstanding, ...allocationInvoices].map((row) => [row.id, row])).values()]);
+    } catch { setInvoices(allocationInvoices); }
     setForm({
-      customer_id: String(receipt.customer_id), journal_id: String(receipt.journal_id), cash_bank_account_id: String(accountId), payment_method_id: String(receipt.payment_method_id),
+      customer_id: String(receipt.customer_id), journal_id: '', cash_bank_account_id: '', payment_method_id: String(receipt.payment_method_id),
       receipt_date: dateValue(receipt.receipt_date), currency_id: String(receipt.currency_id), exchange_rate: String(receipt.exchange_rate || 1),
       amount: String(receipt.amount), reference: String(receipt.reference || ''), memo: String(receipt.memo || ''),
       allocations: (receipt.receipt_allocations || []).map((row) => ({ invoice_id: row.invoice_id, allocated_amount: Number(row.allocated_amount) })),
     });
     setOpen(true);
   }
-  function selectCustomer(value: string) {
-    const next = customers.find((row) => row.id === Number(value));
-    const nextCompany = Number(next?.company_id || 0);
-    const baseCurrency = companies.find((row) => row.id === nextCompany)?.currency_id;
-    setPaymentOptions([]);
-    setForm((current) => ({ ...current, customer_id: value, journal_id: '', cash_bank_account_id: '', payment_method_id: '', currency_id: String(baseCurrency || ''), exchange_rate: '1', allocations: [] }));
+  async function selectCustomer(value: string) {
+    setInvoices([]);
+    setForm((current) => ({ ...current, customer_id: value, journal_id: '', cash_bank_account_id: '', payment_method_id: '', currency_id: '', exchange_rate: '1', allocations: [] }));
+    if (!value) return;
+    try { setInvoices(await customerReceiptApi.outstandingInvoices(Number(value))); }
+    catch (error) { showToast(message(error), 'error'); }
   }
-  async function selectPaymentMethod(value: string) {
-    setPaymentOptions([]);
+  function selectPaymentMethod(value: string) {
     setForm((current) => ({ ...current, payment_method_id: value, journal_id: '', cash_bank_account_id: '' }));
-    if (!value || !form.customer_id || !form.currency_id) return;
-    try {
-      const options = await customerReceiptApi.options({ customer_id: Number(form.customer_id), payment_method_id: Number(value), currency_id: Number(form.currency_id) });
-      setPaymentOptions(options.accounts);
-      const account = options.accounts.find((row) => row.id === options.selected_account_id);
-      setForm((current) => ({ ...current, payment_method_id: value, cash_bank_account_id: account ? String(account.id) : '', journal_id: account ? String(account.journal_id) : '' }));
-    } catch (error) { showToast(message(error), 'error'); }
-  }
-  function selectAccount(value: string) {
-    const account = paymentOptions.find((row) => row.id === Number(value));
-    setForm((current) => ({ ...current, cash_bank_account_id: value, journal_id: account ? String(account.journal_id) : '' }));
   }
   function toggleInvoice(invoice: CustomerInvoice) {
     const exists = form.allocations.some((row) => row.invoice_id === invoice.id);
@@ -188,7 +169,7 @@ export default function CustomerReceiptsPage() {
     if (allocationInvalid) { showToast('The allocated amount cannot exceed the invoice outstanding balance or the receipt amount.', 'error'); return; }
     setSaving(true);
     try {
-      const payload = { ...form, customer_id: Number(form.customer_id), journal_id: Number(form.journal_id), payment_method_id: Number(form.payment_method_id), currency_id: Number(form.currency_id), exchange_rate: Number(form.exchange_rate), amount: Number(form.amount), receipt_date: new Date(`${form.receipt_date}T00:00:00.000Z`).toISOString() };
+      const payload = { customer_id: Number(form.customer_id), payment_method_id: Number(form.payment_method_id), amount: Number(form.amount), receipt_date: new Date(`${form.receipt_date}T00:00:00.000Z`).toISOString(), reference: form.reference, memo: form.memo, allocations: form.allocations };
       const saved = selected ? await customerReceiptApi.update(selected.id, payload) : await customerReceiptApi.create(payload);
       if (postAfterSave) await customerReceiptApi.post(saved.id);
       showToast(postAfterSave ? 'Customer receipt posted successfully' : selected ? 'Draft receipt updated successfully' : 'Draft receipt created successfully', 'success');
@@ -236,15 +217,15 @@ export default function CustomerReceiptsPage() {
       <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto"><DialogHeader><DialogTitle>{viewOnly ? 'Customer receipt' : selected ? 'Edit customer receipt' : 'Customer receipt'}</DialogTitle><DialogDescription>Enter the receipt details and select the outstanding invoices to pay.</DialogDescription></DialogHeader>
         <form onSubmit={save} className="space-y-5">
           <fieldset disabled={viewOnly || saving} className="grid gap-4 md:grid-cols-3">
-            <label className="text-sm font-medium">Customer *<select required value={form.customer_id} onChange={(e) => selectCustomer(e.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3"><option value="">Select customer</option>{customers.map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></label>
+            <label className="text-sm font-medium">Customer *<select required value={form.customer_id} onChange={(e) => void selectCustomer(e.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3"><option value="">Select customer</option>{customers.map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></label>
             <label className="text-sm font-medium">Receipt date *<input required type="date" value={form.receipt_date} onChange={(e) => setForm({ ...form, receipt_date: e.target.value })} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label>
             <label className="text-sm font-medium">Amount *<input required min="0.01" step="0.01" type="number" value={form.amount} onChange={(e) => changeReceiptAmount(e.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label>
-            <label className="text-sm font-medium">Payment method *<select required value={form.payment_method_id} onChange={(e) => void selectPaymentMethod(e.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3"><option value="">Select method</option>{methods.filter((row) => row.is_active !== false && ['inbound', 'both'].includes(String(row.payment_type))).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></label>
-            {shouldSelectBankAccount && <label className="text-sm font-medium">Bank Account *<select required value={form.cash_bank_account_id} onChange={(e) => selectAccount(e.target.value)} disabled={viewOnly || saving || !form.payment_method_id} className="mt-1 h-11 w-full rounded-xl border bg-background px-3 disabled:bg-muted"><option value="">{form.payment_method_id ? 'Select compatible account' : 'Select payment method first'}</option>{paymentOptions.map((row) => <option key={row.id} value={row.id}>{row.code} - {row.account_name}</option>)}</select></label>}
+            <label className="text-sm font-medium">Payment method *<select required value={form.payment_method_id} onChange={(e) => selectPaymentMethod(e.target.value)} className="mt-1 h-11 w-full rounded-xl border bg-background px-3"><option value="">Select method</option>{methods.filter((row) => row.is_active !== false && row.gl_account_id && ['inbound', 'both'].includes(String(row.payment_type))).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></label>
             <label className="text-sm font-medium">Reference<input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} className="mt-1 h-11 w-full rounded-xl border bg-background px-3" /></label>
+            <label className="text-sm font-medium md:col-span-3">Notes<textarea value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} className="mt-1 min-h-24 w-full rounded-xl border bg-background p-3" /></label>
           </fieldset>
-          <div className="rounded-2xl border"><div className="flex items-center justify-between gap-4 border-b p-4"><div><h3 className="font-semibold">Outstanding Invoices</h3><p className="text-xs text-muted-foreground">Select the invoices covered by this receipt.</p></div>{openInvoices.length >= 2 && <button disabled={viewOnly || !form.amount} type="button" onClick={autoAllocate} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50">Auto Allocate</button>}</div>
-            <div className="max-h-64 overflow-auto">{!form.customer_id ? <p className="p-6 text-center text-sm text-muted-foreground">Select a customer first.</p> : openInvoices.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No outstanding posted invoices found for this customer.</p> : <><div className="grid grid-cols-[auto_1.3fr_repeat(4,auto)] items-center gap-4 bg-muted/40 px-3 py-2 text-xs font-semibold"><span /><span>Invoice</span><span className="text-right">Total</span><span className="text-right">Previously Paid</span><span className="text-right">Outstanding</span><span className="w-32 text-right">Allocated</span></div>{openInvoices.map((invoice) => { const allocation = form.allocations.find((row) => row.invoice_id === invoice.id); const transactionOutstanding = Number(invoice.amount_due) + (viewOnly && selected?.state === 'posted' && allocation ? Number(allocation.allocated_amount) : 0); const otherAllocated = form.allocations.reduce((sum, row) => row.invoice_id === invoice.id ? sum : sum + Number(row.allocated_amount || 0), 0); const maxAllocation = Math.max(0, Math.min(Number(invoice.amount_due), Number(form.amount || 0) - otherAllocated)); return <div key={invoice.id} className="grid grid-cols-[auto_1.3fr_repeat(4,auto)] items-center gap-4 border-t p-3 text-sm"><input disabled={viewOnly} type="checkbox" checked={Boolean(allocation)} onChange={() => toggleInvoice(invoice)} /><div><b>{invoice.invoice_number}</b><p className="text-xs text-muted-foreground">Invoice {dateValue(invoice.invoice_date)} · Due {dateValue(invoice.due_date)}</p></div><div className="text-right"><b>{money(invoice.amount_total, invoice.currencies?.code)}</b></div><div className="text-right"><b>{money(Number(invoice.amount_total) - transactionOutstanding)}</b></div><div className="text-right"><b>{money(transactionOutstanding)}</b></div><input aria-label={`Allocated amount for ${invoice.invoice_number}`} disabled={!allocation || viewOnly} type="number" min="0" max={maxAllocation} step="0.01" value={allocation?.allocated_amount ?? ''} onChange={(e) => updateAllocation(invoice.id, e.target.value)} className="h-10 w-32 rounded-lg border px-3 text-right" /></div>; })}</>}</div>
+          <div className="rounded-2xl border"><div className="flex items-center justify-between gap-4 border-b p-4"><div><h3 className="font-semibold">Outstanding Invoices</h3><p className="text-xs text-muted-foreground">Select the invoices covered by this receipt.</p></div>{openInvoices.length > 0 && <button disabled={viewOnly || !form.amount} type="button" onClick={autoAllocate} className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50">Auto Allocate</button>}</div>
+            <div className="max-h-64 overflow-auto">{!form.customer_id ? <p className="p-6 text-center text-sm text-muted-foreground">Select a customer first.</p> : openInvoices.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No outstanding posted invoices found for this customer.</p> : <><div className="grid min-w-[850px] grid-cols-[auto_1.3fr_repeat(5,auto)] items-center gap-4 bg-muted/40 px-3 py-2 text-xs font-semibold"><span /><span>Invoice</span><span className="text-right">Total</span><span className="text-right">Already Paid</span><span className="text-right">Balance Due</span><span>Status</span><span className="w-32 text-right">Allocated</span></div>{openInvoices.map((invoice) => { const allocation = form.allocations.find((row) => row.invoice_id === invoice.id); const transactionOutstanding = Number(invoice.amount_due) + (viewOnly && selected?.state === 'posted' && allocation ? Number(allocation.allocated_amount) : 0); const otherAllocated = form.allocations.reduce((sum, row) => row.invoice_id === invoice.id ? sum : sum + Number(row.allocated_amount || 0), 0); const maxAllocation = Math.max(0, Math.min(Number(invoice.amount_due), Number(form.amount || 0) - otherAllocated)); return <div key={invoice.id} className="grid min-w-[850px] grid-cols-[auto_1.3fr_repeat(5,auto)] items-center gap-4 border-t p-3 text-sm"><input disabled={viewOnly} type="checkbox" checked={Boolean(allocation)} onChange={() => toggleInvoice(invoice)} /><div><b>{invoice.invoice_number}</b><p className="text-xs text-muted-foreground">Invoice {dateValue(invoice.invoice_date)} · Due {dateValue(invoice.due_date)}</p></div><div className="text-right"><b>{money(invoice.amount_total, invoice.currencies?.code)}</b></div><div className="text-right"><b>{money(Number(invoice.amount_total) - transactionOutstanding)}</b></div><div className="text-right"><b>{money(transactionOutstanding)}</b></div><span className="capitalize">{invoice.payment_state === 'partial' ? 'Partially Paid' : invoice.payment_state === 'paid' ? 'Paid' : 'Posted'}</span><input aria-label={`Allocated amount for ${invoice.invoice_number}`} disabled={!allocation || viewOnly} type="number" min="0" max={maxAllocation} step="0.01" value={allocation?.allocated_amount ?? ''} onChange={(e) => updateAllocation(invoice.id, e.target.value)} className="h-10 w-32 rounded-lg border px-3 text-right" /></div>; })}</>}</div>
           </div>
           {allocationInvalid && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">The allocated amount cannot exceed the invoice outstanding balance or the receipt amount.</div>}
           <div className="ml-auto w-full rounded-2xl border p-4 sm:max-w-sm"><h3 className="mb-3 font-semibold">Summary</h3><div className="space-y-2 text-sm"><div className="flex justify-between"><span>Receipt Amount</span><b>{money(form.amount)}</b></div><div className="flex justify-between"><span>Outstanding Before</span><b>{money(selectedOutstandingBefore)}</b></div><div className="flex justify-between"><span>Allocated</span><b>{money(allocated)}</b></div><div className={`flex justify-between ${unallocated < -0.005 ? 'text-rose-600' : ''}`}><span>Remaining</span><b>{money(unallocated)}</b></div><div className="flex justify-between border-t pt-2"><span>Outstanding After Payment</span><b>{money(outstandingAfterPayment)}</b></div></div></div>

@@ -41,6 +41,10 @@ export const customerReceiptApi = {
       accounts: Array<{ id: number; code: string; name: string; account_name: string; journal_id: number; journal_name: string; journal_code: string }>;
     };
   },
+  outstandingInvoices: async (customerId: number) => {
+    const response = await api.get('/accounting/customer-receipts/outstanding-invoices', { params: { customer_id: customerId } });
+    return response.data.data as import('./customerInvoiceApi').CustomerInvoice[];
+  },
   post: async (id: number): Promise<CustomerReceipt> => {
     const response = await api.patch(`/accounting/customer-receipts/${id}/post`);
     return response.data.data;

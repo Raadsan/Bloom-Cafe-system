@@ -674,6 +674,7 @@ model customer_invoices {
   amount_untaxed          Decimal                         @default(0.00) @db.Decimal(15, 2)
   amount_tax              Decimal                         @default(0.00) @db.Decimal(15, 2)
   amount_total            Decimal                         @default(0.00) @db.Decimal(15, 2)
+  paid_amount             Decimal                         @default(0.00) @db.Decimal(15, 2)
   amount_due              Decimal                         @default(0.00) @db.Decimal(15, 2)
   journal_entry_id        Int?                            @db.UnsignedInt
   notes                   String?                         @db.Text
