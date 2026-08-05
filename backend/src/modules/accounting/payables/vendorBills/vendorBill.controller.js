@@ -203,6 +203,66 @@ async function allocateNumber(tx, journal, prefix = journal.code) {
   }
 }
 
+function paymentChannel(method, account) {
+  const identity = `${method.code || ''} ${method.name || ''} ${account.code || ''} ${account.name || ''}`.toLowerCase()
+  if (account.code === '1001' || /\bcash\b/.test(identity)) return { code: 'CASH', name: 'Cash', type: 'cash', label: 'Cash Payment' }
+  if (account.code === '1002' || /\bbank\b|transfer/.test(identity)) return { code: 'BANK', name: 'Bank', type: 'bank', label: 'Bank Payment' }
+  const label = /edahab/.test(identity) ? 'eDahab Payment' : /merchant/.test(identity) ? 'Merchant Payment' : /\bibs\b/.test(identity) ? 'IBS Payment' : /evc/.test(identity) ? 'EVC Payment' : `${method.name || 'Mobile Wallet'} Payment`
+  return { code: 'WALLET', name: 'Mobile Wallet', type: 'bank', label }
+}
+
+async function postImmediatePayment(tx, bill, input, postedAt) {
+  if (!input?.pay_vendor_now) return 0
+  const amount = Math.round(Number(input.amount_paid) * 100) / 100
+  const methodId = parseId(input.payment_method_id)
+  const bankId = parseId(input.bank_account_id)
+  if (!methodId || !Number.isFinite(amount) || amount <= 0) throw inputError('Payment method and a positive amount paid are required')
+  if (amount > Number(bill.amount_total) + 0.005) throw inputError('Amount paid cannot exceed the vendor bill total')
+  const method = await tx.payment_methods.findUnique({ where: { id: methodId } })
+  if (!method?.is_active || !['outbound', 'both'].includes(method.payment_type)) throw inputError('Select an active outbound payment method')
+  let bank = bankId ? await tx.bank_accounts.findUnique({ where: { id: bankId } }) : null
+  if (method.allow_multiple_accounts && !bank) {
+    const matches = await tx.bank_accounts.findMany({ where: { company_id: bill.company_id, currency_id: bill.currency_id, is_active: true, gl_account_id: { not: null }, journal_id: { not: null } } })
+    if (matches.length !== 1) throw inputError('Select a bank account for this payment method')
+    bank = matches[0]
+  }
+  if (bank && (!bank.is_active || bank.company_id !== bill.company_id || bank.currency_id !== bill.currency_id || !bank.gl_account_id)) throw inputError('Select an active vendor-company bank account in the bill currency')
+  const paymentAccountId = method.allow_multiple_accounts ? bank?.gl_account_id : method.gl_account_id || bank?.gl_account_id
+  if (!paymentAccountId) throw inputError('Link this payment method to a GL account before posting')
+  const paymentAccount = await tx.chart_of_accounts.findFirst({ where: { id: paymentAccountId, company_id: bill.company_id, is_active: true, allow_manual_entry: true, account_types: { internal_group: 'asset' }, other_chart_of_accounts: { none: {} } } })
+  if (!paymentAccount) throw inputError('The payment method GL account is not an active cash, bank, or wallet posting account')
+  const channel = paymentChannel(method, paymentAccount)
+  let journal = bank?.journal_id ? await tx.journals.findUnique({ where: { id: bank.journal_id } }) : null
+  if (!journal) journal = await tx.journals.upsert({ where: { company_id_code: { company_id: bill.company_id, code: channel.code } }, update: { name: channel.name, journal_type: channel.type, default_credit_account_id: paymentAccount.id, is_active: true }, create: { company_id: bill.company_id, code: channel.code, name: channel.name, journal_type: channel.type, default_credit_account_id: paymentAccount.id, currency_id: bill.currency_id, sequence_prefix: channel.code, is_active: true } })
+  if (!journal?.is_active || journal.company_id !== bill.company_id) throw inputError('Configure an active journal for the selected payment method')
+  const existing = await tx.vendor_payments.findMany({ where: { company_id: bill.company_id, payment_number: { startsWith: 'PAY' } }, select: { payment_number: true } })
+  let sequence = Math.max(Number(journal.next_sequence || 1), ...existing.map((row) => Number(String(row.payment_number).slice(3)) + 1).filter(Number.isFinite))
+  let paymentNumber = `PAY${String(sequence).padStart(4, '0')}`
+  while (await tx.vendor_payments.findFirst({ where: { company_id: bill.company_id, payment_number: paymentNumber }, select: { id: true } })) paymentNumber = `PAY${String(++sequence).padStart(4, '0')}`
+  await tx.journals.update({ where: { id: journal.id }, data: { next_sequence: sequence + 1 } })
+  const payment = await tx.vendor_payments.create({ data: {
+    company_id: bill.company_id, payment_number: paymentNumber, vendor_id: bill.vendor_id, journal_id: journal.id,
+    payment_method_id: method.id, bank_account_id: bank?.id || null, fiscal_period_id: bill.fiscal_period_id,
+    payment_date: bill.bill_date, currency_id: bill.currency_id, exchange_rate: bill.exchange_rate, amount,
+    unallocated_amount: 0, reference: String(input.payment_reference || '').trim() || null,
+    memo: `Immediate payment for ${bill.bill_number}`, state: 'posted', posted_at: postedAt,
+    payment_allocations: { create: [{ bill_id: bill.id, allocated_amount: amount }] },
+  } })
+  const baseAmount = Math.round(amount * Number(bill.exchange_rate) * 100) / 100
+  const entry = await tx.journal_entries.create({ data: {
+    company_id: bill.company_id, journal_id: journal.id, entry_number: paymentNumber, entry_date: bill.bill_date,
+    fiscal_period_id: bill.fiscal_period_id, reference: paymentNumber,
+    narration: `Vendor payment ${paymentNumber} to ${bill.vendorName || `vendor #${bill.vendor_id}`}`,
+    state: 'posted', source_type: 'vendor_payment', source_id: payment.id, posted_at: postedAt,
+    journal_items: { create: [
+      { sequence: 10, account_id: bill.payable_account_id, label: 'Accounts Payable', partner_type: 'vendor', partner_id: bill.vendor_id, debit: baseAmount, credit: 0, currency_id: bill.currency_id, amount_currency: amount },
+      { sequence: 20, account_id: paymentAccount.id, label: channel.label, partner_type: 'vendor', partner_id: bill.vendor_id, debit: 0, credit: baseAmount, currency_id: bill.currency_id, amount_currency: -amount },
+    ] },
+  } })
+  await tx.vendor_payments.update({ where: { id: payment.id }, data: { journal_entry_id: entry.id } })
+  return amount
+}
+
 export const getAll = async (_req, res) => {
   try { res.json({ success: true, data: await prisma.vendor_bills.findMany({ where: { document_type: 'bill' }, include, orderBy: { created_at: 'desc' } }) }) }
   catch (error) { fail(res, error, 'Failed to fetch vendor bills') }
@@ -275,7 +335,7 @@ export const post = async (req, res) => {
   if (!billId) return res.status(400).json({ success: false, message: 'Invalid bill id' })
   try {
     const data = await prisma.$transaction(async (tx) => {
-      const bill = await tx.vendor_bills.findUnique({ where: { id: billId }, include: { fiscal_periods: { include: { fiscal_years: true } }, journal_entries: true } })
+      const bill = await tx.vendor_bills.findUnique({ where: { id: billId }, include: { fiscal_periods: { include: { fiscal_years: true } }, journal_entries: true, vendors: { select: { name: true } } } })
       if (!bill) throw inputError('Vendor bill not found')
       if (bill.state !== 'draft') throw inputError('Only draft vendor bills can be posted')
       if (!bill.fiscal_periods || bill.fiscal_periods.state !== 'open' || bill.fiscal_periods.fiscal_years.state !== 'open') throw inputError('Bill fiscal period is closed or invalid')
@@ -306,8 +366,11 @@ export const post = async (req, res) => {
         advanceRemaining -= applied
       }
       const appliedAdvance = requestedAdvance - advanceRemaining
-      const amountDue = Math.max(0, Number(bill.amount_total) - appliedAdvance)
-      await tx.vendor_bills.update({ where: { id: billId }, data: { state: 'posted', payment_state: amountDue <= 0.005 ? 'paid' : amountDue < Number(bill.amount_total) ? 'partial' : 'not_paid', amount_due: amountDue, posted_at: postedAt, updated_at: postedAt } })
+      const immediatePaid = await postImmediatePayment(tx, { ...bill, vendorName: bill.vendors?.name }, req.body, postedAt)
+      if (appliedAdvance + immediatePaid > Number(bill.amount_total) + 0.005) throw inputError('Immediate payment plus vendor advance cannot exceed the bill total')
+      const paidAmount = Math.round((appliedAdvance + immediatePaid) * 100) / 100
+      const amountDue = Math.max(0, Math.round((Number(bill.amount_total) - paidAmount) * 100) / 100)
+      await tx.vendor_bills.update({ where: { id: billId }, data: { state: 'posted', payment_state: amountDue <= 0.005 ? 'paid' : paidAmount > 0.005 ? 'partial' : 'not_paid', amount_paid: paidAmount, amount_due: amountDue, posted_at: postedAt, updated_at: postedAt } })
       return tx.vendor_bills.findUnique({ where: { id: billId }, include })
     }, { maxWait: 10000, timeout: 30000 })
     await logAudit({ userId: req.user?.id, action: 'Posted', entity: 'VendorBill', entityId: billId, description: `Posted vendor bill "${data.bill_number}"` })

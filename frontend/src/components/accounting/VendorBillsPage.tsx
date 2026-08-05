@@ -11,6 +11,8 @@ import { accountingTaxApi } from '@/lib/api/accounting/configuration/taxApi';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
 import { paymentTermApi } from '@/lib/api/accounting/configuration/paymentTermApi';
 import { companyApi } from '@/lib/api/accounting/configuration/companyApi';
+import { accountingPaymentMethodApi } from '@/lib/api/accounting/configuration/paymentMethodApi';
+import { bankAccountApi } from '@/lib/api/accounting/banking/bankAccountApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
@@ -21,11 +23,12 @@ type Row = { id: number; [key: string]: unknown };
 type Line = Omit<VendorBillLine, 'id' | 'subtotal' | 'expense_account_id'>;
 type Form = {
   vendor_id: string; reversed_bill_id: string; bill_date: string; received_date: string; currency_id: string; exchange_rate: string;
-  payment_term_id: string; vendor_reference: string; notes: string; lines: Line[];
+  payment_term_id: string; vendor_reference: string; notes: string; lines: Line[]; pay_vendor_now: boolean;
+  payment_method_id: string; bank_account_id: string; amount_paid: string; payment_reference: string;
 };
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = (): Line => ({ product_id: null, description: 'Custom line', quantity: 1, unit_price: 0, discount_percent: 0, tax_id: null });
-const emptyForm = (): Form => ({ vendor_id: '', reversed_bill_id: '', bill_date: today(), received_date: today(), currency_id: '', exchange_rate: '1', payment_term_id: '', vendor_reference: '', notes: '', lines: [emptyLine()] });
+const emptyForm = (): Form => ({ vendor_id: '', reversed_bill_id: '', bill_date: today(), received_date: today(), currency_id: '', exchange_rate: '1', payment_term_id: '', vendor_reference: '', notes: '', lines: [emptyLine()], pay_vendor_now: false, payment_method_id: '', bank_account_id: '', amount_paid: '', payment_reference: '' });
 const dateValue = (value: unknown) => value ? new Date(String(value)).toISOString().slice(0, 10) : '';
 const apiDate = (value: string) => new Date(`${value}T00:00:00.000Z`).toISOString();
 const money = (value: unknown) => Number(value || 0).toFixed(2);
@@ -43,6 +46,8 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   const [currencies, setCurrencies] = useState<Row[]>([]);
   const [terms, setTerms] = useState<Row[]>([]);
   const [companies, setCompanies] = useState<Row[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<Row[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<Row[]>([]);
   const [form, setForm] = useState<Form>(emptyForm);
   const [selected, setSelected] = useState<VendorBill | null>(null);
   const [open, setOpen] = useState(false);
@@ -63,12 +68,12 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [billRows, sourceRows, vendorRows, productRows, taxRows, currencyRows, termRows, companyRows] = await Promise.all([
+      const [billRows, sourceRows, vendorRows, productRows, taxRows, currencyRows, termRows, companyRows, methodRows, bankRows] = await Promise.all([
         recordsApi.getAll(), isRefund ? vendorBillApi.getAll() : Promise.resolve([]), vendorApi.getAll(), accountingProductApi.getAll(), accountingTaxApi.getAll(),
-        currencyApi.getAll(), paymentTermApi.getAll(), companyApi.getAll(),
+        currencyApi.getAll(), paymentTermApi.getAll(), companyApi.getAll(), accountingPaymentMethodApi.getAll(), bankAccountApi.getAll(),
       ]);
       setBills(billRows); setSourceBills(sourceRows); setVendors(vendorRows); setProducts(productRows); setTaxes(taxRows);
-      setCurrencies(currencyRows); setTerms(termRows); setCompanies(companyRows);
+      setCurrencies(currencyRows); setTerms(termRows); setCompanies(companyRows); setPaymentMethods(methodRows); setBankAccounts(bankRows);
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setLoading(false); }
   }, [showToast, recordsApi, isRefund]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
@@ -82,6 +87,13 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     const taxAmount = tax ? (tax.price_includes_tax ? discounted - untaxed : untaxed * rate) : 0;
     return { subtotal: sum.subtotal + untaxed, tax: sum.tax + taxAmount, total: sum.total + untaxed + taxAmount };
   }, { subtotal: 0, tax: 0, total: 0 }), [form.lines, taxes]);
+  const selectedVendor = vendors.find((row) => row.id === Number(form.vendor_id));
+  const selectedPaymentMethod = paymentMethods.find((row) => row.id === Number(form.payment_method_id));
+  const availableBankAccounts = bankAccounts.filter((row) => Number(row.company_id) === Number(selectedVendor?.company_id) && Number(row.currency_id) === Number(form.currency_id) && row.is_active !== false && row.gl_account_id);
+  const paymentNow = form.pay_vendor_now ? Math.max(0, Number(form.amount_paid) || 0) : 0;
+  const summaryPaid = viewOnly && selected ? Number(selected.amount_paid || 0) : paymentNow + Math.min(advanceAmount, totals.total);
+  const summaryBalance = Math.max(0, totals.total - summaryPaid);
+  const summaryStatus = summaryPaid <= 0.005 ? 'Posted' : summaryBalance <= 0.005 ? 'Paid' : 'Partially Paid';
   const filtered = bills.filter((bill) => {
     const needle = query.trim().toLowerCase();
     return (!needle || [bill.bill_number, bill.vendor_reference, bill.vendors?.name, bill.state].some((value) => String(value || '').toLowerCase().includes(needle))) &&
@@ -102,7 +114,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
       vendor_id: String(bill.vendor_id), reversed_bill_id: String(bill.reversed_bill_id || ''), bill_date: dateValue(bill.bill_date), received_date: dateValue(bill.received_date),
       currency_id: String(bill.currency_id || ''), exchange_rate: String(bill.exchange_rate || 1),
       payment_term_id: String(bill.payment_term_id || ''), vendor_reference: String(bill.vendor_reference || ''),
-      notes: '', lines: (bill.vendor_bill_lines || []).map((line) => ({
+      notes: '', pay_vendor_now: false, payment_method_id: '', bank_account_id: '', amount_paid: '', payment_reference: '', lines: (bill.vendor_bill_lines || []).map((line) => ({
         product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity),
         unit_price: Number(line.unit_price), discount_percent: Number(line.discount_percent),
         tax_id: line.tax_id || null,
@@ -151,8 +163,9 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   }
   async function save(postAfterSave = false) {
     setSaving(true);
+    const { pay_vendor_now: _payNow, payment_method_id: _paymentMethod, bank_account_id: _bankAccount, amount_paid: _amountPaid, payment_reference: _paymentReference, ...billForm } = form;
     const payload = {
-      ...form, notes: isRefund ? [`Refund reason: ${refundReason.trim()}`, moreNotes.trim()].filter(Boolean).join('\n') : form.notes,
+      ...billForm, notes: isRefund ? [`Refund reason: ${refundReason.trim()}`, moreNotes.trim()].filter(Boolean).join('\n') : form.notes,
       lines: form.lines.map((line) => ({ ...line, description: line.description || String(products.find((product) => product.id === Number(line.product_id))?.name || 'Custom line') })), vendor_id: Number(form.vendor_id), bill_date: apiDate(form.bill_date),
       received_date: form.received_date ? apiDate(form.received_date) : null, currency_id: Number(form.currency_id),
       exchange_rate: Number(form.exchange_rate), payment_term_id: form.payment_term_id ? Number(form.payment_term_id) : null,
@@ -161,7 +174,13 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     try {
       const saved = selected ? await recordsApi.update(selected.id, payload) : await recordsApi.create(payload);
       if (postAfterSave) {
-        if (isRefund) await vendorRefundApi.post(saved.id); else await vendorBillApi.post(saved.id, Math.min(advanceAmount, totals.total));
+        if (isRefund) await vendorRefundApi.post(saved.id); else await vendorBillApi.post(saved.id, {
+          advance_amount: Math.min(advanceAmount, totals.total), pay_vendor_now: form.pay_vendor_now,
+          payment_method_id: form.payment_method_id ? Number(form.payment_method_id) : undefined,
+          bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : undefined,
+          amount_paid: form.pay_vendor_now ? Number(form.amount_paid) : undefined,
+          payment_reference: form.payment_reference,
+        });
       }
       showToast(postAfterSave ? `Vendor ${kind} posted successfully` : `Draft vendor ${kind} ${selected ? 'updated' : 'prepared'} successfully`, 'success');
       setOpen(false); await load();
@@ -173,7 +192,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     finally { setSaving(false); }
   }
   async function postRecord(bill: VendorBill) {
-    setSaving(true); try { await recordsApi.post(bill.id); showToast(`Vendor ${kind} posted successfully`, 'success'); setPendingAction(null); await load(); }
+    setSaving(true); try { await recordsApi.post(bill.id, isRefund ? undefined : {}); showToast(`Vendor ${kind} posted successfully`, 'success'); setPendingAction(null); await load(); }
     catch (error) { showToast(errorMessage(error), 'error'); }
     finally { setSaving(false); }
   }
@@ -190,7 +209,8 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     { key: 'due', header: 'Due Date', cell: (row) => dateValue(row.due_date) },
     { key: 'status', header: 'Status', align: 'center', cell: (row) => <Status bill={row} /> },
     { key: 'total', header: 'Total', align: 'right', cell: (row) => <span className="font-semibold">{row.currencies?.code} {money(row.amount_total)}</span> },
-    { key: 'dueAmount', header: 'Amount Due', align: 'right', cell: (row) => money(row.amount_due) },
+    { key: 'paidAmount', header: 'Paid', align: 'right', cell: (row) => money(row.amount_paid) },
+    { key: 'dueAmount', header: 'Balance', align: 'right', cell: (row) => <span className="font-semibold">{money(row.amount_due)}</span> },
     { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <div className="flex justify-end gap-1">
       {row.state === 'draft' ? <><button title="Edit" onClick={() => openBill(row)} className={actionBtnEdit}><Edit3 className="size-4" /></button><button title="Post" onClick={() => setPendingAction({ type: 'post', bill: row })} className={actionBtnView}><Send className="size-4" /></button><button title="Delete" onClick={() => setPendingAction({ type: 'delete', bill: row })} className={actionBtnDelete}><Trash2 className="size-4" /></button></> : <><button title="View" onClick={() => openBill(row, true)} className={actionBtnView}><Eye className="size-4" /></button><button title="Print" onClick={() => void printRecord(row)} className={actionBtnView}><Printer className="size-4" /></button></>}
     </div> },
@@ -220,7 +240,8 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
           <td className="p-2"><select value={line.tax_id || ''} onChange={(event) => updateLine(index, { tax_id: Number(event.target.value) || null })} className="h-9 w-full rounded-lg border px-2"><option value="">No tax</option>{taxes.filter((row) => row.is_active !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
           <td className="p-2"><button type="button" disabled={form.lines.length === 1} onClick={() => setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) })} className="text-rose-600 disabled:opacity-30"><X className="size-4" /></button></td>
         </tr>)}</tbody></table><button type="button" onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })} className="m-3 flex items-center gap-1 text-xs font-semibold text-primary"><Plus className="size-3" /> Add line</button></div>}
-        <div className="mt-4 grid items-stretch gap-4 lg:min-h-[170px] lg:grid-cols-[minmax(0,1fr)_260px]">{isRefund ? <details className="h-fit rounded-xl border p-4"><summary className="cursor-pointer text-xs font-semibold">More Options</summary><label className="mt-3 flex flex-col text-xs font-semibold">Notes<textarea value={moreNotes} onChange={(event) => setMoreNotes(event.target.value)} className="mt-1 min-h-[100px] w-full resize-none rounded-lg border p-2 text-sm" placeholder="Optional internal notes..." /></label></details> : <label className="flex h-full flex-col text-xs font-semibold">Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 min-h-[140px] w-full flex-1 resize-none rounded-lg border p-2 text-sm" placeholder="Add any notes for this bill..." /></label>}<aside className="h-full rounded-xl border bg-muted/20 p-4 text-sm"><p className="mb-3 font-semibold">Invoice summary</p><Total label="Subtotal" value={totals.subtotal} /><Total label="Tax" value={totals.tax} /><div className="my-2 border-t" /><Total label="Grand total" value={totals.total} strong /></aside></div>
+        {!isRefund && !viewOnly && <section className="rounded-xl border bg-muted/10 p-4"><h3 className="font-semibold">Payment Information</h3><label className="mt-3 flex w-fit items-center gap-2 text-sm font-medium"><input type="checkbox" checked={form.pay_vendor_now} onChange={(event) => setForm((current) => ({ ...current, pay_vendor_now: event.target.checked, payment_method_id: event.target.checked ? current.payment_method_id : '', bank_account_id: '', amount_paid: event.target.checked ? current.amount_paid : '', payment_reference: event.target.checked ? current.payment_reference : '' }))} className="size-4 accent-primary" /> Pay Vendor Now</label>{form.pay_vendor_now && <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Select label="Payment Method" value={form.payment_method_id} set={(value) => setForm((current) => ({ ...current, payment_method_id: value, bank_account_id: '' }))} rows={paymentMethods.filter((row) => row.is_active !== false && ['outbound', 'both'].includes(String(row.payment_type)))} />{selectedPaymentMethod?.allow_multiple_accounts === true && <Select label="Bank Account" value={form.bank_account_id} set={(value) => setForm((current) => ({ ...current, bank_account_id: value }))} rows={availableBankAccounts} labelKey="account_name" optional={availableBankAccounts.length === 1} />}<label className="text-xs font-semibold">Amount Paid <span className="text-rose-500">*</span><input required type="number" min="0.01" max={Math.max(0, totals.total - Math.min(advanceAmount, totals.total))} step="0.01" value={form.amount_paid} onChange={(event) => setForm((current) => ({ ...current, amount_paid: event.target.value }))} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3 text-sm" /></label><Field label="Reference" value={form.payment_reference} set={(value) => setForm((current) => ({ ...current, payment_reference: value }))} optional /></div>}</section>}
+        <div className="mt-4 grid items-stretch gap-4 lg:min-h-[170px] lg:grid-cols-[minmax(0,1fr)_280px]">{isRefund ? <details className="h-fit rounded-xl border p-4"><summary className="cursor-pointer text-xs font-semibold">More Options</summary><label className="mt-3 flex flex-col text-xs font-semibold">Notes<textarea value={moreNotes} onChange={(event) => setMoreNotes(event.target.value)} className="mt-1 min-h-[100px] w-full resize-none rounded-lg border p-2 text-sm" placeholder="Optional internal notes..." /></label></details> : <label className="flex h-full flex-col text-xs font-semibold">Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="mt-1 min-h-[140px] w-full flex-1 resize-none rounded-lg border p-2 text-sm" placeholder="Add any notes for this bill..." /></label>}<aside className="h-full rounded-xl border bg-muted/20 p-4 text-sm"><p className="mb-3 font-semibold">Bill summary</p><Total label="Subtotal" value={totals.subtotal} /><Total label="Tax" value={totals.tax} /><div className="my-2 border-t" /><Total label="Grand total" value={totals.total} strong />{!isRefund && <><div className="my-2 border-t" /><Total label="Paid" value={summaryPaid} /><Total label="Balance" value={summaryBalance} /><div className="mt-2 flex justify-between font-semibold"><span>Status</span><span>{summaryStatus}</span></div></>}</aside></div>
       </fieldset><DialogFooter><button type="button" onClick={() => setOpen(false)} className="h-9 rounded-xl border px-4">{viewOnly ? 'Close' : 'Cancel'}</button>{!viewOnly && <><button disabled={saving} className="h-9 rounded-xl border px-4 font-semibold">{saving ? 'Saving...' : 'Save Draft'}</button><button type="button" disabled={saving} onClick={(event) => { if (event.currentTarget.form?.reportValidity()) void save(true); }} className="h-9 rounded-xl bg-primary px-4 font-semibold text-white">Post {isRefund ? 'Refund' : 'Bill'}</button></>}</DialogFooter></form>
     </DialogContent></Dialog>
     <AccountingConfirmDialog open={Boolean(pendingAction)} title={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} Vendor ${isRefund ? 'Refund' : 'Bill'}`} description={pendingAction?.type === 'delete' ? `Confirm removal of this draft vendor ${kind}.` : `Confirm this vendor ${kind} before updating accounting balances.`} confirmLabel={`${pendingAction?.type === 'delete' ? 'Delete' : 'Post'} ${isRefund ? 'Refund' : 'Bill'}`} destructive={pendingAction?.type === 'delete'} busy={saving} details={pendingAction && <div className="flex justify-between"><span className="text-muted-foreground">Document</span><b>{pendingAction.bill.bill_number}</b></div>} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && void (pendingAction.type === 'delete' ? remove(pendingAction.bill) : postRecord(pendingAction.bill))} />

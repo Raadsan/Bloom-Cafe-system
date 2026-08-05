@@ -33,8 +33,8 @@ export type VendorBill = AccountingRecord & {
 const bills = createAccountingCrudApi<VendorBill>('/accounting/vendor-bills');
 export const vendorBillApi = {
   ...bills,
-  post: async (id: number, advanceAmount = 0): Promise<VendorBill> => {
-    const response = await (await import('../../axios')).default.post(`/accounting/vendor-bills/${id}/post`, { advance_amount: advanceAmount });
+  post: async (id: number, payment: { advance_amount?: number; pay_vendor_now?: boolean; payment_method_id?: number; bank_account_id?: number; amount_paid?: number; payment_reference?: string } = {}): Promise<VendorBill> => {
+    const response = await (await import('../../axios')).default.post(`/accounting/vendor-bills/${id}/post`, payment);
     return response.data.data;
   },
 };

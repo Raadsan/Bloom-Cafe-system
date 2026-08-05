@@ -308,6 +308,19 @@ export const post = async (req, res) => {
           journal_items: { create: journalItems },
         } })
       await tx.vendor_payments.update({ where: { id: paymentId }, data: { state: 'posted', journal_entry_id: entry.id, posted_at: postedAt, updated_at: postedAt } })
+      for (const billId of new Set(payment.payment_allocations.map((allocation) => allocation.bill_id))) {
+        const [bill, aggregate] = await Promise.all([
+          tx.vendor_bills.findUnique({ where: { id: billId }, select: { amount_total: true } }),
+          tx.payment_allocations.aggregate({
+            where: { bill_id: billId, vendor_payments: { state: 'posted' } },
+            _sum: { allocated_amount: true },
+          }),
+        ])
+        if (!bill) continue
+        const paid = Math.min(Number(bill.amount_total), Math.round(Number(aggregate._sum.allocated_amount || 0) * 100) / 100)
+        const due = Math.max(0, Math.round((Number(bill.amount_total) - paid) * 100) / 100)
+        await tx.vendor_bills.update({ where: { id: billId }, data: { amount_paid: paid, amount_due: due, payment_state: due <= 0.005 ? 'paid' : paid > 0.005 ? 'partial' : 'not_paid', updated_at: postedAt } })
+      }
       return tx.vendor_payments.findUnique({ where: { id: paymentId }, include })
     }, { maxWait: 10000, timeout: 30000 })
     await logAudit({ userId: req.user?.id, action: 'Posted', entity: 'VendorPayment', entityId: paymentId, description: `Posted vendor payment "${data.payment_number}"` })
