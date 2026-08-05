@@ -98,6 +98,27 @@ interface SidebarCache {
 }
 let _sidebarCache: SidebarCache | null = null;
 
+const FULL_ACCESS = { canView: true, canAdd: false, canEdit: false, canDelete: false };
+const MAIN_MODULE_MENUS: Menu[] = [
+  { id: -101, title: "Dashboard", url: "/dashboard", icon: "LayoutDashboard", order: 1, moduleKey: "CORE", isActive: true, permissions: FULL_ACCESS },
+  { id: -102, title: "Restaurant", url: "/restaurant/dashboard", icon: "Store", order: 2, moduleKey: "CORE", isActive: true, permissions: FULL_ACCESS },
+  { id: -103, title: "Accounting", url: "/accounting/dashboard", icon: "Landmark", order: 3, moduleKey: "CORE", isActive: true, permissions: FULL_ACCESS },
+  { id: -104, title: "Configurations", url: "/config/roles", icon: "Settings", order: 4, moduleKey: "CORE", isActive: true, permissions: FULL_ACCESS },
+];
+
+const CONFIGURATION_MENUS: Menu[] = [
+  { id: -301, title: "Roles", url: "/roles", icon: "ShieldCheck", order: 1, moduleKey: "ACCESS_CONTROL", isActive: true, permissions: FULL_ACCESS },
+  { id: -302, title: "System Users", url: "/users", icon: "Users", order: 2, moduleKey: "ACCESS_CONTROL", isActive: true, permissions: FULL_ACCESS },
+  { id: -303, title: "Menus", url: "/menus", icon: "ListTree", order: 3, moduleKey: "ACCESS_CONTROL", isActive: true, permissions: FULL_ACCESS },
+  { id: -304, title: "Permissions", url: "/permissions", icon: "KeyRound", order: 4, moduleKey: "ACCESS_CONTROL", isActive: true, permissions: FULL_ACCESS },
+];
+
+const WORKSPACE_DASHBOARDS: Partial<Record<WorkspaceKey, Menu>> = {
+  RESTAURANT: { id: -201, title: "Dashboard", url: "/dashboard", icon: "LayoutDashboard", order: -1, moduleKey: "RESTAURANT", isActive: true, permissions: FULL_ACCESS },
+  ACCOUNTING: { id: -202, title: "Dashboard", url: "/dashboard", icon: "LayoutDashboard", order: -1, moduleKey: "ACCOUNTING", isActive: true, permissions: FULL_ACCESS },
+  ACCESS_CONTROL: { id: -203, title: "Dashboard", url: "/dashboard", icon: "LayoutDashboard", order: -1, moduleKey: "ACCESS_CONTROL", isActive: true, permissions: FULL_ACCESS },
+};
+
 function clearSidebarCache() {
   _sidebarCache = null;
 }
@@ -190,8 +211,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const workspace = workspaceFromPath(pathname);
   const [user, setUser] = useState<AuthUser | null>(null);
   // Pre-populate from module cache for instant render — no loading flash on navigation
-  const [menus, setMenus] = useState<Menu[]>(_sidebarCache?.menus ?? []);
-  const [loading, setLoading] = useState(_sidebarCache === null); // only show skeleton on first load
+  const staticWorkspaceMenus = workspace === 'CORE' ? MAIN_MODULE_MENUS : workspace === 'ACCESS_CONTROL' ? CONFIGURATION_MENUS : null;
+  const [menus, setMenus] = useState<Menu[]>(_sidebarCache?.workspace === workspace ? _sidebarCache.menus : staticWorkspaceMenus || []);
+  const [loading, setLoading] = useState(!staticWorkspaceMenus && _sidebarCache?.workspace !== workspace);
   const [openMenus, setOpenMenus] = useState<Record<number, boolean>>({});
   const userRoleIdRef = useRef<number | undefined>(undefined);
 
@@ -211,6 +233,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         setUser(currentUser);
 
         if (currentUser && currentUser.roleId) {
+          if (workspace === 'CORE' || workspace === 'ACCESS_CONTROL') {
+            const workspaceMenus = workspace === 'CORE' ? MAIN_MODULE_MENUS : CONFIGURATION_MENUS;
+            _sidebarCache = { menus: workspaceMenus, roleId: currentUser.roleId, workspace };
+            setMenus(workspaceMenus);
+            setLoading(false);
+            return;
+          }
           if (!refreshWorkspaceMenus && _sidebarCache && _sidebarCache.roleId === currentUser.roleId && _sidebarCache.workspace === workspace) {
             setMenus(_sidebarCache.menus);
             setLoading(false);
@@ -314,8 +343,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   const navItems = useMemo(() => {
+    const dashboard = WORKSPACE_DASHBOARDS[workspace];
+    const source = workspace === 'CORE' ? MAIN_MODULE_MENUS : workspace === 'ACCESS_CONTROL' ? CONFIGURATION_MENUS : dashboard && !menus.some((menu) => menu.url === '/dashboard') ? [dashboard, ...menus] : menus;
     const seen = new Set<string>();
-    return menus
+    return source
       .filter((item) => item.isActive !== false)
       .filter(item => {
         const title = item.title.trim();
@@ -323,7 +354,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         seen.add(title);
         return true;
       });
-  }, [menus]);
+  }, [menus, workspace]);
 
   return (
     <Sidebar collapsible="icon" {...props} className="border-r border-sidebar-border shadow-none bg-sidebar">

@@ -6,7 +6,6 @@ import { Edit3, Landmark, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { bankAccountApi } from '@/lib/api/accounting/banking/bankAccountApi';
 import { companyApi } from '@/lib/api/accounting/configuration/companyApi';
 import { currencyApi } from '@/lib/api/accounting/configuration/currencyApi';
-import { chartOfAccountApi } from '@/lib/api/accounting/ledger/chartOfAccountApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
@@ -40,7 +39,7 @@ export default function BankingSetupPage() {
     setLoading(true);
     try {
       const [data, companyRows, currencyRows, accountRows] = await Promise.all([
-        bankAccountApi.getAll(), companyApi.getAll(), currencyApi.getAll(), chartOfAccountApi.getAll(),
+        bankAccountApi.getAll(), companyApi.getAll(), currencyApi.getAll(), bankAccountApi.getEligibleGlAccounts(),
       ]);
       setRows(data); setCompanies(companyRows); setCurrencies(currencyRows); setAccounts(accountRows);
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setLoading(false); }
@@ -54,7 +53,7 @@ export default function BankingSetupPage() {
       (status === 'all' || Boolean(row.is_active) === (status === 'active')) &&
       (companyFilter === 'all' || Number(row.company_id) === Number(companyFilter));
   }), [companyFilter, query, rows, status]);
-  const companyAccounts = accounts.filter((row) => Number(row.company_id) === Number(form.company_id) && row.is_active !== false);
+  const companyAccounts = accounts.filter((row) => Number(row.company_id) === Number(form.company_id));
 
   function create() { setSelected(null); setForm(emptyAccount()); setOpen(true); }
   function edit(row: Row) {

@@ -118,7 +118,8 @@ export function ProtectedRoute({
         // Admin is not an automatic bypass: it must also have canView assigned.
         const canEnter = (user.authContext === "pos" && POS_ROUTES.has(pathname)) ||
           ACCOUNT_ROUTES.has(pathname) || pathname === '/accounting/dashboard' ||
-          (pathname === '/dashboard' && isModuleAdmin(user.role)) || (
+          (pathname === '/dashboard' && isModuleAdmin(user.role)) ||
+          (pathname.startsWith('/config/') && isModuleAdmin(user.role)) || (
           // Menu permissions have a short-lived cache and are also enforced by
           // the backend. Avoid forcing the same remote query on every route.
           !!user.roleId && hasRouteAccess(assignedMenus, pathname, workspace)

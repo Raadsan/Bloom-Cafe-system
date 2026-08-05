@@ -2,6 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import crypto from 'crypto'
+// This SDK is a runtime dependency because configured S3 storage is initialized at startup.
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))

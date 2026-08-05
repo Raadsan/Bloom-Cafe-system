@@ -30,10 +30,10 @@ type DashboardOption = {
 };
 
 function findDashboardHref(workspace: WorkspaceKey, menus: Awaited<ReturnType<typeof menuApi.getMenusByRole>>) {
+  if (workspace === "ACCESS_CONTROL") return "/config/roles";
   const dashboard = menus.find((menu) => menu.isActive !== false && menu.url === "/dashboard")
     ?? menus.find((menu) => menu.isActive !== false && menu.title.toLowerCase().includes("dashboard"));
-  if (!dashboard) return null;
-  return workspaceHref(dashboard.url, workspace);
+  return workspaceHref(dashboard?.url || '/dashboard', workspace);
 }
 
 export function DashboardSwitcher() {

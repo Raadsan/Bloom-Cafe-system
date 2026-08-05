@@ -19,8 +19,7 @@ export function workspaceFromPath(pathname: string): WorkspaceKey {
 
 export function workspaceHref(url: string, workspace: WorkspaceKey) {
   if (workspace === 'RESTAURANT' && !url.startsWith('/restaurant/')) return `/restaurant${url}`;
-  if (workspace === 'ACCESS_CONTROL' && url === '/users') return '/config/users';
-  if (workspace === 'ACCESS_CONTROL' && !url.startsWith('/access-control/') && !url.startsWith('/config/')) return `/access-control${url}`;
+  if (workspace === 'ACCESS_CONTROL' && !url.startsWith('/config/')) return `/config${url}`;
   if (workspace === 'ACCOUNTING' && !url.startsWith('/accounting/')) return `/accounting${url}`;
   return url;
 }

@@ -26,11 +26,28 @@ async function resolveInstitution(name) {
 async function resolveJournal(companyId, submittedJournalId) {
     if (submittedJournalId) return submittedJournalId
     const journal = await prisma.journals.findFirst({
-        where: { company_id: companyId, is_active: true, journal_type: 'bank' },
+        where: { company_id: companyId, code: 'BANK', is_active: true, journal_type: 'bank' },
         orderBy: [{ code: 'asc' }, { id: 'asc' }],
         select: { id: true },
     })
     return journal?.id || null
+}
+
+const eligibleBankAccountWhere = (companyId) => ({
+    ...(companyId ? { company_id: companyId } : {}),
+    code: '1002',
+    is_active: true,
+    allow_manual_entry: true,
+    account_types: { internal_group: 'asset' },
+    other_chart_of_accounts: { none: {} },
+})
+
+async function validateBankGlAccount(companyId, glAccountId, currencyId) {
+    const account = await prisma.chart_of_accounts.findFirst({
+        where: { id: glAccountId, ...eligibleBankAccountWhere(companyId), OR: [{ currency_id: null }, { currency_id: currencyId }] },
+        select: { id: true },
+    })
+    if (!account) throw inputError('Linked GL account must be the active 1002 – Bank Account posting ledger for this company and currency')
 }
 
 function payload(body) {
@@ -64,6 +81,18 @@ export const getAll = async (_req, res) => {
     } catch (error) { fail(res, error) }
 }
 
+export const getEligibleGlAccounts = async (req, res) => {
+    try {
+        const companyId = id(req.query.company_id)
+        const data = await prisma.chart_of_accounts.findMany({
+            where: eligibleBankAccountWhere(companyId),
+            select: { id: true, company_id: true, currency_id: true, code: true, name: true },
+            orderBy: [{ company_id: 'asc' }, { code: 'asc' }],
+        })
+        res.status(200).json({ success: true, data })
+    } catch (error) { fail(res, error) }
+}
+
 export const getById = async (req, res) => {
     try {
         const data = await prisma.bank_accounts.findUnique({ where: { id: parseInt(req.params.id) }, include })
@@ -75,6 +104,7 @@ export const getById = async (req, res) => {
 export const create = async (req, res) => {
     try {
         const data = payload(req.body)
+        await validateBankGlAccount(data.company_id, data.gl_account_id, data.currency_id)
         const institution = await resolveInstitution(data.institution_name)
         const journalId = await resolveJournal(data.company_id, data.journal_id)
         const created = await prisma.bank_accounts.create({ data: { ...data, bank_id: institution.id, journal_id: journalId }, include })
@@ -85,6 +115,7 @@ export const create = async (req, res) => {
 export const update = async (req, res) => {
     try {
         const data = payload(req.body)
+        await validateBankGlAccount(data.company_id, data.gl_account_id, data.currency_id)
         const institution = await resolveInstitution(data.institution_name)
         const journalId = await resolveJournal(data.company_id, data.journal_id)
         const updated = await prisma.bank_accounts.update({ where: { id: parseInt(req.params.id) }, data: { ...data, bank_id: institution.id, journal_id: journalId }, include })

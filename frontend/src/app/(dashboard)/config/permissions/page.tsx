@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Save, Search } from "lucide-react";
+import { CheckCheck, Eraser, Save, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -47,6 +47,7 @@ export default function PermissionsPage() {
   const [permsLoading, setPermsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedModule, setSelectedModule] = useState("ALL");
   const [pageSize, setPageSize] = useState(25);
   const [permissionsDirty, setPermissionsDirty] = useState(false);
   const { showToast } = useToast();
@@ -58,8 +59,11 @@ export default function PermissionsPage() {
 
   const filteredMenus = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return sortedAllMenus;
     return sortedAllMenus.filter((menu) => {
+      if (selectedModule !== "ALL" && String(menu.moduleKey || "CORE").toUpperCase() !== selectedModule) {
+        return false;
+      }
+      if (!q) return true;
       const menuMatch =
         menu.title.toLowerCase().includes(q) ||
         menu.url?.toLowerCase().includes(q);
@@ -70,7 +74,7 @@ export default function PermissionsPage() {
       );
       return menuMatch || subMatch;
     });
-  }, [sortedAllMenus, searchQuery]);
+  }, [sortedAllMenus, searchQuery, selectedModule]);
 
   useEffect(() => {
     const init = async () => {
@@ -265,6 +269,25 @@ export default function PermissionsPage() {
     });
   };
 
+  const setVisiblePermissions = (enabled: boolean) => {
+    if (filteredMenus.length === 0) return;
+    setPermissionsDirty(true);
+    setPermissions((previous) => {
+      const next = { ...previous };
+      filteredMenus.forEach((menu) => {
+        const value = { canView: enabled, canAdd: enabled, canEdit: enabled, canDelete: enabled };
+        next[menu.id] = {
+          menu: { ...value },
+          submenus: {
+            ...(next[menu.id]?.submenus || {}),
+            ...Object.fromEntries((menu.items || []).map((submenu) => [submenu.id, { ...value }])),
+          },
+        };
+      });
+      return next;
+    });
+  };
+
   const handleSave = async () => {
     if (!selectedRoleId) return;
     try {
@@ -373,6 +396,21 @@ export default function PermissionsPage() {
             </div>
 
             <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
+              <span>Filter Module</span>
+              <select
+                value={selectedModule}
+                onChange={(e) => setSelectedModule(e.target.value)}
+                className="w-44 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+              >
+                <option value="ALL">All Modules</option>
+                <option value="CORE">CORE</option>
+                <option value="RESTAURANT">RESTAURANT</option>
+                <option value="ACCOUNTING">ACCOUNTING</option>
+                <option value="ACCESS_CONTROL">ACCESS CONTROL</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
               <span>Filter Role</span>
               <select
                 value={selectedRoleId || ""}
@@ -389,6 +427,26 @@ export default function PermissionsPage() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setVisiblePermissions(true)}
+              disabled={loading || permsLoading || filteredMenus.length === 0}
+              className="h-[42px] px-4 rounded-md flex items-center gap-2 font-semibold text-xs"
+            >
+              <CheckCheck className="size-4" />
+              Check All
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setVisiblePermissions(false)}
+              disabled={loading || permsLoading || filteredMenus.length === 0}
+              className="h-[42px] px-4 rounded-md flex items-center gap-2 font-semibold text-xs text-destructive hover:text-destructive"
+            >
+              <Eraser className="size-4" />
+              Clear
+            </Button>
             <div className="relative w-64 group">
               <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input
