@@ -846,10 +846,23 @@ export default function PosTerminalPage() {
 
   const resolveDeliveryAddressId = async (): Promise<number | undefined> => {
     if (orderType !== "delivery") return undefined;
-    const cust = customers.find(c => c.id === selectedCustomer);
+    let customerId = selectedCustomer;
+    let cust = customers.find(c => c.id === customerId);
     const phone = cust?.phone || customerPhone.trim() || "N/A";
+
+    if (!customerId) {
+      const existingCustomer = await customerApi.getCustomerByPhone(phone);
+      cust = existingCustomer || await customerApi.createCustomer({
+        fullName: getCustomerNamePayload() || "Delivery Guest",
+        phone,
+      });
+      customerId = cust.id;
+      setSelectedCustomer(cust.id);
+      setCustomers(current => current.some(item => item.id === cust!.id) ? current : [...current, cust!]);
+    }
+
     const res = await api.post("/addresses", {
-      customerId: selectedCustomer || undefined,
+      customerId,
       name: "Delivery",
       district: deliveryDistrict.trim() || "N/A",
       street: deliveryStreet.trim(),

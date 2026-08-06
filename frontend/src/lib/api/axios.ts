@@ -1,5 +1,17 @@
 import axios from 'axios';
 
+const TECHNICAL_ERROR_PATTERN = /prisma\.|invocation|unknown argument|argument `?.+`? is missing|validation error|stack trace|\n\s*at\s+/i;
+
+function isSafeUserMessage(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= 240 && !value.includes('\n') && !TECHNICAL_ERROR_PATTERN.test(value);
+}
+
+export function getApiErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.') {
+  if (!axios.isAxiosError(error)) return fallback;
+  const message = error.response?.data?.message;
+  return isSafeUserMessage(message) ? message.trim() : fallback;
+}
+
 const getBaseUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
@@ -28,6 +40,14 @@ let refreshPromise: Promise<void> | null = null;
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const responseMessage = error.response?.data?.message;
+    if (responseMessage && !isSafeUserMessage(responseMessage)) {
+      error.response.data = {
+        ...error.response.data,
+        message: 'Unable to complete the request. Please try again.',
+      };
+    }
+
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       const original = error.config as typeof error.config & { _retried?: boolean };
       const isRefresh = original?.url?.includes('/auth/refresh');

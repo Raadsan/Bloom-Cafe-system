@@ -13,7 +13,7 @@ const restaurantMenus = [
     ['Order Reports', '/report/orders'], ['Financial Reports', '/report/finance'], ['Customer Reports', '/report/clients'],
   ]],
   ['Configuration', '/config', 'Settings2', [
-    ['Tracking', '/config/tracking'], ['Notifications', '/config/notifications'],
+    ['Receipt Settings', '/receipt-settings'], ['Tracking', '/config/tracking'], ['Notifications', '/config/notifications'],
   ]],
 ]
 

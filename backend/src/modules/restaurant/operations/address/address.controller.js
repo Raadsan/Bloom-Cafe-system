@@ -18,18 +18,23 @@ export const getCustomerAddresses = async (req, res) => {
 export const createAddress = async (req, res) => {
   try {
     const { customerId, name, district, street, phone, isDefault } = req.body
+    const parsedCustomerId = Number(customerId)
+
+    if (!Number.isInteger(parsedCustomerId) || parsedCustomerId <= 0) {
+      return res.status(400).json({ success: false, message: 'A valid customer is required for delivery' })
+    }
 
     // If isDefault is true, unset other defaults for this customer
     if (isDefault) {
       await prisma.address.updateMany({
-        where: { customerId: Number(customerId), isDefault: true },
+        where: { customerId: parsedCustomerId, isDefault: true },
         data: { isDefault: false }
       })
     }
 
     const address = await prisma.address.create({
       data: {
-        customerId: Number(customerId),
+        customerId: parsedCustomerId,
         name,
         district,
         street,
@@ -40,7 +45,8 @@ export const createAddress = async (req, res) => {
 
     res.status(201).json({ success: true, data: address })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    console.error('Create Address Error:', error)
+    res.status(500).json({ success: false, message: 'Unable to save the delivery address' })
   }
 }
 
