@@ -1141,6 +1141,8 @@ export default function PosTerminalPage() {
       return;
     }
 
+    if (!validateOrderDetails()) return;
+
     const payPhone = resolvePaymentPhone();
     if (paymentMethod === "premier_wallet" && !payPhone) {
       showToast("Enter mobile number for Premier Wallet payment", "error");
