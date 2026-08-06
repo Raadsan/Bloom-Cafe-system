@@ -14,6 +14,7 @@ import {
   attachCompositesToMenuItems,
 } from '../../../../utils/compositeMenuHelper.js'
 import { refreshSumPricedCompositesForItem, invalidateComboFormCache } from '../composite/composite.controller.js'
+import { syncAccountingProduct } from '../../../../utils/accountingProductSync.js'
 
 const posCatalogCache = { data: null, at: 0 }
 const POS_CATALOG_TTL_MS = 5 * 60 * 1000
@@ -143,17 +144,6 @@ function normalizeOptionsInput(raw) {
     }
   }
   return null
-}
-
-async function syncAccountingProduct(item) {
-  const sku = `MENU-${item.id}`
-  const data = {
-    name: item.name, description: item.description, product_type: 'goods',
-    can_be_sold: item.isSellable, can_be_purchased: item.isPurchasable,
-    list_price: item.price, standard_cost: item.costPrice || 0,
-    is_active: item.isSellable || item.isPurchasable,
-  }
-  await prisma.products.upsert({ where: { sku }, update: data, create: { sku, ...data } })
 }
 
 // CREATE MENU ITEM

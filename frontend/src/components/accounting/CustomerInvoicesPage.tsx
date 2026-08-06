@@ -58,8 +58,11 @@ export default function CustomerInvoicesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [invoiceRows, customerRows, productRows, taxRows, currencyRows, termRows, methodRows] = await Promise.all([
-        customerInvoiceApi.getAll(), accountingCustomerApi.getAll(), accountingProductApi.getAll(), accountingTaxApi.getAll(),
+      // Product loading also backfills menu-item VAT mappings. Finish it before
+      // reading taxes so a newly discovered VAT rate is present in the dropdown.
+      const productRows = await accountingProductApi.getAll();
+      const [invoiceRows, customerRows, taxRows, currencyRows, termRows, methodRows] = await Promise.all([
+        customerInvoiceApi.getAll(), accountingCustomerApi.getAll(), accountingTaxApi.getAll(),
         currencyApi.getAll(), paymentTermApi.getAll(), accountingPaymentMethodApi.getAll(),
       ]);
       setInvoices(invoiceRows); setCustomers(customerRows); setProducts(productRows); setTaxes(taxRows); setCurrencies(currencyRows);
@@ -219,7 +222,7 @@ export default function CustomerInvoicesPage() {
         <td className="p-2"><input required type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
         <td className="p-2"><input required type="number" min="0" step="0.01" value={line.unit_price} onChange={(event) => updateLine(index, { unit_price: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
         <td className="p-2"><input type="number" min="0" max="100" step="0.01" value={line.discount_percent} onChange={(event) => updateLine(index, { discount_percent: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
-        <td className="p-2"><select value={line.tax_id || ''} onChange={(event) => updateLine(index, { tax_id: Number(event.target.value) || null })} className="h-9 w-full rounded-lg border px-2"><option value="">No tax</option>{taxes.filter((item) => item.is_active !== false).map((item) => <option key={item.id} value={item.id}>{String(item.name)}</option>)}</select></td>
+        <td className="p-2"><select value={line.tax_id || ''} onChange={(event) => updateLine(index, { tax_id: Number(event.target.value) || null })} className="h-9 w-full rounded-lg border px-2"><option value="">No tax</option>{taxes.filter((item) => item.is_active !== false && Number(item.rate_percent || 0) !== 0).map((item) => <option key={item.id} value={item.id}>{String(item.name)}</option>)}</select></td>
         <td className="p-2"><button type="button" disabled={form.lines.length === 1} onClick={() => setForm({ ...form, lines: form.lines.filter((_, lineIndex) => lineIndex !== index) })} className="rounded p-1 text-rose-600 disabled:opacity-30"><X className="size-4" /></button></td>
       </tr>)}</tbody></table><button type="button" onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })} className="m-2.5 flex items-center gap-1 text-xs font-semibold text-primary"><Plus className="size-3" /> Add line</button></div>
         </div>

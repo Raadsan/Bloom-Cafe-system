@@ -1,7 +1,9 @@
 import prisma from '../../../../config/db.js'
+import { syncAllMenuAccountingProducts } from '../../../../utils/accountingProductSync.js'
 
 export const getAll = async (req, res) => {
     try {
+        await syncAllMenuAccountingProducts()
         const data = await prisma.products.findMany()
         res.status(200).json({ success: true, data })
     } catch (error) {

@@ -173,6 +173,8 @@ async function seedAccounting() {
   const term = await prisma.payment_terms.upsert({ where: { name: 'Due on Receipt' }, update: { is_active: true }, create: { name: 'Due on Receipt', description: 'Payment is due immediately.' } })
   if (!await prisma.payment_term_lines.findFirst({ where: { payment_term_id: term.id } })) await prisma.payment_term_lines.create({ data: { payment_term_id: term.id, value_type: 'balance', due_days: 0 } })
   await prisma.taxes.upsert({ where: { name: 'No Tax' }, update: { rate_percent: 0, is_active: true }, create: { name: 'No Tax', rate_percent: 0 } })
+  const vatAccount = await prisma.chart_of_accounts.upsert({ where: { company_id_code: { company_id: company.id, code: '2100' } }, update: { name: 'VAT Payable', account_type_id: types.liability.id, currency_id: usd.id, is_active: true }, create: { company_id: company.id, code: '2100', name: 'VAT Payable', account_type_id: types.liability.id, currency_id: usd.id } })
+  await prisma.taxes.upsert({ where: { name: 'VAT 5%' }, update: { rate_percent: 5, tax_scope: 'sale', tax_account_id: vatAccount.id, is_active: true }, create: { name: 'VAT 5%', rate_percent: 5, tax_scope: 'sale', tax_account_id: vatAccount.id } })
   const year = new Date().getUTCFullYear()
   const start = new Date(Date.UTC(year, 0, 1)); const end = new Date(Date.UTC(year, 11, 31))
   const fiscalYear = await prisma.fiscal_years.upsert({ where: { company_id_name: { company_id: company.id, name: String(year) } }, update: { state: 'open' }, create: { company_id: company.id, name: String(year), start_date: start, end_date: end } })

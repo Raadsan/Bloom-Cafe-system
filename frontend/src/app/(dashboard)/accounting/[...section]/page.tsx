@@ -12,6 +12,7 @@ import VendorPaymentsPage from '@/components/accounting/VendorPaymentsPage';
 import BankingSetupPage from '@/components/accounting/BankingSetupPage';
 import CashTransactionsPage from '@/components/accounting/CashTransactionsPage';
 import FinancialReportsPage, { type FinancialReportKind } from '@/components/accounting/FinancialReportsPage';
+import MenuPage from '@/app/(dashboard)/menus/page';
 
 const CONFIGURATION_SECTIONS = new Set([
   'account-types', 'currencies', 'companies', 'payment-methods',
@@ -124,6 +125,10 @@ export default async function AccountingSectionPage({
 
   if (['general-ledger', 'trial-balance', 'profit-and-loss', 'balance-sheet', 'cash-flow', 'journal-report'].includes(key)) {
     return <FinancialReportsPage kind={key as FinancialReportKind} />;
+  }
+
+  if (key === 'products' || key === 'menus') {
+    return <MenuPage />;
   }
 
   return (
