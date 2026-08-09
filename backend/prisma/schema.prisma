@@ -901,6 +901,7 @@ model journals {
   sequence_prefix                                                         String                @default("") @db.VarChar(16)
   next_sequence                                                           Int                   @default(1) @db.UnsignedInt
   is_active                                                               Boolean               @default(true)
+  allow_manual_entries                                                    Boolean               @default(false)
   created_at                                                              DateTime              @default(now()) @db.Timestamp(0)
   updated_at                                                              DateTime              @default(now()) @db.Timestamp(0)
   bank_accounts                                                           bank_accounts[]
