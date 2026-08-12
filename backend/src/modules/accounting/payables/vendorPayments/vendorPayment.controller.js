@@ -103,17 +103,25 @@ async function prepare(input) {
     if (allocation.allocated_amount > Number(bill.amount_due) + 0.005) throw inputError(`Allocation exceeds the balance of ${bill.bill_number}`)
   }
   const allocated = Math.round(allocations.reduce((sum, row) => sum + row.allocated_amount, 0) * 100) / 100
-  if (!allocations.length) throw inputError('Allocate the payment to at least one outstanding bill')
-  if (Math.abs(allocated - amount) > 0.005) throw inputError('Payment amount must be fully allocated to outstanding bills')
-  const payableAccount = await prisma.chart_of_accounts.findFirst({ where: {
-    company_id: vendor.company_id, code: '2000', is_active: true, allow_manual_entry: true,
-    account_types: { internal_group: 'liability' }, other_chart_of_accounts: { none: {} },
-  } })
+  if (!allocations.length) throw inputError('Select at least one bill and enter an allocation greater than zero')
+  if (allocated > amount + 0.005) throw inputError('Total allocation cannot exceed the payment amount')
+  const [payableAccount, advanceAccount] = await Promise.all([
+    prisma.chart_of_accounts.findFirst({ where: {
+      company_id: vendor.company_id, code: '2000', is_active: true, allow_manual_entry: true,
+      account_types: { internal_group: 'liability' }, other_chart_of_accounts: { none: {} },
+    } }),
+    allocated < amount - 0.005 ? prisma.chart_of_accounts.findFirst({ where: {
+      company_id: vendor.company_id, code: '1400', is_active: true, allow_manual_entry: true,
+      account_types: { internal_group: 'asset' }, other_chart_of_accounts: { none: {} },
+    } }) : Promise.resolve(null),
+  ])
   if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
+  if (allocated < amount - 0.005 && !advanceAccount) throw inputError('Vendor Advances account 1400 was not found')
   return {
-    header: { company_id: vendor.company_id, vendor_id: vendorId, journal_id: journal.id, payment_method_id: paymentMethodId, bank_account_id: bank?.id || null, fiscal_period_id: fiscalPeriod.id, payment_date: paymentDate, currency_id: currencyId, exchange_rate: exchangeRate, amount, unallocated_amount: 0, reference: String(input.reference || '').trim() || null, memo: String(input.memo || '').trim() || null, state: 'draft' },
+    header: { company_id: vendor.company_id, vendor_id: vendorId, journal_id: journal.id, payment_method_id: paymentMethodId, bank_account_id: bank?.id || null, fiscal_period_id: fiscalPeriod.id, payment_date: paymentDate, currency_id: currencyId, exchange_rate: exchangeRate, amount, unallocated_amount: Math.round((amount - allocated) * 100) / 100, reference: String(input.reference || '').trim() || null, memo: String(input.memo || '').trim() || null, state: 'draft' },
     allocations,
     payableAccountId: payableAccount.id,
+    advanceAccountId: advanceAccount?.id || null,
     allocatedAmount: allocated,
     paymentAccountId: account.id,
     paymentLabel: channel.label,
@@ -124,7 +132,9 @@ async function prepare(input) {
 function paymentEntryData(prepared, paymentNumber, paymentId, state = 'draft', postedAt = null) {
   const baseAmount = Math.round(Number(prepared.header.amount) * Number(prepared.header.exchange_rate) * 100) / 100
   const allocatedBase = Math.round(Number(prepared.allocatedAmount) * Number(prepared.header.exchange_rate) * 100) / 100
+  const unallocated = Number(prepared.header.unallocated_amount || 0)
   const debitLines = [{ sequence: 10, account_id: prepared.payableAccountId, label: 'Accounts Payable', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: allocatedBase, credit: 0, currency_id: prepared.header.currency_id, amount_currency: Number(prepared.allocatedAmount) }]
+  if (unallocated > 0.005) debitLines.push({ sequence: 20, account_id: prepared.advanceAccountId, label: 'Vendor Advance', partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: Math.round(unallocated * Number(prepared.header.exchange_rate) * 100) / 100, credit: 0, currency_id: prepared.header.currency_id, amount_currency: unallocated })
   return {
     company_id: prepared.header.company_id,
     journal_id: prepared.header.journal_id,
@@ -137,7 +147,7 @@ function paymentEntryData(prepared, paymentNumber, paymentId, state = 'draft', p
     source_type: 'vendor_payment',
     source_id: paymentId,
     posted_at: postedAt,
-    journal_items: { create: [...debitLines, { sequence: 20, account_id: prepared.paymentAccountId, label: prepared.paymentLabel, partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -Number(prepared.header.amount) }] },
+    journal_items: { create: [...debitLines, { sequence: (debitLines.length + 1) * 10, account_id: prepared.paymentAccountId, label: prepared.paymentLabel, partner_type: 'vendor', partner_id: prepared.header.vendor_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -Number(prepared.header.amount) }] },
   }
 }
 async function number(tx, journalId, companyId) {
@@ -240,8 +250,10 @@ export const post = async (req, res) => {
       if (!payment || payment.state !== 'draft') throw inputError('Draft vendor payment not found')
       if (!payment.fiscal_period_id) throw inputError('Vendor payment is missing its fiscal period')
       const allocated = payment.payment_allocations.reduce((sum, allocation) => sum + Number(allocation.allocated_amount), 0)
-      if (!payment.payment_allocations.length || Math.abs(allocated - Number(payment.amount)) > 0.005) throw inputError('Payment amount must be fully allocated to outstanding bills')
-      const [vendor, bank, journal, payableAccount] = await Promise.all([
+      if (!payment.payment_allocations.length) throw inputError('Select at least one bill and enter an allocation greater than zero')
+      if (allocated > Number(payment.amount) + 0.005) throw inputError('Total allocation cannot exceed the payment amount')
+      const unallocated = Math.max(0, Math.round((Number(payment.amount) - allocated) * 100) / 100)
+      const [vendor, bank, journal, payableAccount, advanceAccount] = await Promise.all([
         tx.vendors.findUnique({ where: { id: payment.vendor_id }, include: { companies: true } }),
         payment.bank_account_id ? tx.bank_accounts.findUnique({ where: { id: payment.bank_account_id } }) : Promise.resolve(null),
         tx.journals.findUnique({ where: { id: payment.journal_id } }),
@@ -253,6 +265,7 @@ export const post = async (req, res) => {
           },
           orderBy: { code: 'asc' },
         }),
+        unallocated > 0.005 ? tx.chart_of_accounts.findFirst({ where: { company_id: payment.company_id, code: '1400', is_active: true, allow_manual_entry: true, account_types: { internal_group: 'asset' }, other_chart_of_accounts: { none: {} } } }) : Promise.resolve(null),
       ])
       if (!vendor?.is_active) throw inputError('Active vendor not found')
       if (payment.payment_methods?.allow_multiple_accounts && !bank) throw inputError('Vendor payment is missing the selected bank account')
@@ -271,6 +284,7 @@ export const post = async (req, res) => {
       if (bank && (!bank.is_active || bank.company_id !== payment.company_id || bank.gl_account_id !== paymentAccountId)) throw inputError('The selected bank account is inactive or inconsistent with the payment method')
       if (!journal?.is_active || journal.company_id !== payment.company_id || (bank && journal.id !== bank.journal_id)) throw inputError('The selected payment journal is inactive or invalid')
       if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
+      if (unallocated > 0.005 && !advanceAccount) throw inputError('Vendor Advances account 1400 was not found')
       const fiscalPeriod = await tx.fiscal_periods.findUnique({ where: { id: payment.fiscal_period_id } })
       if (!fiscalPeriod || fiscalPeriod.state !== 'open') throw inputError('Payment fiscal period is closed or invalid')
       const existingEntry = await tx.journal_entries.findFirst({ where: { source_type: 'vendor_payment', source_id: paymentId }, select: { id: true, state: true } })
@@ -295,7 +309,8 @@ export const post = async (req, res) => {
       const narration = `Vendor payment ${payment.payment_number} to ${vendor.name}`
       const journalItems = [
         { sequence: 10, account_id: payableAccount.id, label: 'Accounts Payable', partner_type: 'vendor', partner_id: payment.vendor_id, debit: Math.round(allocated * Number(payment.exchange_rate) * 100) / 100, credit: 0, currency_id: payment.currency_id, amount_currency: allocated },
-        { sequence: 20, account_id: paymentAccountId, label: channel.label, partner_type: 'vendor', partner_id: payment.vendor_id, debit: 0, credit: Math.round(Number(payment.amount) * Number(payment.exchange_rate) * 100) / 100, currency_id: payment.currency_id, amount_currency: -Number(payment.amount) },
+        ...(unallocated > 0.005 ? [{ sequence: 20, account_id: advanceAccount.id, label: 'Vendor Advance', partner_type: 'vendor', partner_id: payment.vendor_id, debit: Math.round(unallocated * Number(payment.exchange_rate) * 100) / 100, credit: 0, currency_id: payment.currency_id, amount_currency: unallocated }] : []),
+        { sequence: unallocated > 0.005 ? 30 : 20, account_id: paymentAccountId, label: channel.label, partner_type: 'vendor', partner_id: payment.vendor_id, debit: 0, credit: Math.round(Number(payment.amount) * Number(payment.exchange_rate) * 100) / 100, currency_id: payment.currency_id, amount_currency: -Number(payment.amount) },
       ]
       if (existingEntry) await tx.journal_items.deleteMany({ where: { entry_id: existingEntry.id } })
       const entry = existingEntry
@@ -307,7 +322,8 @@ export const post = async (req, res) => {
           state: 'posted', source_type: 'vendor_payment', source_id: payment.id, posted_at: postedAt,
           journal_items: { create: journalItems },
         } })
-      await tx.vendor_payments.update({ where: { id: paymentId }, data: { state: 'posted', journal_entry_id: entry.id, posted_at: postedAt, updated_at: postedAt } })
+      if (unallocated > 0.005) await tx.vendor_advances.upsert({ where: { payment_id: paymentId }, update: { original_amount: unallocated, remaining_amount: unallocated, advance_account_id: advanceAccount.id, state: 'open', updated_at: postedAt }, create: { company_id: payment.company_id, vendor_id: payment.vendor_id, currency_id: payment.currency_id, payment_id: paymentId, advance_account_id: advanceAccount.id, original_amount: unallocated, remaining_amount: unallocated, state: 'open' } })
+      await tx.vendor_payments.update({ where: { id: paymentId }, data: { unallocated_amount: unallocated, state: 'posted', journal_entry_id: entry.id, posted_at: postedAt, updated_at: postedAt } })
       for (const billId of new Set(payment.payment_allocations.map((allocation) => allocation.bill_id))) {
         const [bill, aggregate] = await Promise.all([
           tx.vendor_bills.findUnique({ where: { id: billId }, select: { amount_total: true } }),

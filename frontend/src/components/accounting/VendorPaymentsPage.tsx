@@ -61,11 +61,10 @@ export default function VendorPaymentsPage() {
   const openBills = bills.filter((bill) => bill.vendor_id === Number(form.vendor_id) && bill.state === 'posted' && Number(bill.currency_id) === Number(form.currency_id) && (Number(bill.amount_due) > 0 || form.allocations.some((row) => row.bill_id === bill.id)));
   const allocated = form.allocations.reduce((sum, row) => sum + Number(row.allocated_amount || 0), 0);
   const unallocated = Number(form.amount || 0) - allocated;
-  const totalOutstanding = openBills.reduce((sum, bill) => sum + Number(bill.amount_due), 0);
-  const balanceAfterPayment = Math.max(0, totalOutstanding - allocated);
-  const paymentExceedsOutstanding = Number(form.amount || 0) > totalOutstanding + 0.005;
+  const selectedBillTotal = form.allocations.reduce((sum, row) => sum + Number(openBills.find((bill) => bill.id === row.bill_id)?.amount_due || 0), 0);
+  const balanceAfterPayment = Math.max(0, selectedBillTotal - allocated);
   const paymentStatus = allocated <= 0.005 ? 'Not Allocated' : balanceAfterPayment <= 0.005 ? 'Paid' : 'Partially Paid';
-  const canPostPayment = !saving && Number(form.amount) > 0 && Boolean(form.payment_method_id) && (!shouldSelectBankAccount || Boolean(form.bank_account_id)) && form.allocations.length > 0 && Math.abs(unallocated) <= 0.005 && !paymentExceedsOutstanding;
+  const canPostPayment = !saving && Number(form.amount) > 0 && Boolean(form.payment_method_id) && (!shouldSelectBankAccount || Boolean(form.bank_account_id)) && allocated > 0.005 && allocated <= Number(form.amount) + 0.005;
   const filtered = payments.filter((payment) => {
     const needle = query.trim().toLowerCase();
     return (!needle || [payment.payment_number, payment.vendors?.name, payment.reference].some((value) => String(value || '').toLowerCase().includes(needle))) &&
@@ -77,10 +76,7 @@ export default function VendorPaymentsPage() {
     const next = vendors.find((row) => row.id === Number(value));
     const nextCompany = companies.find((row) => row.id === Number(next?.company_id));
     const currencyId = Number(next?.currency_id || nextCompany?.currency_id || 0);
-    const outstanding = bills.filter((bill) => bill.vendor_id === Number(value) && bill.state === 'posted' && Number(bill.currency_id) === currencyId && Number(bill.amount_due) > 0);
-    const allocations = outstanding.map((bill) => ({ bill_id: bill.id, allocated_amount: Number(bill.amount_due) }));
-    const amount = allocations.reduce((sum, row) => sum + row.allocated_amount, 0);
-    setForm((current) => ({ ...current, vendor_id: value, bank_account_id: '', currency_id: String(currencyId || ''), exchange_rate: '1', amount: amount > 0 ? String(Math.round(amount * 100) / 100) : '', allocations }));
+    setForm((current) => ({ ...current, vendor_id: value, bank_account_id: '', currency_id: String(currencyId || ''), exchange_rate: '1', amount: '', allocations: [] }));
   }
   function selectBank(value: string) {
     const bank = banks.find((row) => row.id === Number(value));
@@ -96,17 +92,24 @@ export default function VendorPaymentsPage() {
   }
   function setAllocation(billId: number, value: string) {
     const outstanding = Number(openBills.find((bill) => bill.id === billId)?.amount_due || 0);
-    const nextAmount = Math.min(Math.max(0, Number(value) || 0), outstanding);
+    const otherAllocated = form.allocations.filter((row) => row.bill_id !== billId).reduce((sum, row) => sum + Number(row.allocated_amount || 0), 0);
+    const nextAmount = Math.min(Math.max(0, Number(value) || 0), outstanding, Math.max(0, Number(form.amount || 0) - otherAllocated));
     setForm((current) => ({ ...current, allocations: nextAmount > 0
       ? current.allocations.some((row) => row.bill_id === billId)
         ? current.allocations.map((row) => row.bill_id === billId ? { ...row, allocated_amount: nextAmount } : row)
         : [...current.allocations, { bill_id: billId, allocated_amount: nextAmount }]
       : current.allocations.filter((row) => row.bill_id !== billId) }));
   }
+  function toggleBill(bill: VendorBill, checked: boolean) {
+    if (!checked) { setForm((current) => ({ ...current, allocations: current.allocations.filter((row) => row.bill_id !== bill.id) })); return; }
+    const remaining = Math.max(0, Number(form.amount || 0) - allocated);
+    const initial = Math.min(remaining, Number(bill.amount_due));
+    setForm((current) => ({ ...current, allocations: [...current.allocations, { bill_id: bill.id, allocated_amount: Math.round(initial * 100) / 100 }] }));
+  }
   function autoAllocate() {
     let remaining = Math.max(0, Number(form.amount || 0));
     const nextAllocations: Allocation[] = [];
-    [...openBills]
+    [...openBills.filter((bill) => form.allocations.some((allocation) => allocation.bill_id === bill.id))]
       .sort((a, b) => day(a.due_date).localeCompare(day(b.due_date)) || day(a.bill_date).localeCompare(day(b.bill_date)) || a.id - b.id)
       .forEach((bill) => {
         if (remaining <= 0.005) return;
@@ -120,7 +123,7 @@ export default function VendorPaymentsPage() {
     event?.preventDefault();
     if (postAfterSave && !canPostPayment) return;
     setSaving(true);
-    const payload = { ...form, vendor_id: Number(form.vendor_id), bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : undefined, payment_method_id: Number(form.payment_method_id), payment_date: new Date(`${form.payment_date}T00:00:00.000Z`).toISOString(), currency_id: Number(form.currency_id), exchange_rate: Number(form.exchange_rate), amount: Number(form.amount) };
+    const payload = { ...form, allocations: form.allocations.filter((row) => Number(row.allocated_amount) > 0.005), vendor_id: Number(form.vendor_id), bank_account_id: form.bank_account_id ? Number(form.bank_account_id) : undefined, payment_method_id: Number(form.payment_method_id), payment_date: new Date(`${form.payment_date}T00:00:00.000Z`).toISOString(), currency_id: Number(form.currency_id), exchange_rate: Number(form.exchange_rate), amount: Number(form.amount) };
     try {
       const saved = selected ? await vendorPaymentApi.update(selected.id, payload) : await vendorPaymentApi.create(payload);
       if (postAfterSave) await vendorPaymentApi.post(saved.id);
@@ -163,12 +166,11 @@ export default function VendorPaymentsPage() {
         <Field label="Reference" value={form.reference} set={(value) => setForm({ ...form, reference: value })} optional />
       </fieldset>
       <div className="rounded-2xl border"><div className="flex flex-wrap items-center justify-between gap-4 border-b p-4"><div><h3 className="font-semibold">Outstanding Bills</h3><p className="text-xs text-muted-foreground">Select the bills covered by this payment.</p></div><button disabled={readonly || !form.amount || !openBills.length} type="button" onClick={autoAllocate} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Auto Allocate</button></div>
-        <div className="max-h-72 overflow-auto">{!form.vendor_id ? <p className="p-6 text-center text-sm text-muted-foreground">Select a vendor first.</p> : openBills.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No outstanding posted bills found.</p> : <table className="w-full min-w-[820px] text-sm"><thead className="sticky top-0 bg-muted/70 text-xs uppercase"><tr><th className="p-3 text-left">Bill Number</th><th className="p-3 text-left">Bill Date</th><th className="p-3 text-left">Due Date</th><th className="p-3 text-right">Total</th><th className="p-3 text-right">Paid</th><th className="p-3 text-right">Balance</th><th className="p-3 text-right">Allocate</th></tr></thead><tbody>{openBills.map((bill) => { const allocation = form.allocations.find((row) => row.bill_id === bill.id); const paid = Number(bill.amount_paid ?? Math.max(0, Number(bill.amount_total) - Number(bill.amount_due))); return <tr key={bill.id} className="border-t"><td className="p-3 font-semibold">{bill.bill_number}</td><td className="p-3">{day(bill.bill_date)}</td><td className="p-3">{day(bill.due_date)}</td><td className="p-3 text-right">{money(bill.amount_total)}</td><td className="p-3 text-right">{money(paid)}</td><td className="p-3 text-right font-semibold">{money(bill.amount_due)}</td><td className="p-3 text-right"><input aria-label={`Allocate to ${bill.bill_number}`} disabled={readonly} type="number" min="0" max={Number(bill.amount_due)} step=".01" value={allocation?.allocated_amount ?? ''} onChange={(event) => setAllocation(bill.id, event.target.value)} className="h-10 w-32 rounded-lg border px-3 text-right" placeholder="0.00" /></td></tr>; })}</tbody></table>}</div>
+        <div className="max-h-72 overflow-auto">{!form.vendor_id ? <p className="p-6 text-center text-sm text-muted-foreground">Select a vendor first.</p> : openBills.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No outstanding posted bills found.</p> : <table className="w-full min-w-[880px] text-sm"><thead className="sticky top-0 bg-muted/70 text-xs uppercase"><tr><th className="p-3 text-center">Select</th><th className="p-3 text-left">Bill Number</th><th className="p-3 text-left">Bill Date</th><th className="p-3 text-left">Due Date</th><th className="p-3 text-right">Total</th><th className="p-3 text-right">Paid</th><th className="p-3 text-right">Balance</th><th className="p-3 text-right">Allocate</th></tr></thead><tbody>{openBills.map((bill) => { const allocation = form.allocations.find((row) => row.bill_id === bill.id); const isSelected = Boolean(allocation); const paid = Number(bill.amount_paid ?? Math.max(0, Number(bill.amount_total) - Number(bill.amount_due))); return <tr key={bill.id} className="border-t"><td className="p-3 text-center"><input aria-label={`Select ${bill.bill_number}`} disabled={readonly} type="checkbox" checked={isSelected} onChange={(event) => toggleBill(bill, event.target.checked)} className="size-4 accent-primary" /></td><td className="p-3 font-semibold">{bill.bill_number}</td><td className="p-3">{day(bill.bill_date)}</td><td className="p-3">{day(bill.due_date)}</td><td className="p-3 text-right">{money(bill.amount_total)}</td><td className="p-3 text-right">{money(paid)}</td><td className="p-3 text-right font-semibold">{money(bill.amount_due)}</td><td className="p-3 text-right"><input aria-label={`Allocate to ${bill.bill_number}`} disabled={readonly || !isSelected} type="number" min="0" max={Number(bill.amount_due)} step=".01" value={allocation?.allocated_amount ?? ''} onChange={(event) => setAllocation(bill.id, event.target.value)} className="h-10 w-32 rounded-lg border px-3 text-right disabled:bg-muted" placeholder="0.00" /></td></tr>; })}</tbody></table>}</div>
       </div>
-      <div className="ml-auto w-full rounded-2xl border p-4 sm:max-w-md"><h3 className="mb-3 font-semibold">Payment Summary</h3><div className="space-y-2 text-sm"><div className="flex justify-between"><span>Payment Amount</span><b>{money(form.amount)}</b></div><div className="flex justify-between"><span>Allocated</span><b>{money(allocated)}</b></div><div className={`flex justify-between ${Math.abs(unallocated) > 0.005 ? 'text-amber-700' : ''}`}><span>Unallocated</span><b>{money(unallocated)}</b></div><div className="flex justify-between border-t pt-2"><span>Balance After Payment</span><b>{money(balanceAfterPayment)}</b></div><div className="flex justify-between"><span>Status</span><b className={paymentStatus === 'Paid' ? 'text-emerald-700' : paymentStatus === 'Partially Paid' ? 'text-amber-700' : 'text-muted-foreground'}>{paymentStatus}</b></div></div></div>
-      {paymentExceedsOutstanding && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">Payment amount cannot exceed the vendor&apos;s outstanding bill balance of {money(totalOutstanding)}.</div>}
-      {!paymentExceedsOutstanding && Number(form.amount) > 0 && Math.abs(unallocated) > 0.005 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Allocate the full payment amount before posting. Use Auto Allocate to apply it to the oldest bills.</div>}
-      <DialogFooter><button type="button" onClick={() => setOpen(false)} className="h-10 rounded-xl border px-5">{readonly ? 'Close' : 'Cancel'}</button>{!readonly && <><button disabled={saving || paymentExceedsOutstanding || !form.allocations.length || Math.abs(unallocated) > 0.005} className="h-10 rounded-xl border px-5 font-semibold disabled:opacity-50">{saving ? 'Saving...' : 'Save Draft'}</button><button type="button" disabled={!canPostPayment} onClick={(event) => { if (event.currentTarget.form?.reportValidity()) void save(undefined, true); }} className="h-10 rounded-xl bg-primary px-5 font-semibold text-white disabled:opacity-50">Post Payment</button></>}</DialogFooter>
+      <div className="ml-auto w-full rounded-2xl border p-4 sm:max-w-md"><h3 className="mb-3 font-semibold">Payment Summary</h3><div className="space-y-2 text-sm"><div className="flex justify-between"><span>Payment Amount</span><b>{money(form.amount)}</b></div><div className="flex justify-between"><span>Selected Bill Total</span><b>{money(selectedBillTotal)}</b></div><div className="flex justify-between"><span>Allocated</span><b>{money(allocated)}</b></div><div className={`flex justify-between ${Math.abs(unallocated) > 0.005 ? 'text-amber-700' : ''}`}><span>Unallocated</span><b>{money(unallocated)}</b></div><div className="flex justify-between border-t pt-2"><span>Balance After Payment</span><b>{money(balanceAfterPayment)}</b></div><div className="flex justify-between"><span>Status</span><b className={paymentStatus === 'Paid' ? 'text-emerald-700' : paymentStatus === 'Partially Paid' ? 'text-amber-700' : 'text-muted-foreground'}>{paymentStatus}</b></div></div></div>
+      {Number(form.amount) > 0 && unallocated > 0.005 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">The unallocated amount will be recorded as a Vendor Advance. It will not be applied to any unselected bill.</div>}
+      <DialogFooter><button type="button" onClick={() => setOpen(false)} className="h-10 rounded-xl border px-5">{readonly ? 'Close' : 'Cancel'}</button>{!readonly && <><button disabled={saving || allocated <= 0.005 || allocated > Number(form.amount || 0) + 0.005} className="h-10 rounded-xl border px-5 font-semibold disabled:opacity-50">{saving ? 'Saving...' : 'Save Draft'}</button><button type="button" disabled={!canPostPayment} onClick={(event) => { if (event.currentTarget.form?.reportValidity()) void save(undefined, true); }} className="h-10 rounded-xl bg-primary px-5 font-semibold text-white disabled:opacity-50">Post Payment</button></>}</DialogFooter>
     </form></DialogContent></Dialog>
     <AccountingConfirmDialog open={Boolean(pendingAction)} title={pendingAction?.type === 'delete' ? 'Delete Vendor Payment' : 'Post Vendor Payment'} description={pendingAction?.type === 'delete' ? 'Confirm removal of this draft vendor payment.' : 'Confirm the payment before updating the selected bill balances.'} confirmLabel={pendingAction?.type === 'delete' ? 'Delete Payment' : 'Post Payment'} destructive={pendingAction?.type === 'delete'} busy={saving} details={pendingAction && <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><b>{pendingAction.payment.payment_number}</b></div>} onCancel={() => setPendingAction(null)} onConfirm={() => pendingAction && void (pendingAction.type === 'delete' ? remove(pendingAction.payment) : post(pendingAction.payment))} />
     {printTarget && <PrintableVendorPayment payment={printTarget} bills={bills} />}

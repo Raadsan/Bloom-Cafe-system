@@ -113,7 +113,7 @@ async function prepareBill(input, documentType = 'bill') {
   if (!fiscalPeriod) throw inputError('No open fiscal period covers the bill date')
 
   const currencyId = parseId(input.currency_id) || company.currency_id
-  const [currency, payableAccount, expenseAccount] = await Promise.all([
+  const [currency, payableAccount, defaultExpenseAccount] = await Promise.all([
     prisma.currencies.findUnique({ where: { id: currencyId } }),
     prisma.chart_of_accounts.findFirst({
       where: {
@@ -133,32 +133,42 @@ async function prepareBill(input, documentType = 'bill') {
   ])
   if (!currency?.is_active) throw inputError('Bill currency is inactive or missing')
   if (!payableAccount) throw inputError('Accounts Payable account 2000 was not found')
-  if (!expenseAccount) throw inputError('Default purchase expense account 5005 – Cafeteria Expense was not found or is not a posting account')
+  // Product lines use their configured expense account, falling back to the
+  // legacy default purchase account when a product has no mapping.
   if (reversedBillId) {
     const original = await prisma.vendor_bills.findFirst({ where: { id: reversedBillId, document_type: 'bill', vendor_id: vendorId, state: 'posted' } })
     if (!original) throw inputError('Original posted vendor bill was not found for this vendor')
   }
 
-  const productIds = [...new Set(lines.map((line) => parseId(line.product_id)).filter(Boolean))]
+  const productIds = [...new Set(lines.filter((line) => line.line_type !== 'expense').map((line) => parseId(line.product_id)).filter(Boolean))]
+  const expenseAccountIds = [...new Set(lines.filter((line) => line.line_type === 'expense').map((line) => parseId(line.expense_account_id)).filter(Boolean))]
   const taxIds = [...new Set(lines.map((line) => parseId(line.tax_id)).filter(Boolean))]
-  const [products, taxes] = await Promise.all([
+  const [products, taxes, expenseAccounts] = await Promise.all([
     prisma.products.findMany({ where: { id: { in: productIds } } }),
     prisma.taxes.findMany({ where: { id: { in: taxIds } } }),
+    prisma.chart_of_accounts.findMany({ where: { id: { in: expenseAccountIds }, company_id: vendor.company_id, is_active: true, allow_manual_entry: true, account_types: { internal_group: 'expense' }, other_chart_of_accounts: { none: {} } } }),
   ])
   const productMap = new Map(products.map((row) => [row.id, row]))
   const taxMap = new Map(taxes.map((row) => [row.id, row]))
+  const expenseAccountMap = new Map(expenseAccounts.map((row) => [row.id, row]))
   let amountUntaxed = 0
   let amountTax = 0
   const preparedLines = lines.map((line, index) => {
+    const isExpense = line.line_type === 'expense'
+    if (line.line_type && !['product', 'expense'].includes(line.line_type)) throw inputError(`Line ${index + 1}: line type must be Product or Expense`)
     const productId = parseId(line.product_id)
     const product = productId ? productMap.get(productId) : null
     const taxId = parseId(line.tax_id)
     const tax = taxId ? taxMap.get(taxId) : null
-    const quantity = Number(line.quantity)
-    const unitPrice = Number(line.unit_price)
-    const discount = Number(line.discount_percent || 0)
+    const quantity = isExpense ? 1 : Number(line.quantity)
+    const unitPrice = isExpense ? Number(line.amount) : Number(line.unit_price)
+    const discount = isExpense ? 0 : Number(line.discount_percent || 0)
     const description = String(line.description || product?.name || '').trim()
-    if (productId && (!product || !product.is_active || !product.can_be_purchased)) throw inputError(`Line ${index + 1}: product is not active and purchasable`)
+    if (isExpense && productId) throw inputError(`Line ${index + 1}: expense lines cannot include a product`)
+    if (!isExpense && line.line_type === 'product' && !productId) throw inputError(`Line ${index + 1}: product is required`)
+    if (!isExpense && productId && (!product || !product.is_active || !product.can_be_purchased)) throw inputError(`Line ${index + 1}: product is not active and purchasable`)
+    const selectedExpenseAccountId = isExpense ? parseId(line.expense_account_id) : product?.expense_account_id || defaultExpenseAccount?.id
+    if (!selectedExpenseAccountId || (isExpense && !expenseAccountMap.has(selectedExpenseAccountId))) throw inputError(`Line ${index + 1}: select a valid posting expense account`)
     if (!description) throw inputError(`Line ${index + 1}: description is required`)
     if (!Number.isFinite(quantity) || quantity <= 0) throw inputError(`Line ${index + 1}: quantity must be greater than zero`)
     if (!Number.isFinite(unitPrice) || unitPrice < 0) throw inputError(`Line ${index + 1}: unit price cannot be negative`)
@@ -170,7 +180,7 @@ async function prepareBill(input, documentType = 'bill') {
     const taxAmount = tax ? (tax.price_includes_tax ? discounted - untaxed : untaxed * rate) : 0
     amountUntaxed += Math.round(untaxed * 100) / 100
     amountTax += Math.round(taxAmount * 100) / 100
-    return { sequence: (index + 1) * 10, product_id: productId, description, quantity, unit_price: unitPrice, discount_percent: discount, tax_id: taxId, expense_account_id: expenseAccount.id, subtotal: Math.round(untaxed * 100) / 100 }
+    return { sequence: (index + 1) * 10, product_id: isExpense ? null : productId, description, quantity, unit_price: unitPrice, discount_percent: discount, tax_id: taxId, expense_account_id: selectedExpenseAccountId, subtotal: Math.round(untaxed * 100) / 100 }
   })
   amountUntaxed = Math.round(amountUntaxed * 100) / 100
   amountTax = Math.round(amountTax * 100) / 100

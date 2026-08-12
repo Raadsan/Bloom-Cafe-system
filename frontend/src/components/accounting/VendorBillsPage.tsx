@@ -13,6 +13,8 @@ import { paymentTermApi } from '@/lib/api/accounting/configuration/paymentTermAp
 import { companyApi } from '@/lib/api/accounting/configuration/companyApi';
 import { accountingPaymentMethodApi } from '@/lib/api/accounting/configuration/paymentMethodApi';
 import { bankAccountApi } from '@/lib/api/accounting/banking/bankAccountApi';
+import { chartOfAccountApi } from '@/lib/api/accounting/ledger/chartOfAccountApi';
+import { accountTypeApi } from '@/lib/api/accounting/configuration/accountTypeApi';
 import { useToast } from '@/components/ui/toast';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DashboardDataTable, { type DashboardTableColumn } from '@/components/shared/DashboardDataTable';
@@ -20,14 +22,14 @@ import AccountingConfirmDialog from './AccountingConfirmDialog';
 import { actionBtnDelete, actionBtnEdit, actionBtnView, btnCreatePage, dashboardSelectClass, pageHeaderTitleClass, pageHeaderWrapperClass } from '@/lib/dashboard-ui';
 
 type Row = { id: number; [key: string]: unknown };
-type Line = Omit<VendorBillLine, 'id' | 'subtotal' | 'expense_account_id'>;
+type Line = Omit<VendorBillLine, 'id' | 'subtotal'>;
 type Form = {
   vendor_id: string; reversed_bill_id: string; bill_date: string; received_date: string; currency_id: string; exchange_rate: string;
   payment_term_id: string; vendor_reference: string; notes: string; lines: Line[]; pay_vendor_now: boolean;
   payment_method_id: string; bank_account_id: string; amount_paid: string; payment_reference: string;
 };
 const today = () => new Date().toISOString().slice(0, 10);
-const emptyLine = (): Line => ({ product_id: null, description: 'Custom line', quantity: 1, unit_price: 0, discount_percent: 0, tax_id: null });
+const emptyLine = (): Line => ({ line_type: 'product', product_id: null, expense_account_id: null, description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_id: null, amount: 0 });
 const emptyForm = (): Form => ({ vendor_id: '', reversed_bill_id: '', bill_date: today(), received_date: today(), currency_id: '', exchange_rate: '1', payment_term_id: '', vendor_reference: '', notes: '', lines: [emptyLine()], pay_vendor_now: false, payment_method_id: '', bank_account_id: '', amount_paid: '', payment_reference: '' });
 const dateValue = (value: unknown) => value ? new Date(String(value)).toISOString().slice(0, 10) : '';
 const apiDate = (value: string) => new Date(`${value}T00:00:00.000Z`).toISOString();
@@ -48,6 +50,8 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   const [companies, setCompanies] = useState<Row[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<Row[]>([]);
   const [bankAccounts, setBankAccounts] = useState<Row[]>([]);
+  const [accounts, setAccounts] = useState<Row[]>([]);
+  const [accountTypes, setAccountTypes] = useState<Row[]>([]);
   const [form, setForm] = useState<Form>(emptyForm);
   const [selected, setSelected] = useState<VendorBill | null>(null);
   const [open, setOpen] = useState(false);
@@ -68,18 +72,19 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [billRows, sourceRows, vendorRows, productRows, taxRows, currencyRows, termRows, companyRows, methodRows, bankRows] = await Promise.all([
+      const [billRows, sourceRows, vendorRows, productRows, taxRows, currencyRows, termRows, companyRows, methodRows, bankRows, accountRows, accountTypeRows] = await Promise.all([
         recordsApi.getAll(), isRefund ? vendorBillApi.getAll() : Promise.resolve([]), vendorApi.getAll(), accountingProductApi.getAll(), accountingTaxApi.getAll(),
-        currencyApi.getAll(), paymentTermApi.getAll(), companyApi.getAll(), accountingPaymentMethodApi.getAll(), bankAccountApi.getAll(),
+        currencyApi.getAll(), paymentTermApi.getAll(), companyApi.getAll(), accountingPaymentMethodApi.getAll(), bankAccountApi.getAll(), chartOfAccountApi.getAll(), accountTypeApi.getAll(),
       ]);
       setBills(billRows); setSourceBills(sourceRows); setVendors(vendorRows); setProducts(productRows); setTaxes(taxRows);
       setCurrencies(currencyRows); setTerms(termRows); setCompanies(companyRows); setPaymentMethods(methodRows); setBankAccounts(bankRows);
+      setAccounts(accountRows); setAccountTypes(accountTypeRows);
     } catch (error) { showToast(errorMessage(error), 'error'); } finally { setLoading(false); }
   }, [showToast, recordsApi, isRefund]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const totals = useMemo(() => form.lines.reduce((sum, line) => {
-    const gross = Number(line.quantity) * Number(line.unit_price);
+    const gross = line.line_type === 'expense' ? Number(line.amount) : Number(line.quantity) * Number(line.unit_price);
     const discounted = gross * (1 - Number(line.discount_percent) / 100);
     const tax = taxes.find((row) => row.id === Number(line.tax_id));
     const rate = Number(tax?.rate_percent || 0) / 100;
@@ -88,6 +93,11 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     return { subtotal: sum.subtotal + untaxed, tax: sum.tax + taxAmount, total: sum.total + untaxed + taxAmount };
   }, { subtotal: 0, tax: 0, total: 0 }), [form.lines, taxes]);
   const selectedVendor = vendors.find((row) => row.id === Number(form.vendor_id));
+  const expenseAccountTypeIds = useMemo(() => new Set(accountTypes.filter((type) => type.internal_group === 'expense').map((type) => Number(type.id))), [accountTypes]);
+  // Posting accounts can be children of an expense heading (for example,
+  // 5000 Expenses → 5002 Rent).  A valid account is therefore a leaf account,
+  // not necessarily one without a parent.
+  const expenseAccounts = accounts.filter((account) => Number(account.company_id) === Number(selectedVendor?.company_id) && account.is_active !== false && account.allow_manual_entry !== false && expenseAccountTypeIds.has(Number(account.account_type_id)) && !accounts.some((child) => Number(child.parent_id) === Number(account.id)));
   const selectedPaymentMethod = paymentMethods.find((row) => row.id === Number(form.payment_method_id));
   const availableBankAccounts = bankAccounts.filter((row) => Number(row.company_id) === Number(selectedVendor?.company_id) && Number(row.currency_id) === Number(form.currency_id) && row.is_active !== false && row.gl_account_id);
   const paymentNow = form.pay_vendor_now ? Math.max(0, Number(form.amount_paid) || 0) : 0;
@@ -117,7 +127,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
       notes: '', pay_vendor_now: false, payment_method_id: '', bank_account_id: '', amount_paid: '', payment_reference: '', lines: (bill.vendor_bill_lines || []).map((line) => ({
         product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity),
         unit_price: Number(line.unit_price), discount_percent: Number(line.discount_percent),
-        tax_id: line.tax_id || null,
+        tax_id: line.tax_id || null, line_type: line.product_id ? 'product' : 'expense', expense_account_id: line.expense_account_id || null, amount: Number(line.unit_price),
       })),
     });
     if (isRefund) { setRefundMode('partial'); setRefundReason(''); setMoreNotes(String(bill.notes || '')); }
@@ -146,7 +156,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     if (!original) { setForm((current) => ({ ...current, reversed_bill_id: value })); return; }
     const lines = (original.vendor_bill_lines || []).map((line) => ({
       product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity), unit_price: Number(line.unit_price),
-      discount_percent: Number(line.discount_percent), tax_id: line.tax_id || null,
+      discount_percent: Number(line.discount_percent), tax_id: line.tax_id || null, line_type: line.product_id ? 'product' : 'expense', expense_account_id: line.expense_account_id || null, amount: Number(line.unit_price),
     }));
     setForm((current) => ({ ...current, vendor_id: String(original.vendor_id), reversed_bill_id: value, currency_id: String(original.currency_id), exchange_rate: String(original.exchange_rate || 1), payment_term_id: '', bill_date: today(), received_date: today(), lines }));
     setRefundMode('full'); setRefundReason(''); setMoreNotes('');
@@ -166,7 +176,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     const { pay_vendor_now: _payNow, payment_method_id: _paymentMethod, bank_account_id: _bankAccount, amount_paid: _amountPaid, payment_reference: _paymentReference, ...billForm } = form;
     const payload = {
       ...billForm, notes: isRefund ? [`Refund reason: ${refundReason.trim()}`, moreNotes.trim()].filter(Boolean).join('\n') : form.notes,
-      lines: form.lines.map((line) => ({ ...line, description: line.description || String(products.find((product) => product.id === Number(line.product_id))?.name || 'Custom line') })), vendor_id: Number(form.vendor_id), bill_date: apiDate(form.bill_date),
+      lines: form.lines.map((line) => ({ ...line, ...(isRefund ? { line_type: undefined } : {}), description: line.description || String(products.find((product) => product.id === Number(line.product_id))?.name || 'Expense') })), vendor_id: Number(form.vendor_id), bill_date: apiDate(form.bill_date),
       received_date: form.received_date ? apiDate(form.received_date) : null, currency_id: Number(form.currency_id),
       exchange_rate: Number(form.exchange_rate), payment_term_id: form.payment_term_id ? Number(form.payment_term_id) : null,
       reversed_bill_id: form.reversed_bill_id ? Number(form.reversed_bill_id) : null,
@@ -231,13 +241,14 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
         </div>
         {isRefund && form.reversed_bill_id && <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 sm:grid-cols-[220px_1fr]"><label className="text-xs font-semibold">Refund Type *<select value={refundMode} onChange={(event) => setRefundMode(event.target.value as 'full' | 'partial')} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3"><option value="full">Full Refund</option><option value="partial">Partial Refund</option></select></label><label className="text-xs font-semibold">Refund Reason *<input required value={refundReason} onChange={(event) => setRefundReason(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3" placeholder="Reason for this refund" /></label>{refundMode === 'full' && <label className="text-xs font-semibold sm:col-span-2">Refund Amount<input readOnly value={money(totals.total)} className="mt-1.5 h-10 w-full rounded-xl border bg-muted px-3 font-semibold" /></label>}</div>}
         {!isRefund && form.vendor_id && availableAdvance > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"><div><b>Available Vendor Advance: ${money(availableAdvance)}</b><p className="text-xs text-emerald-700">Apply it now to reduce this bill&apos;s outstanding balance after posting.</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => setAdvanceAmount(Math.min(availableAdvance, totals.total))} className="h-9 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-semibold">Apply All</button><label className="flex items-center gap-2 text-xs font-semibold">Partial<input aria-label="Partial Vendor Advance" type="number" min="0" max={Math.min(availableAdvance, totals.total)} step="0.01" value={advanceAmount} onChange={(event) => setAdvanceAmount(Math.min(Math.max(0, Number(event.target.value) || 0), availableAdvance, totals.total))} className="h-9 w-28 rounded-lg border bg-white px-2 text-right" /></label><button type="button" onClick={() => setAdvanceAmount(0)} className="h-9 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-semibold">Ignore</button></div></div>}
-        {(!isRefund || refundMode === 'partial') && <div className="rounded-xl border"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[18%]" /><col className="w-[22%]" /><col className="w-[8%]" /><col className="w-[12%]" /><col className="w-[12%]" /><col className="w-[18%]" /><col className="w-[5%]" /></colgroup><thead className="bg-muted/50"><tr><th className="p-2.5 text-left">Product</th><th className="p-2.5 text-left">Description</th><th className="p-2.5">Qty</th><th className="p-2.5">Unit cost</th><th className="p-2.5">Discount</th><th className="p-2.5">Tax</th><th /></tr></thead><tbody>{form.lines.map((line, index) => <tr key={index} className="border-t">
-          <td className="p-2"><select value={line.product_id || ''} onChange={(event) => chooseProduct(index, event.target.value)} className="h-9 w-full rounded-lg border px-2"><option value="">Custom line</option>{products.filter((row) => row.can_be_purchased !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
+        {(!isRefund || refundMode === 'partial') && <div className="rounded-xl border"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[17%]" /><col className="w-[20%]" /><col className="w-[7%]" /><col className="w-[11%]" /><col className="w-[10%]" /><col className="w-[15%]" /><col className="w-[12%]" /><col className="w-[5%]" /></colgroup><thead className="bg-muted/50"><tr><th className="p-2.5 text-left">Line type / item</th><th className="p-2.5 text-left">Description</th><th className="p-2.5">Qty</th><th className="p-2.5">Unit cost / amount</th><th className="p-2.5">Discount</th><th className="p-2.5">Tax</th><th className="p-2.5 text-right">Line total</th><th /></tr></thead><tbody>{form.lines.map((line, index) => <tr key={index} className="border-t">
+          <td className="space-y-1 p-2">{!isRefund && <select value={line.line_type || 'product'} onChange={(event) => updateLine(index, event.target.value === 'expense' ? { line_type: 'expense', product_id: null, discount_percent: 0, quantity: 1, unit_price: 0 } : { line_type: 'product', expense_account_id: null, amount: 0 })} className="h-8 w-full rounded-lg border px-2"><option value="product">Product</option><option value="expense">Expense</option></select>}{line.line_type === 'expense' ? <select required value={line.expense_account_id || ''} onChange={(event) => updateLine(index, { expense_account_id: Number(event.target.value) || null })} className="h-9 w-full rounded-lg border px-2"><option value="">Select expense account</option>{expenseAccounts.map((row) => <option key={row.id} value={row.id}>{String(row.code)} — {String(row.name)}</option>)}</select> : <select required value={line.product_id || ''} onChange={(event) => chooseProduct(index, event.target.value)} className="h-9 w-full rounded-lg border px-2"><option value="">Select product</option>{products.filter((row) => row.can_be_purchased !== false).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select>}</td>
           <td className="p-2"><input required value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} className="h-9 w-full rounded-lg border px-2" placeholder="Product or service description" /></td>
-          <td className="p-2"><input required type="number" min="1" step="1" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
-          <td className="p-2"><input required type="number" min="0" step="0.01" value={line.unit_price} onChange={(event) => updateLine(index, { unit_price: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
-          <td className="p-2"><input type="number" min="0" max="100" step=".01" value={line.discount_percent} onChange={(event) => updateLine(index, { discount_percent: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
+          <td className="p-2">{line.line_type === 'expense' ? '—' : <input required type="number" min="1" step="1" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" />}</td>
+          <td className="p-2"><input required type="number" min="0" step="0.01" value={line.line_type === 'expense' ? line.amount || 0 : line.unit_price} onChange={(event) => updateLine(index, line.line_type === 'expense' ? { amount: Number(event.target.value) } : { unit_price: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" /></td>
+          <td className="p-2">{line.line_type === 'expense' ? '—' : <input type="number" min="0" max="100" step=".01" value={line.discount_percent} onChange={(event) => updateLine(index, { discount_percent: Number(event.target.value) })} className="h-9 w-full rounded-lg border px-2" />}</td>
           <td className="p-2"><select value={line.tax_id || ''} onChange={(event) => updateLine(index, { tax_id: Number(event.target.value) || null })} className="h-9 w-full rounded-lg border px-2"><option value="">No tax</option>{taxes.filter((row) => row.is_active !== false && Number(row.rate_percent || 0) !== 0).map((row) => <option key={row.id} value={row.id}>{String(row.name)}</option>)}</select></td>
+          <td className="p-2 text-right font-semibold">{money((line.line_type === 'expense' ? Number(line.amount) : Number(line.quantity) * Number(line.unit_price) * (1 - Number(line.discount_percent || 0) / 100)))}</td>
           <td className="p-2"><button type="button" disabled={form.lines.length === 1} onClick={() => setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) })} className="text-rose-600 disabled:opacity-30"><X className="size-4" /></button></td>
         </tr>)}</tbody></table><button type="button" onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })} className="m-3 flex items-center gap-1 text-xs font-semibold text-primary"><Plus className="size-3" /> Add line</button></div>}
         {!isRefund && !viewOnly && <section className="rounded-xl border bg-muted/10 p-4"><h3 className="font-semibold">Payment Information</h3><label className="mt-3 flex w-fit items-center gap-2 text-sm font-medium"><input type="checkbox" checked={form.pay_vendor_now} onChange={(event) => setForm((current) => ({ ...current, pay_vendor_now: event.target.checked, payment_method_id: event.target.checked ? current.payment_method_id : '', bank_account_id: '', amount_paid: event.target.checked ? current.amount_paid : '', payment_reference: event.target.checked ? current.payment_reference : '' }))} className="size-4 accent-primary" /> Pay Vendor Now</label>{form.pay_vendor_now && <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Select label="Payment Method" value={form.payment_method_id} set={(value) => setForm((current) => ({ ...current, payment_method_id: value, bank_account_id: '' }))} rows={paymentMethods.filter((row) => row.is_active !== false && ['outbound', 'both'].includes(String(row.payment_type)))} />{selectedPaymentMethod?.allow_multiple_accounts === true && <Select label="Bank Account" value={form.bank_account_id} set={(value) => setForm((current) => ({ ...current, bank_account_id: value }))} rows={availableBankAccounts} labelKey="account_name" optional={availableBankAccounts.length === 1} />}<label className="text-xs font-semibold">Amount Paid <span className="text-rose-500">*</span><input required type="number" min="0.01" max={Math.max(0, totals.total - Math.min(advanceAmount, totals.total))} step="0.01" value={form.amount_paid} onChange={(event) => setForm((current) => ({ ...current, amount_paid: event.target.value }))} className="mt-1.5 h-10 w-full rounded-xl border bg-background px-3 text-sm" /></label><Field label="Reference" value={form.payment_reference} set={(value) => setForm((current) => ({ ...current, payment_reference: value }))} optional /></div>}</section>}

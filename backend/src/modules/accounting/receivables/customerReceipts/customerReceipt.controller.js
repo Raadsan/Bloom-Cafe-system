@@ -207,7 +207,10 @@ async function allocateNumber(tx, journal) {
 }
 
 function entryData(prepared, receiptNumber, receiptId) {
-  const baseAmount = Math.round(prepared.header.amount * prepared.header.exchange_rate * 100) / 100
+  // Only the amount applied to selected invoices affects Accounts Receivable.
+  // Any remaining receipt amount stays unallocated and is not silently applied.
+  const baseAmount = Math.round(prepared.allocations.reduce((sum, row) => sum + Number(row.allocated_amount), 0) * prepared.header.exchange_rate * 100) / 100
+  const allocatedAmount = Math.round(prepared.allocations.reduce((sum, row) => sum + Number(row.allocated_amount), 0) * 100) / 100
   return {
     company_id: prepared.header.company_id, journal_id: prepared.header.journal_id,
     entry_number: receiptNumber, entry_date: prepared.header.receipt_date,
@@ -215,8 +218,8 @@ function entryData(prepared, receiptNumber, receiptId) {
     narration: `Draft customer receipt ${receiptNumber}`, state: 'draft',
     source_type: 'customer_receipt', source_id: receiptId,
     journal_items: { create: [
-      { sequence: 10, account_id: prepared.paymentAccountId, label: 'Customer receipt', debit: baseAmount, credit: 0, currency_id: prepared.header.currency_id, amount_currency: prepared.header.amount },
-      { sequence: 20, account_id: prepared.receivableAccountId, label: 'Accounts Receivable', partner_type: 'customer', partner_id: prepared.header.customer_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -prepared.header.amount },
+      { sequence: 10, account_id: prepared.paymentAccountId, label: 'Customer receipt', debit: baseAmount, credit: 0, currency_id: prepared.header.currency_id, amount_currency: allocatedAmount },
+      { sequence: 20, account_id: prepared.receivableAccountId, label: 'Accounts Receivable', partner_type: 'customer', partner_id: prepared.header.customer_id, debit: 0, credit: baseAmount, currency_id: prepared.header.currency_id, amount_currency: -allocatedAmount },
     ] },
   }
 }
@@ -367,9 +370,7 @@ export const post = async (req, res) => {
       if (Number(receipt.amount) <= 0) throw inputError('Receipt amount must be greater than zero')
       const allocatedTotal = Math.round(receipt.receipt_allocations.reduce((sum, row) => sum + Number(row.allocated_amount), 0) * 100) / 100
       if (allocatedTotal > Number(receipt.amount) + 0.005) throw inputError('The allocated amount cannot exceed the invoice outstanding balance or the receipt amount.')
-      if (!receipt.receipt_allocations.length || Math.abs(allocatedTotal - Number(receipt.amount)) > 0.005) {
-        throw inputError('The total allocated amount must equal the receipt amount before posting.')
-      }
+      if (!receipt.receipt_allocations.length || allocatedTotal <= 0.005) throw inputError('Select at least one invoice and enter an allocation greater than zero.')
       const debit = receipt.journal_entries.journal_items.reduce((sum, row) => sum + Number(row.debit), 0)
       const credit = receipt.journal_entries.journal_items.reduce((sum, row) => sum + Number(row.credit), 0)
       if (debit <= 0 || Math.abs(debit - credit) > 0.005) throw inputError('Receipt journal entry is unbalanced')

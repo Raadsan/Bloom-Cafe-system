@@ -2,12 +2,14 @@ import { createAccountingCrudApi, type AccountingRecord } from '../accountingCru
 export type VendorBillLine = {
   id?: number;
   product_id?: number | null;
+  line_type?: 'product' | 'expense';
   description: string;
   quantity: number;
   unit_price: number;
   discount_percent: number;
   tax_id?: number | null;
-  expense_account_id?: number;
+  expense_account_id?: number | null;
+  amount?: number;
   subtotal?: number;
 };
 export type VendorBill = AccountingRecord & {
