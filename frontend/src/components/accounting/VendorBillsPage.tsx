@@ -127,7 +127,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
       notes: '', pay_vendor_now: false, payment_method_id: '', bank_account_id: '', amount_paid: '', payment_reference: '', lines: (bill.vendor_bill_lines || []).map((line) => ({
         product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity),
         unit_price: Number(line.unit_price), discount_percent: Number(line.discount_percent),
-        tax_id: line.tax_id || null, line_type: line.product_id ? 'product' : 'expense', expense_account_id: line.expense_account_id || null, amount: Number(line.unit_price),
+        tax_id: line.tax_id || null, line_type: (line.product_id ? 'product' : 'expense') as 'product' | 'expense', expense_account_id: line.expense_account_id || null, amount: Number(line.unit_price),
       })),
     });
     if (isRefund) { setRefundMode('partial'); setRefundReason(''); setMoreNotes(String(bill.notes || '')); }
@@ -156,7 +156,7 @@ export default function VendorBillsPage({ kind = 'bill' }: { kind?: 'bill' | 're
     if (!original) { setForm((current) => ({ ...current, reversed_bill_id: value })); return; }
     const lines = (original.vendor_bill_lines || []).map((line) => ({
       product_id: line.product_id || null, description: line.description, quantity: Number(line.quantity), unit_price: Number(line.unit_price),
-      discount_percent: Number(line.discount_percent), tax_id: line.tax_id || null, line_type: line.product_id ? 'product' : 'expense', expense_account_id: line.expense_account_id || null, amount: Number(line.unit_price),
+      discount_percent: Number(line.discount_percent), tax_id: line.tax_id || null, line_type: (line.product_id ? 'product' : 'expense') as 'product' | 'expense', expense_account_id: line.expense_account_id || null, amount: Number(line.unit_price),
     }));
     setForm((current) => ({ ...current, vendor_id: String(original.vendor_id), reversed_bill_id: value, currency_id: String(original.currency_id), exchange_rate: String(original.exchange_rate || 1), payment_term_id: '', bill_date: today(), received_date: today(), lines }));
     setRefundMode('full'); setRefundReason(''); setMoreNotes('');
