@@ -685,6 +685,7 @@ export const getFinanceReport = async (req, res) => {
 
     let totalRevenue = 0
     let totalCost = 0
+    let totalVat = 0
     let transactionCount = payments.length
     
     const itemsList = []
@@ -692,25 +693,41 @@ export const getFinanceReport = async (req, res) => {
     const breakdownBySource = {}
 
     payments.forEach(p => {
-      totalRevenue += p.amount
+      const amount = Number(p.amount) || 0
+      totalRevenue += amount
       
       // By Method
       const method = p.method || 'Unknown'
       if (!breakdownByMethod[method]) breakdownByMethod[method] = 0
-      breakdownByMethod[method] += p.amount
+      breakdownByMethod[method] += amount
 
       // By Source (from Order)
       const source = p.order?.source || 'pos'
       if (!breakdownBySource[source]) breakdownBySource[source] = 0
-      breakdownBySource[source] += p.amount
+      breakdownBySource[source] += amount
+
+      let orderVat = Number(p.order?.taxAmount) || 0
+      let calculatedItemsVat = 0
 
       // Items calculation
       if (p.order && p.order.orderitem) {
         p.order.orderitem.forEach(item => {
           const cost = (item.menuitem?.costPrice || 0) * item.quantity
           const selling = item.unitPrice * item.quantity
+          const itemTaxRate = Number(item.tax) || 0
+          
+          let itemVat = 0
+          if (itemTaxRate > 0) {
+            itemVat = selling * (itemTaxRate / 100)
+          } else if (orderVat > 0 && (p.order?.subTotal || 0) > 0) {
+            itemVat = orderVat * (selling / p.order.subTotal)
+          }
+
+          calculatedItemsVat += itemVat
           totalCost += cost
           
+          const profit = selling - cost - itemVat
+
           itemsList.push({
             id: item.id,
             orderId: p.orderId,
@@ -720,22 +737,35 @@ export const getFinanceReport = async (req, res) => {
             sellingPrice: item.unitPrice,
             totalCost: cost,
             totalSelling: selling,
-            profit: selling - cost,
+            vat: Number(itemVat.toFixed(2)),
+            profit: Number(profit.toFixed(2)),
             date: p.paidAt,
             paymentMethod: p.method || 'unknown',
             providerName: p.providerName || null,
           })
         })
       }
+
+      if (orderVat === 0 && calculatedItemsVat > 0) {
+        orderVat = calculatedItemsVat
+      }
+
+      totalVat += orderVat
     })
 
-    const netProfit = totalRevenue - totalCost
-    const averageTransaction = transactionCount > 0 ? totalRevenue / transactionCount : 0
+    totalRevenue = Number(totalRevenue.toFixed(2))
+    totalCost = Number(totalCost.toFixed(2))
+    totalVat = Number(totalVat.toFixed(2))
+    const netRevenue = Number(Math.max(0, totalRevenue - totalVat).toFixed(2))
+    const netProfit = Number((totalRevenue - totalVat - totalCost).toFixed(2))
+    const averageTransaction = transactionCount > 0 ? Number((totalRevenue / transactionCount).toFixed(2)) : 0
 
     return res.status(200).json({
       success: true,
       data: {
         totalRevenue,
+        totalVat,
+        netRevenue,
         totalCost,
         netProfit,
         averageTransaction,
@@ -770,7 +800,7 @@ export const getWeeklyAnalytics = async (req, res) => {
   }
 }
 
-// ORDERS REPORT (Detailed)
+// ORDERS REPORT (Detailed with Category & Item Sales)
 export const getOrdersReport = async (req, res) => {
   try {
     const dateRange = parseDateRange(req.query)
@@ -778,7 +808,20 @@ export const getOrdersReport = async (req, res) => {
     const [orders, stats] = await Promise.all([
       prisma.order.findMany({
         where: dateRange ? { createdAt: dateRange } : {},
-        include: { table: true, customer: true }
+        include: {
+          table: true,
+          customer: true,
+          orderitem: {
+            include: {
+              menuitem: {
+                include: {
+                  category: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
       }),
       prisma.order.aggregate({
         where: dateRange ? { createdAt: dateRange } : {},
@@ -787,25 +830,114 @@ export const getOrdersReport = async (req, res) => {
       })
     ])
 
-    const breakdownByStatus = {}
     const breakdownByType = {}
     const breakdownBySource = {}
+    const categoryMap = {}
+    let totalItemsSold = 0
 
     orders.forEach(o => {
-      breakdownByStatus[o.status] = (breakdownByStatus[o.status] || 0) + 1
       breakdownByType[o.orderType] = (breakdownByType[o.orderType] || 0) + 1
       breakdownBySource[o.source] = (breakdownBySource[o.source] || 0) + 1
+
+      // Aggregate sold items per category
+      if (o.status !== 'cancelled' && o.orderitem && o.orderitem.length > 0) {
+        o.orderitem.forEach(item => {
+          const catName = item.menuitem?.category?.name || 'Uncategorized'
+          const itemName = item.menuitem?.name || 'Unknown Item'
+          const qty = Number(item.quantity) || 1
+          const unitPrice = Number(item.unitPrice) || 0
+          const amount = unitPrice * qty
+
+          const itemTaxRate = Number(item.tax) || 0
+          const orderVat = Number(o.taxAmount) || 0
+          let itemVat = 0
+          if (itemTaxRate > 0) {
+            itemVat = amount * (itemTaxRate / 100)
+          } else if (orderVat > 0 && (o.subTotal || 0) > 0) {
+            itemVat = orderVat * (amount / o.subTotal)
+          }
+          const netAmount = amount - itemVat
+
+          totalItemsSold += qty
+
+          if (!categoryMap[catName]) {
+            categoryMap[catName] = {
+              categoryName: catName,
+              totalQuantity: 0,
+              totalAmount: 0,
+              totalVat: 0,
+              totalNet: 0,
+              itemsMap: {}
+            }
+          }
+
+          categoryMap[catName].totalQuantity += qty
+          categoryMap[catName].totalAmount += amount
+          categoryMap[catName].totalVat += itemVat
+          categoryMap[catName].totalNet += netAmount
+
+          if (!categoryMap[catName].itemsMap[itemName]) {
+            categoryMap[catName].itemsMap[itemName] = {
+              name: itemName,
+              quantity: 0,
+              totalAmount: 0,
+              vat: 0,
+              netAmount: 0,
+              unitPrice: unitPrice
+            }
+          }
+
+          categoryMap[catName].itemsMap[itemName].quantity += qty
+          categoryMap[catName].itemsMap[itemName].totalAmount += amount
+          categoryMap[catName].itemsMap[itemName].vat += itemVat
+          categoryMap[catName].itemsMap[itemName].netAmount += netAmount
+        })
+      }
     })
+
+    const categorySales = Object.values(categoryMap).map(cat => ({
+      categoryName: cat.categoryName,
+      totalQuantity: Number(cat.totalQuantity.toFixed(1)),
+      totalAmount: Number(cat.totalAmount.toFixed(2)),
+      totalVat: Number(cat.totalVat.toFixed(2)),
+      totalNet: Number(cat.totalNet.toFixed(2)),
+      items: Object.values(cat.itemsMap).map(it => ({
+        name: it.name,
+        quantity: Number(it.quantity.toFixed(1)),
+        totalAmount: Number(it.totalAmount.toFixed(2)),
+        vat: Number(it.vat.toFixed(2)),
+        netAmount: Number(it.netAmount.toFixed(2)),
+        unitPrice: it.unitPrice
+      })).sort((a, b) => b.totalAmount - a.totalAmount)
+    })).sort((a, b) => b.totalAmount - a.totalAmount)
+
+    const totalVat = Number(categorySales.reduce((sum, c) => sum + (c.totalVat || 0), 0).toFixed(2))
 
     return res.status(200).json({
       success: true,
       data: {
-        totalOrders: stats._count.id || 0,
-        totalAmount: stats._sum.total || 0,
-        breakdownByStatus,
+        totalOrders: stats._count.id || orders.length,
+        totalAmount: Number((stats._sum.total || 0).toFixed(2)),
+        totalVat,
+        totalItemsSold,
+        categorySales,
         breakdownByType,
         breakdownBySource,
-        orders: orders.slice(0, 50) // Return last 50 for preview
+        orders: orders.map(o => ({
+          id: o.id,
+          orderNumber: o.orderNumber,
+          customerName: o.customerName || o.customer?.name || null,
+          customerPhone: o.customerPhone || o.customer?.phone || null,
+          source: o.source,
+          orderType: o.orderType,
+          status: o.status,
+          total: o.total,
+          taxAmount: o.taxAmount,
+          createdAt: o.createdAt,
+          tableId: o.tableId,
+          table: o.table ? { number: o.table.number } : null,
+          itemCount: o.orderitem?.reduce((sum, it) => sum + (it.quantity || 1), 0) || 0
+        }))
       }
     })
   } catch (error) {

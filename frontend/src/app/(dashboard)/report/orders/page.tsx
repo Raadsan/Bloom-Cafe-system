@@ -3,14 +3,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ShoppingBag,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Calendar,
-  Search,
-  RefreshCw,
   DollarSign,
+  Layers,
+  Receipt,
+  Download,
+  Printer,
+  Search,
+  Calendar,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Coffee,
   Filter,
+  Percent,
 } from "lucide-react";
 import {
   AreaChart,
@@ -28,8 +33,6 @@ import {
 } from "recharts";
 import { reportApi } from "@/lib/api/restaurant/reportApi";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/toast";
-import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -38,25 +41,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import {
   dashboardPageClass,
   dashboardPageStyle,
   pageHeaderTitleClass,
   pageHeaderWrapperClass,
   dashboardStatIconClass,
+  chartPrimary,
+  chartPrimaryVariants,
+  chartTooltipStyle,
+  chartAxisTick,
   dashboardTableHeaderClass,
   dashboardTableHeadRowClass,
   dashboardTableHeadClass,
   dashboardTableBodyRowClass,
   dashboardTableCellClass,
   dashboardTableIdClass,
-  dashboardStatusBadgeClass,
-  getOrderStatusBadgeClass,
-  formatStatusLabel,
-  chartPrimary,
-  chartPrimaryVariants,
-  chartTooltipStyle,
-  chartAxisTick,
 } from "@/lib/dashboard-ui";
 
 const EMPTY_WEEKLY = [
@@ -74,30 +76,45 @@ function formatLabel(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+interface CategorySaleItem {
+  name: string;
+  quantity: number;
+  totalAmount: number;
+  unitPrice?: number;
+  vat?: number;
+  netAmount?: number;
+}
+
+interface CategorySale {
+  categoryName: string;
+  totalQuantity: number;
+  totalAmount: number;
+  totalVat?: number;
+  totalNet?: number;
+  items: CategorySaleItem[];
+}
+
 interface OrdersReportData {
   totalOrders: number;
   totalAmount: number;
-  breakdownByStatus?: Record<string, number>;
+  totalVat?: number;
+  totalItemsSold?: number;
+  categorySales?: CategorySale[];
   breakdownByType?: Record<string, number>;
   breakdownBySource?: Record<string, number>;
-  orders?: Array<{
-    id: number;
-    customerName?: string;
-    customerPhone?: string;
-    source?: string;
-    orderType?: string;
-    status: string;
-    total: number;
-    table?: { number?: number };
-    tableId?: number;
-  }>;
 }
 
 export default function OrdersReportPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<OrdersReportData | null>(null);
   const [weeklyData, setWeeklyData] = useState(EMPTY_WEEKLY);
+  
+  // Table state
   const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
   const [dateRange, setDateRange] = useState({
     startDate: new Date(new Date().setDate(new Date().getDate() - 30))
       .toISOString()
@@ -113,11 +130,13 @@ export default function OrdersReportPage() {
         reportApi.getOrdersReport(dateRange),
         reportApi.getWeeklyAnalytics(),
       ]);
+
       if (ordersRes.success) {
         setData(ordersRes.data);
       } else {
         setData(null);
       }
+
       if (weeklyRes.success && Array.isArray(weeklyRes.data)) {
         setWeeklyData(weeklyRes.data);
       }
@@ -128,7 +147,7 @@ export default function OrdersReportPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange.endDate, dateRange.startDate]);
+  }, [dateRange.endDate, dateRange.startDate, showToast]);
 
   useEffect(() => {
     fetchReport();
@@ -137,14 +156,7 @@ export default function OrdersReportPage() {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount || 0);
 
-  const statusChartData = useMemo(() => {
-    if (!data?.breakdownByStatus) return [];
-    return Object.entries(data.breakdownByStatus).map(([name, value]) => ({
-      name: formatStatusLabel(name),
-      value,
-    }));
-  }, [data?.breakdownByStatus]);
-
+  // Type Chart Data
   const typeChartData = useMemo(() => {
     if (!data?.breakdownByType) return [];
     return Object.entries(data.breakdownByType).map(([name, value]) => ({
@@ -153,20 +165,251 @@ export default function OrdersReportPage() {
     }));
   }, [data?.breakdownByType]);
 
-  const filteredOrders = useMemo(() => {
-    if (!data?.orders) return [];
+  // Source Chart Data
+  const sourceChartData = useMemo(() => {
+    if (!data?.breakdownBySource) return [];
+    return Object.entries(data.breakdownBySource).map(([name, value]) => ({
+      name: formatLabel(name),
+      value,
+    }));
+  }, [data?.breakdownBySource]);
+
+  // Category Filter Options
+  const categoryOptions = useMemo(() => {
+    if (!data?.categorySales) return [];
+    return data.categorySales.map((c) => c.categoryName);
+  }, [data?.categorySales]);
+
+  // Filter Category Sales
+  const filteredCategorySales = useMemo(() => {
+    if (!data?.categorySales) return [];
     const q = search.toLowerCase().trim();
-    if (!q) return data.orders;
-    return data.orders.filter((o) => {
-      return (
-        o.id.toString().includes(q) ||
-        (o.customerName || "").toLowerCase().includes(q) ||
-        (o.source || "").toLowerCase().includes(q) ||
-        (o.orderType || "").toLowerCase().includes(q) ||
-        o.status.toLowerCase().includes(q)
+
+    return data.categorySales
+      .filter((cat) => {
+        if (selectedCategory !== "all" && cat.categoryName.toLowerCase() !== selectedCategory.toLowerCase()) {
+          return false;
+        }
+        if (!q) return true;
+        const matchesCat = cat.categoryName.toLowerCase().includes(q);
+        const matchesItems = cat.items.some((it) => it.name.toLowerCase().includes(q));
+        return matchesCat || matchesItems;
+      })
+      .map((cat) => {
+        if (!q) return cat;
+        return {
+          ...cat,
+          items: cat.items.filter(
+            (it) => it.name.toLowerCase().includes(q) || cat.categoryName.toLowerCase().includes(q)
+          ),
+        };
+      })
+      .filter((cat) => cat.items.length > 0);
+  }, [data?.categorySales, search, selectedCategory]);
+
+  // Totals of current filtered data
+  const totalCategoryQty = useMemo(() => {
+    return filteredCategorySales.reduce(
+      (sum, c) => sum + c.items.reduce((s, it) => s + it.quantity, 0),
+      0
+    );
+  }, [filteredCategorySales]);
+
+  const totalCategoryAmount = useMemo(() => {
+    return filteredCategorySales.reduce(
+      (sum, c) => sum + c.items.reduce((s, it) => s + it.totalAmount, 0),
+      0
+    );
+  }, [filteredCategorySales]);
+
+  const totalCategoryVat = useMemo(() => {
+    return filteredCategorySales.reduce(
+      (sum, c) => sum + c.items.reduce((s, it) => s + (it.vat ?? 0), 0),
+      0
+    );
+  }, [filteredCategorySales]);
+
+  const totalCategoryNet = useMemo(() => {
+    return filteredCategorySales.reduce(
+      (sum, c) =>
+        sum +
+        c.items.reduce((s, it) => s + (it.netAmount !== undefined ? it.netAmount : it.totalAmount - (it.vat ?? 0)), 0),
+      0
+    );
+  }, [filteredCategorySales]);
+
+  // Pagination for Categories
+  const totalPages = Math.max(1, Math.ceil(filteredCategorySales.length / pageSize));
+  const paginatedCategories = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCategorySales.slice(start, start + pageSize);
+  }, [filteredCategorySales, currentPage, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedCategory, pageSize]);
+
+  const startRecord = filteredCategorySales.length ? (currentPage - 1) * pageSize + 1 : 0;
+  const endRecord = Math.min(currentPage * pageSize, filteredCategorySales.length);
+
+  // Export to CSV
+  const handleExportCsv = () => {
+    if (!filteredCategorySales.length) {
+      showToast("No data to export", "error");
+      return;
+    }
+    const lines = ["Category,Item Name,Quantity Sold,Total Sales ($),VAT ($),Net Profit ($)"];
+    filteredCategorySales.forEach((cat) => {
+      const catVat = cat.items.reduce((s, it) => s + (it.vat ?? 0), 0);
+      const catNet = cat.items.reduce(
+        (s, it) => s + (it.netAmount !== undefined ? it.netAmount : it.totalAmount - (it.vat ?? 0)),
+        0
       );
+      lines.push(
+        `"${cat.categoryName}",[TOTAL CATEGORY],${cat.totalQuantity.toFixed(1)},${cat.totalAmount.toFixed(2)},${catVat.toFixed(2)},${catNet.toFixed(2)}`
+      );
+      cat.items.forEach((it) => {
+        const itemVat = it.vat ?? 0;
+        const itemNet = it.netAmount !== undefined ? it.netAmount : it.totalAmount - itemVat;
+        lines.push(
+          `"${cat.categoryName}","${it.name.replace(/"/g, '""')}",${it.quantity.toFixed(1)},${it.totalAmount.toFixed(2)},${itemVat.toFixed(2)},${itemNet.toFixed(2)}`
+        );
+      });
     });
-  }, [data?.orders, search]);
+    lines.push(
+      `"GRAND TOTAL",,${totalCategoryQty.toFixed(1)},${totalCategoryAmount.toFixed(2)},${totalCategoryVat.toFixed(2)},${totalCategoryNet.toFixed(2)}`
+    );
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sales-by-category-${dateRange.startDate}-to-${dateRange.endDate}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast("Sales report exported to CSV", "success");
+  };
+
+  // Export to PDF
+  const handleExportPdf = () => {
+    if (!filteredCategorySales.length) {
+      showToast("No data to export", "error");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      showToast("Pop-up blocked. Please allow pop-ups for this site.", "error");
+      return;
+    }
+
+    let rowsHtml = "";
+    filteredCategorySales.forEach((cat) => {
+      const catVat = cat.items.reduce((s, it) => s + (it.vat ?? 0), 0);
+      const catNet = cat.items.reduce(
+        (s, it) => s + (it.netAmount !== undefined ? it.netAmount : it.totalAmount - (it.vat ?? 0)),
+        0
+      );
+      rowsHtml += `
+        <tr style="background:#f8fafc; font-weight: 700; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
+          <td style="padding: 7px 10px; color: #0f172a;">${cat.categoryName} (${cat.items.length} items)</td>
+          <td style="padding: 7px 10px; color: #5b1017;">Category</td>
+          <td style="padding: 7px 10px; text-align: right; font-weight: 700;">${cat.totalQuantity.toFixed(1)}</td>
+          <td style="padding: 7px 10px; text-align: right; font-weight: 700; color: #0f172a;">${formatCurrency(cat.totalAmount)}</td>
+          <td style="padding: 7px 10px; text-align: right; font-weight: 700; color: #4f46e5;">${formatCurrency(catVat)}</td>
+          <td style="padding: 7px 10px; text-align: right; font-weight: 700; color: #059669;">${formatCurrency(catNet)}</td>
+        </tr>
+      `;
+      cat.items.forEach((it) => {
+        const itemVat = it.vat ?? 0;
+        const itemNet = it.netAmount !== undefined ? it.netAmount : it.totalAmount - itemVat;
+        rowsHtml += `
+          <tr>
+            <td style="padding: 5px 10px 5px 24px; color: #334155;">• ${it.name}</td>
+            <td style="padding: 5px 10px; color: #94a3b8; font-size: 10px;">${cat.categoryName}</td>
+            <td style="padding: 5px 10px; text-align: right;">${it.quantity.toFixed(1)}</td>
+            <td style="padding: 5px 10px; text-align: right; font-weight: 500;">${formatCurrency(it.totalAmount)}</td>
+            <td style="padding: 5px 10px; text-align: right; color: #4f46e5;">${formatCurrency(itemVat)}</td>
+            <td style="padding: 5px 10px; text-align: right; font-weight: 600; color: #059669;">${formatCurrency(itemNet)}</td>
+          </tr>
+        `;
+      });
+    });
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Orders & Sales Report - Category Breakdown</title>
+          <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; margin: 0; padding: 20px; font-size: 12px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #5b1017; padding-bottom: 12px; margin-bottom: 16px; }
+            .brand { font-size: 18px; font-weight: 800; color: #5b1017; letter-spacing: -0.5px; }
+            .meta { text-align: right; font-size: 11px; color: #64748b; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+            th { background: #5b1017; color: white; text-align: left; padding: 7px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+            td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; }
+            .grand-total { background: #fff1f2; font-weight: 800; font-size: 12px; border-top: 2px solid #5b1017; border-bottom: 2px solid #5b1017; color: #5b1017; }
+            .footer { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
+            @media print { body { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="brand">BLOOM CAFE</div>
+              <div style="font-size: 13px; font-weight: 600; color: #334155; margin-top: 2px;">Orders Activity & Category Sales Report</div>
+            </div>
+            <div class="meta">
+              <div><strong>Period:</strong> ${dateRange.startDate} to ${dateRange.endDate}</div>
+              <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Item / Category</th>
+                <th>Group</th>
+                <th style="text-align:right;">Qty Sold</th>
+                <th style="text-align:right;">Total Sales</th>
+                <th style="text-align:right;">VAT</th>
+                <th style="text-align:right;">Net Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+              <tr class="grand-total">
+                <td style="padding: 10px;">Grand Total</td>
+                <td style="padding: 10px;">${filteredCategorySales.length} Categories</td>
+                <td style="padding: 10px; text-align: right;">${totalCategoryQty.toFixed(1)}</td>
+                <td style="padding: 10px; text-align: right;">${formatCurrency(totalCategoryAmount)}</td>
+                <td style="padding: 10px; text-align: right;">${formatCurrency(totalCategoryVat)}</td>
+                <td style="padding: 10px; text-align: right;">${formatCurrency(totalCategoryNet)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <span>Bloom Cafe Management System</span>
+            <span>Page 1 of 1</span>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const avgOrderValue =
+    (data?.totalOrders ?? 0) > 0 ? (data?.totalAmount ?? 0) / (data?.totalOrders ?? 1) : 0;
 
   const statCards = [
     {
@@ -175,24 +418,29 @@ export default function OrdersReportPage() {
       icon: ShoppingBag,
     },
     {
-      title: "Total Amount",
+      title: "Total Sales",
       value: formatCurrency(data?.totalAmount ?? 0),
       icon: DollarSign,
     },
     {
-      title: "Served",
-      value: data?.breakdownByStatus?.served ?? 0,
-      icon: CheckCircle2,
+      title: "Total VAT",
+      value: formatCurrency(data?.totalVat ?? totalCategoryVat ?? 0),
+      icon: Percent,
     },
     {
-      title: "Pending",
-      value: data?.breakdownByStatus?.pending ?? 0,
-      icon: Clock,
+      title: "Total Items Sold",
+      value: (data?.totalItemsSold ?? 0).toLocaleString(),
+      icon: Coffee,
     },
     {
-      title: "Cancelled",
-      value: data?.breakdownByStatus?.cancelled ?? 0,
-      icon: XCircle,
+      title: "Active Categories",
+      value: data?.categorySales?.length ?? 0,
+      icon: Layers,
+    },
+    {
+      title: "Avg Order Value",
+      value: formatCurrency(avgOrderValue),
+      icon: Receipt,
     },
   ];
 
@@ -201,9 +449,10 @@ export default function OrdersReportPage() {
       className={cn(dashboardPageClass, "space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700")}
       style={dashboardPageStyle}
     >
+      {/* Header Bar */}
       <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-end justify-between gap-4")}>
         <div>
-          <h1 className={pageHeaderTitleClass}>Orders Report</h1>
+          <h1 className={pageHeaderTitleClass}>Orders & Sales Report</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2 trezo-card p-2">
           <div className="flex items-center gap-2 px-2">
@@ -235,43 +484,46 @@ export default function OrdersReportPage() {
       </div>
 
       {loading && !data ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 px-4">
-          {[1, 2, 3, 4, 5].map((i) => (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 px-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="trezo-card h-28 animate-pulse bg-muted/20" />
           ))}
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 px-4">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 px-4">
             {statCards.map((stat, i) => (
               <div
                 key={stat.title}
-                className="trezo-card p-6 flex flex-col justify-between group hover:border-primary/30 transition-all hover:shadow-md"
+                className="trezo-card p-5 flex flex-col justify-between group hover:border-primary/30 transition-all hover:shadow-md"
               >
                 <div className="flex items-start justify-between">
                   <div className={dashboardStatIconClass(i)}>
-                    <stat.icon className="size-5 text-white" />
+                    <stat.icon className="size-4 text-white" />
                   </div>
                 </div>
-                <div className="mt-4">
+                <div className="mt-3">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
                     {stat.title}
                   </p>
-                  <h3 className="text-2xl font-bold tracking-tight text-foreground mt-1">{stat.value}</h3>
+                  <h3 className="text-xl font-bold tracking-tight text-foreground mt-1">{stat.value}</h3>
                 </div>
               </div>
             ))}
           </div>
 
+          {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-4">
+            {/* Order Trends Chart */}
             <div className="lg:col-span-2 trezo-card p-6">
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
                     Order Trends
                   </h3>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                    Weekly order volume
+                    Weekly order volume & revenue
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -281,11 +533,11 @@ export default function OrdersReportPage() {
                   </span>
                 </div>
               </div>
-              <div className="h-[300px] w-full">
+              <div className="h-[240px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={weeklyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="orderTrendGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={chartPrimary} stopOpacity={0.25} />
                         <stop offset="95%" stopColor={chartPrimary} stopOpacity={0} />
                       </linearGradient>
@@ -305,27 +557,26 @@ export default function OrdersReportPage() {
                       stroke={chartPrimary}
                       strokeWidth={2.5}
                       fillOpacity={1}
-                      fill="url(#colorOrders)"
+                      fill="url(#orderTrendGradient)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
+            {/* Order Types / Channel Volume */}
             <div className="trezo-card p-6">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
-                    Order Volume
-                  </h3>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                    Orders by weekday
-                  </p>
-                </div>
+              <div className="mb-4">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
+                  Order Types
+                </h3>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                  Dine-in, Takeaway & Delivery
+                </p>
               </div>
-              <div className="h-[300px] w-full">
+              <div className="h-[180px] w-full mb-2">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weeklyData}>
+                  <BarChart data={typeChartData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       vertical={false}
@@ -339,10 +590,10 @@ export default function OrdersReportPage() {
                       contentStyle={chartTooltipStyle}
                       itemStyle={{ color: "#ffffff" }}
                     />
-                    <Bar dataKey="orders" radius={[4, 4, 0, 0]}>
-                      {weeklyData.map((_, index) => (
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {typeChartData.map((_, index) => (
                         <Cell
-                          key={`bar-${index}`}
+                          key={`order-type-${index}`}
                           fill={chartPrimaryVariants[index % chartPrimaryVariants.length]}
                         />
                       ))}
@@ -350,191 +601,275 @@ export default function OrdersReportPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-4">
-            <div className="lg:col-span-2 trezo-card overflow-hidden">
-              <div className="px-8 py-4 flex flex-wrap items-center justify-between gap-3 border-b border-border">
-                <div>
-                  <h3 className="text-sm font-bold uppercase tracking-tight text-foreground">
-                    Order Activity
-                  </h3>
-                  <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mt-0.5">
-                    Recent orders in selected period
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="relative w-48 group">
-                    <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
-                    <input
-                      type="text"
-                      placeholder="Search orders..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full h-9 pl-9 pr-3 bg-muted/30 border border-border rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-xs font-medium text-foreground"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 px-3 bg-muted/30 border border-border text-muted-foreground hover:text-primary hover:border-primary/30"
+              <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
+                {typeChartData.map((entry, index) => (
+                  <div
+                    key={`type-legend-${entry.name}-${index}`}
+                    className="flex items-center justify-between p-2 rounded-md bg-muted/30 border border-border text-[11px]"
                   >
-                    <Filter className="size-3.5 mr-1.5" />
-                    <span className="text-xs font-semibold">Filter</span>
-                  </Button>
-                </div>
-              </div>
-
-              <div className="border-t border-border overflow-x-auto">
-                <Table className="w-full">
-                  <TableHeader className={dashboardTableHeaderClass}>
-                    <TableRow className={dashboardTableHeadRowClass}>
-                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
-                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Customer</TableHead>
-                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Type</TableHead>
-                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Source</TableHead>
-                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Status</TableHead>
-                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="bg-card">
-                    {filteredOrders.length > 0 ? (
-                      filteredOrders.map((order) => (
-                        <TableRow key={order.id} className={dashboardTableBodyRowClass}>
-                          <TableCell className={dashboardTableCellClass}>
-                            <span className={dashboardTableIdClass}>{order.id}</span>
-                          </TableCell>
-                          <TableCell className={dashboardTableCellClass}>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[13px] font-medium text-zinc-700 dark:text-white">
-                                {order.customerName || "Walk-in Guest"}
-                              </span>
-                              <span className="text-[11px] text-zinc-500 dark:text-white/70">
-                                {order.customerPhone || "No phone"}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className={dashboardTableCellClass}>
-                            <span className="text-[12px] font-medium text-zinc-600 dark:text-white/90">
-                              {formatLabel(order.orderType || "dine-in")}
-                            </span>
-                          </TableCell>
-                          <TableCell className={dashboardTableCellClass}>
-                            <span className="text-[10px] font-bold text-primary dark:text-white bg-primary/5 px-2 py-0.5 rounded uppercase tracking-wider">
-                              {formatLabel(order.source || "pos")}
-                            </span>
-                          </TableCell>
-                          <TableCell className={dashboardTableCellClass}>
-                            <span
-                              className={cn(
-                                dashboardStatusBadgeClass,
-                                getOrderStatusBadgeClass(order.status)
-                              )}
-                            >
-                              {formatStatusLabel(order.status)}
-                            </span>
-                          </TableCell>
-                          <TableCell className={cn(dashboardTableCellClass, "text-right")}>
-                            <span className="text-[13px] font-bold text-zinc-700 dark:text-white tabular-nums">
-                              {formatCurrency(order.total)}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={6} className="px-6 py-10 text-center text-zinc-500">
-                          No orders found for this period
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="trezo-card p-6">
-                <div className="mb-8">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
-                    Order Status
-                  </h3>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                    Fulfillment distribution
-                  </p>
-                </div>
-                <div className="h-[220px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={statusChartData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={4}
-                        dataKey="value"
-                        stroke="none"
-                      >
-                        {statusChartData.map((_, index) => (
-                          <Cell
-                            key={`status-${index}`}
-                            fill={chartPrimaryVariants[index % chartPrimaryVariants.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={chartTooltipStyle} itemStyle={{ color: "#ffffff" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {statusChartData.map((entry, index) => (
-                    <div key={entry.name} className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
+                    <div className="flex items-center gap-2">
                       <div
                         className="size-2 rounded-full"
                         style={{
                           backgroundColor: chartPrimaryVariants[index % chartPrimaryVariants.length],
                         }}
                       />
-                      <span className="text-muted-foreground">{entry.name}</span>
-                      <span className="text-foreground">{entry.value}</span>
+                      <span className="font-bold text-foreground">{entry.name}</span>
                     </div>
-                  ))}
+                    <span className="font-bold text-primary dark:text-white tabular-nums">
+                      {entry.value} orders
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Full-width Main Activity Table matching Transaction Details */}
+          <div className="px-4">
+            <div className="trezo-card overflow-hidden">
+              {/* Controls Bar */}
+              <div className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border">
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-tight text-foreground">
+                    Order Activity & Category Sales
+                  </h3>
+                  <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mt-0.5">
+                    Items sold and sales revenue grouped by category
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Rows selector */}
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-muted-foreground font-medium text-[11px]">Show</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="h-9 px-2.5 bg-muted/30 border border-border rounded-md text-xs font-semibold outline-none focus:border-primary text-foreground cursor-pointer"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+
+                  {/* Category Filter */}
+                  <div className="flex items-center">
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="h-9 px-3 bg-muted/30 border border-border rounded-md text-xs font-semibold outline-none focus:border-primary text-foreground cursor-pointer max-w-[160px]"
+                    >
+                      <option value="all">All Categories</option>
+                      {categoryOptions.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Search Input */}
+                  <div className="relative w-48 sm:w-56 group">
+                    <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
+                    <input
+                      type="text"
+                      placeholder="Search items, categories..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full h-9 pl-9 pr-3 bg-muted/30 border border-border rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-xs font-medium text-foreground"
+                    />
+                  </div>
+
+                  {/* Export CSV */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportCsv}
+                    className="h-9 px-3 border-border text-foreground hover:bg-muted/50 rounded-md gap-1.5 text-xs font-bold"
+                  >
+                    <Download className="size-3.5" />
+                    <span>CSV</span>
+                  </Button>
+
+                  {/* Export PDF */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportPdf}
+                    className="h-9 px-3 border-border text-foreground hover:bg-muted/50 rounded-md gap-1.5 text-xs font-bold"
+                  >
+                    <Printer className="size-3.5" />
+                    <span>PDF</span>
+                  </Button>
                 </div>
               </div>
 
-              <div className="trezo-card p-6">
-                <div className="mb-6">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
-                    Order Type
-                  </h3>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                    Dine-in, takeaway & delivery
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  {typeChartData.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No data</p>
-                  ) : (
-                    typeChartData.map((entry, index) => (
-                      <div
-                        key={entry.name}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="size-2 rounded-full"
-                            style={{
-                              backgroundColor: chartPrimaryVariants[index % chartPrimaryVariants.length],
-                            }}
-                          />
-                          <span className="text-xs font-bold text-foreground">{entry.name}</span>
-                        </div>
-                        <span className="text-sm font-bold text-primary dark:text-white">{entry.value}</span>
-                      </div>
-                    ))
-                  )}
+              {/* Table Data */}
+              <div className="overflow-x-auto">
+                <Table className="w-full">
+                  <TableHeader className={dashboardTableHeaderClass}>
+                    <TableRow className={dashboardTableHeadRowClass}>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Item / Category</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Category Group</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Qty Sold</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Total Sales</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>VAT</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Net Profit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="bg-card">
+                    {paginatedCategories.length > 0 ? (
+                      paginatedCategories.map((cat, catIdx) => {
+                        const catVat = cat.items.reduce((s, it) => s + (it.vat ?? 0), 0);
+                        const catNet = cat.items.reduce(
+                          (s, it) => s + (it.netAmount !== undefined ? it.netAmount : it.totalAmount - (it.vat ?? 0)),
+                          0
+                        );
+                        return (
+                          <React.Fragment key={`cat-group-${cat.categoryName}-${catIdx}`}>
+                            {/* Category Summary / Header Row */}
+                            <TableRow className="bg-muted/40 hover:bg-muted/60 border-y border-border/80">
+                              <TableCell className={cn(dashboardTableCellClass, "font-bold")}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[13px] font-bold text-zinc-900 dark:text-white">
+                                    {cat.categoryName}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold px-1.5 py-0.5 rounded bg-muted/80 border border-border/60">
+                                    {cat.items.length} {cat.items.length === 1 ? "item" : "items"}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className={dashboardTableCellClass}>
+                                <span className="text-[10px] font-bold text-primary dark:text-white bg-primary/10 px-2 py-0.5 rounded uppercase tracking-wider">
+                                  {cat.categoryName}
+                                </span>
+                              </TableCell>
+                              <TableCell className={cn(dashboardTableCellClass, "text-right font-bold text-foreground tabular-nums")}>
+                                {cat.totalQuantity.toFixed(1)}
+                              </TableCell>
+                              <TableCell className={cn(dashboardTableCellClass, "text-right font-bold text-foreground tabular-nums")}>
+                                {formatCurrency(cat.totalAmount)}
+                              </TableCell>
+                              <TableCell className={cn(dashboardTableCellClass, "text-right font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums")}>
+                                {formatCurrency(catVat)}
+                              </TableCell>
+                              <TableCell className={cn(dashboardTableCellClass, "text-right font-bold text-emerald-600 dark:text-emerald-400 tabular-nums")}>
+                                {formatCurrency(catNet)}
+                              </TableCell>
+                            </TableRow>
+
+                            {/* Item Sub-rows */}
+                            {cat.items.map((it, itemIdx) => {
+                              const itemVat = it.vat ?? 0;
+                              const itemNet = it.netAmount !== undefined ? it.netAmount : it.totalAmount - itemVat;
+                              return (
+                                <TableRow
+                                  key={`cat-item-${cat.categoryName}-${it.name}-${itemIdx}`}
+                                  className={dashboardTableBodyRowClass}
+                                >
+                                  <TableCell className={dashboardTableCellClass}>
+                                    <div className="flex items-center gap-2.5 pl-4">
+                                      <span className="size-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600" />
+                                      <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-200">
+                                        {it.name}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className={dashboardTableCellClass}>
+                                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium">
+                                      {cat.categoryName}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className={cn(dashboardTableCellClass, "text-right font-medium text-zinc-700 dark:text-zinc-200 tabular-nums")}>
+                                    {it.quantity.toFixed(1)}
+                                  </TableCell>
+                                  <TableCell className={cn(dashboardTableCellClass, "text-right font-medium text-zinc-800 dark:text-white tabular-nums")}>
+                                    {formatCurrency(it.totalAmount)}
+                                  </TableCell>
+                                  <TableCell className={cn(dashboardTableCellClass, "text-right font-medium text-indigo-600 dark:text-indigo-400 tabular-nums")}>
+                                    {formatCurrency(itemVat)}
+                                  </TableCell>
+                                  <TableCell className={cn(dashboardTableCellClass, "text-right font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums")}>
+                                    {formatCurrency(itemNet)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="px-6 py-12 text-center text-zinc-500">
+                          No category sales records found matching your criteria.
+                        </TableCell>
+                      </TableRow>
+                    )}
+
+                    {/* Grand Total Row */}
+                    {filteredCategorySales.length > 0 && (
+                      <TableRow className="border-t-2 border-border bg-muted/20 font-extrabold text-sm">
+                        <TableCell className={cn(dashboardTableCellClass, "font-bold text-primary dark:text-white uppercase tracking-wider")}>
+                          Grand Total
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[11px] font-bold text-muted-foreground">
+                            {filteredCategorySales.length} {filteredCategorySales.length === 1 ? "Category" : "Categories"}
+                          </span>
+                        </TableCell>
+                        <TableCell className={cn(dashboardTableCellClass, "text-right font-bold text-foreground tabular-nums")}>
+                          {totalCategoryQty.toFixed(1)}
+                        </TableCell>
+                        <TableCell className={cn(dashboardTableCellClass, "text-right font-bold text-foreground tabular-nums")}>
+                          {formatCurrency(totalCategoryAmount)}
+                        </TableCell>
+                        <TableCell className={cn(dashboardTableCellClass, "text-right font-bold text-indigo-600 dark:text-indigo-400 tabular-nums")}>
+                          {formatCurrency(totalCategoryVat)}
+                        </TableCell>
+                        <TableCell className={cn(dashboardTableCellClass, "text-right font-bold text-emerald-600 dark:text-emerald-400 tabular-nums")}>
+                          {formatCurrency(totalCategoryNet)}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination & Summary Footer */}
+              <div className="px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border bg-muted/10">
+                <span className="text-xs text-muted-foreground font-medium">
+                  Showing {startRecord}–{endRecord} of {filteredCategorySales.length} categories
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="h-8 w-8 p-0"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <span className="px-3 py-1 text-xs font-semibold rounded-md border border-border bg-card text-foreground">
+                    {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="h-8 w-8 p-0"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
                 </div>
               </div>
             </div>

@@ -54,6 +54,8 @@ export interface MenuItem {
   isRecommended: boolean;
   categoryId: number;
   category?: { id: number; name: string };
+  vendorId?: number | null;
+  vendorName?: string | null;
   /** POS variants e.g. ["Small", "Medium", "Large"] */
   options?: string[] | null;
   isComposite?: boolean;
@@ -89,6 +91,8 @@ export interface CreateMenuItemPayload {
   isPurchasable?: boolean;
   isRecommended?: boolean;
   categoryId: number;
+  vendorId?: number | null;
+  vendorName?: string | null;
   options?: string[] | string | null;
 }
 
@@ -106,6 +110,8 @@ export interface UpdateMenuItemPayload {
   isPurchasable?: boolean;
   isRecommended?: boolean;
   categoryId?: number;
+  vendorId?: number | null;
+  vendorName?: string | null;
   options?: string[] | string | null;
 }
 

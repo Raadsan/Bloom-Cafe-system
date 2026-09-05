@@ -12,7 +12,7 @@ import VendorPaymentsPage from '@/components/accounting/VendorPaymentsPage';
 import BankingSetupPage from '@/components/accounting/BankingSetupPage';
 import CashTransactionsPage from '@/components/accounting/CashTransactionsPage';
 import FinancialReportsPage, { type FinancialReportKind } from '@/components/accounting/FinancialReportsPage';
-import MenuPage from '@/app/(dashboard)/menus/page';
+import AccountingVendorProductsPage from '@/components/accounting/AccountingVendorProductsPage';
 
 const CONFIGURATION_SECTIONS = new Set([
   'account-types', 'currencies', 'companies', 'payment-methods',
@@ -128,7 +128,7 @@ export default async function AccountingSectionPage({
   }
 
   if (key === 'products' || key === 'menus') {
-    return <MenuPage />;
+    return <AccountingVendorProductsPage />;
   }
 
   return (

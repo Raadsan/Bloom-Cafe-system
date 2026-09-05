@@ -47,7 +47,10 @@ function mapMenuItemsForApi(items, origin) {
   return items.map((item) => {
     const path = sanitizeMenuImageUrlForPos(item.imageUrl)
     const imageUrl = toAbsoluteMenuImageUrl(path, origin)
-    return { ...item, imageUrl }
+    const opt = item.options && typeof item.options === 'object' && !Array.isArray(item.options) ? item.options : {}
+    const vendorName = opt.vendorName || item.purchaseLines?.[0]?.purchase?.supplier?.name || null
+    const vendorId = opt.vendorId || item.purchaseLines?.[0]?.purchase?.supplier?.id || null
+    return { ...item, imageUrl, vendorName, vendorId }
   })
 }
 
@@ -56,6 +59,19 @@ async function loadAllMenuItemsFromDb(origin) {
     include: {
       category: {
         select: { id: true, name: true },
+      },
+      purchaseLines: {
+        take: 1,
+        orderBy: { id: 'desc' },
+        include: {
+          purchase: {
+            include: {
+              supplier: {
+                select: { id: true, name: true },
+              },
+            },
+          },
+        },
       },
     },
     orderBy: { id: 'asc' },
@@ -127,6 +143,7 @@ function normalizeDiscountInput(discountType, discountValue, price) {
 function normalizeOptionsInput(raw) {
   if (raw === undefined) return undefined
   if (raw === null || raw === '') return null
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw
   if (Array.isArray(raw)) {
     const list = raw.map(String).map(s => s.trim()).filter(Boolean)
     return list.length ? list : null
@@ -134,6 +151,7 @@ function normalizeOptionsInput(raw) {
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw)
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
       if (Array.isArray(parsed)) {
         const list = parsed.map(String).map(s => s.trim()).filter(Boolean)
         return list.length ? list : null
@@ -149,12 +167,14 @@ function normalizeOptionsInput(raw) {
 // CREATE MENU ITEM
 export const createMenuItem = async (req, res) => {
   try {
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isSellable, isPurchasable, isRecommended, options, discountType, discountValue } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isSellable, isPurchasable, isRecommended, options, discountType, discountValue, vendorId, vendorName } = req.body
 
-    if (!name || price === undefined || !categoryId) {
+    const effectivePrice = price !== undefined ? Number(price) : (costPrice !== undefined ? Number(costPrice) : 0)
+
+    if (!name || !categoryId) {
       return res.status(400).json({
         success: false,
-        message: 'name, price, and categoryId are required'
+        message: 'name and categoryId are required'
       })
     }
 
@@ -169,8 +189,17 @@ export const createMenuItem = async (req, res) => {
       })
     }
 
-    const parsedPrice = Number(price)
+    const parsedPrice = Number(effectivePrice)
     const discount = normalizeDiscountInput(discountType, discountValue, parsedPrice)
+
+    let finalOptions = normalizeOptionsInput(options)
+    if (vendorName || vendorId) {
+      finalOptions = {
+        ...(typeof finalOptions === 'object' && !Array.isArray(finalOptions) ? finalOptions : {}),
+        vendorId: vendorId ? Number(vendorId) : null,
+        vendorName: vendorName ? String(vendorName).trim() : null,
+      }
+    }
 
     const item = await prisma.menuitem.create({
       data: {
@@ -187,7 +216,7 @@ export const createMenuItem = async (req, res) => {
         isSellable: typeof isSellable === 'boolean' ? isSellable : true,
         isPurchasable: typeof isPurchasable === 'boolean' ? isPurchasable : false,
         isRecommended: typeof isRecommended === 'boolean' ? isRecommended : false,
-        options: normalizeOptionsInput(options),
+        options: finalOptions,
       },
       include: {
         category: true
@@ -397,33 +426,45 @@ export const getMenuItemsByCategory = async (req, res) => {
 export const updateMenuItem = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isSellable, isPurchasable, isRecommended, options, discountType, discountValue } = req.body
+    const { name, description, costPrice, price, tax, imageUrl, categoryId, isAvailable, isSellable, isPurchasable, isRecommended, options, discountType, discountValue, vendorId, vendorName } = req.body
 
     const itemId = Number(id)
     if (isNaN(itemId)) {
       return res.status(400).json({ success: false, message: 'Invalid menu item id' })
     }
 
-    const existing = await prisma.menuitem.findUnique({ where: { id: itemId } })
+    const existing = await prisma.menuitem.findUnique({
+      where: { id: itemId }
+    })
+
     if (!existing) {
-      return res.status(404).json({ success: false, message: 'Menu item not found' })
+      return res.status(404).json({
+        success: false,
+        message: 'Menu item not found'
+      })
     }
 
     if (categoryId) {
-      const cat = await prisma.category.findUnique({ where: { id: Number(categoryId) } })
+      const cat = await prisma.category.findUnique({
+        where: { id: Number(categoryId) }
+      })
       if (!cat) {
-        return res.status(404).json({ success: false, message: 'Category not found' })
+        return res.status(404).json({
+          success: false,
+          message: 'Category not found'
+        })
       }
     }
 
-    const nextPrice = price !== undefined ? Number(price) : existing.price
-    const nextDiscountType =
-      discountType !== undefined ? discountType : existing.discountType
-    const nextDiscountValue =
-      discountValue !== undefined ? discountValue : existing.discountValue
+    const nextPrice =
+      price !== undefined
+        ? Number(price)
+        : costPrice !== undefined && (existing.price === 0 || !existing.isSellable)
+          ? Number(costPrice)
+          : existing.price
     const discount = normalizeDiscountInput(
-      nextDiscountType,
-      nextDiscountValue,
+      discountType !== undefined ? discountType : existing.discountType,
+      discountValue !== undefined ? discountValue : existing.discountValue,
       nextPrice
     )
 
@@ -454,6 +495,15 @@ export const updateMenuItem = async (req, res) => {
       }
     }
 
+    let finalOptions = options !== undefined ? normalizeOptionsInput(options) : existing.options
+    if (vendorName !== undefined || vendorId !== undefined) {
+      finalOptions = {
+        ...(typeof finalOptions === 'object' && !Array.isArray(finalOptions) ? finalOptions : {}),
+        ...(vendorId !== undefined ? { vendorId: vendorId ? Number(vendorId) : null } : {}),
+        ...(vendorName !== undefined ? { vendorName: vendorName ? String(vendorName).trim() : null } : {}),
+      }
+    }
+
     const updated = await prisma.menuitem.update({
       where: { id: itemId },
       data: {
@@ -475,7 +525,7 @@ export const updateMenuItem = async (req, res) => {
         isSellable: typeof isSellable === 'boolean' ? isSellable : existing.isSellable,
         isPurchasable: typeof isPurchasable === 'boolean' ? isPurchasable : existing.isPurchasable,
         isRecommended: typeof isRecommended === 'boolean' ? isRecommended : (existing.isRecommended ?? false),
-        ...(options !== undefined ? { options: normalizeOptionsInput(options) } : {}),
+        options: finalOptions,
       },
       include: {
         category: { select: { id: true, name: true } }

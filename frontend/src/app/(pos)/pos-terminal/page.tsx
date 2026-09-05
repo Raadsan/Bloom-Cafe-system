@@ -475,6 +475,14 @@ export default function PosTerminalPage() {
     [products]
   );
 
+  // Only show category tabs that have at least one product in that category
+  const categoriesWithProducts = useMemo(() => {
+    const usedCatIds = new Set(
+      products.filter(p => !p.isComposite).map(p => p.categoryId)
+    );
+    return categories.filter(c => usedCatIds.has(c.id));
+  }, [categories, products]);
+
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchesCategory =
@@ -1266,7 +1274,7 @@ export default function PosTerminalPage() {
               <span className="text-[10px] font-bold opacity-80">({comboCount})</span>
             </button>
           )}
-          {categories.map(cat => (
+          {categoriesWithProducts.map(cat => (
             <button
               key={cat.id}
               type="button"
@@ -1354,6 +1362,9 @@ export default function PosTerminalPage() {
                 const outOfStock = !product.isAvailable;
                 const hasDiscount = menuItemHasDiscount(product);
                 const effectivePrice = getMenuItemEffectivePrice(product);
+                const taxRate = product.tax || 0;
+                const priceWithVat = effectivePrice * (1 + taxRate / 100);
+                const originalPriceWithVat = hasDiscount ? product.price * (1 + taxRate / 100) : undefined;
                 const discountPct = getMenuItemDiscountPercent(product);
                 const comboLabel = product.isComposite && product.components?.length
                   ? product.components.map(c => `${c.quantity}× ${c.name}`).join(" + ")
@@ -1369,8 +1380,8 @@ export default function PosTerminalPage() {
                         : categoryName(product.categoryId)
                     }
                     imageUrl={product.imageUrl}
-                    price={effectivePrice}
-                    originalPrice={hasDiscount ? product.price : product.savings ? product.componentsTotal : undefined}
+                    price={priceWithVat}
+                    originalPrice={hasDiscount ? originalPriceWithVat : product.savings ? product.componentsTotal : undefined}
                     discountPercent={discountPct}
                     hasDiscount={hasDiscount || (product.savings != null && product.savings > 0)}
                     outOfStock={outOfStock}
@@ -1418,12 +1429,15 @@ export default function PosTerminalPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <span className={cn("text-sm font-bold block", priceAmountClass)}>
-                      ${getMenuItemEffectivePrice(product).toFixed(2)}
+                      ${(getMenuItemEffectivePrice(product) * (1 + (product.tax || 0) / 100)).toFixed(2)}
                     </span>
                     {menuItemHasDiscount(product) && (
                       <span className="text-[10px] text-zinc-400 line-through">
-                        ${product.price.toFixed(2)}
+                        ${(product.price * (1 + (product.tax || 0) / 100)).toFixed(2)}
                       </span>
+                    )}
+                    {(product.tax || 0) > 0 && (
+                      <span className="text-[9px] text-amber-500 block">incl. VAT</span>
                     )}
                   </div>
                   <Plus className="size-4 text-primary" />

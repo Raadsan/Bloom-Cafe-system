@@ -135,6 +135,12 @@ export default function MenuPage() {
     fetchData();
   }, []);
 
+  // Only show categories that actually have items
+  const categoriesWithItems = useMemo(() => {
+    const usedIds = new Set(items.map(i => i.categoryId));
+    return categories.filter(c => usedIds.has(c.id));
+  }, [categories, items]);
+
   const filteredItems = useMemo(() => {
     return items.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -337,7 +343,7 @@ export default function MenuPage() {
                 className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value="all">All Categories</option>
-                {categories.map(c => (
+                {categoriesWithItems.map(c => (
                   <option key={c.id} value={String(c.id)}>{c.name}</option>
                 ))}
               </select>
@@ -442,21 +448,40 @@ export default function MenuPage() {
                         ${(item.costPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="px-6 py-3 text-right">
-                        {menuItemHasDiscount(item) ? (
-                          <div className="flex flex-col items-end gap-0.5">
-                            <span className="text-[13px] font-semibold text-primary">
-                              ${getMenuItemEffectivePrice(item).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                            <span className="text-[11px] text-zinc-400 line-through">
-                              ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                            <span className="text-[10px] text-emerald-600">{getMenuItemDiscountLabel(item)}</span>
-                          </div>
-                        ) : (
-                          <span className="text-[13px] font-semibold text-primary">
-                            ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        )}
+                        {menuItemHasDiscount(item) ? (() => {
+                          const effPrice = getMenuItemEffectivePrice(item);
+                          const taxRate = item.tax || 0;
+                          const priceWithVat = effPrice * (1 + taxRate / 100);
+                          const vatAmt = effPrice * taxRate / 100;
+                          return (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-[13px] font-semibold text-primary">
+                                ${priceWithVat.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-[11px] text-zinc-400 line-through">
+                                ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              {taxRate > 0 && (
+                                <span className="text-[10px] text-amber-600">+VAT ${vatAmt.toFixed(2)}</span>
+                              )}
+                              <span className="text-[10px] text-emerald-600">{getMenuItemDiscountLabel(item)}</span>
+                            </div>
+                          );
+                        })() : (() => {
+                          const taxRate = item.tax || 0;
+                          const priceWithVat = item.price * (1 + taxRate / 100);
+                          const vatAmt = item.price * taxRate / 100;
+                          return (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-[13px] font-semibold text-primary">
+                                ${priceWithVat.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              {taxRate > 0 && (
+                                <span className="text-[10px] text-amber-600">+VAT ${vatAmt.toFixed(2)}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="px-6 py-3 text-[13px] font-medium text-zinc-500 text-right">
                         {item.tax}%
@@ -623,10 +648,6 @@ export default function MenuPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-6 rounded-lg border border-zinc-200 p-3 dark:border-[#2a2a2a]">
-                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" checked={formIsSellable} onChange={(e) => setFormIsSellable(e.target.checked)} className="size-4 accent-primary" /> Sellable</label>
-                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" checked={formIsPurchasable} onChange={(e) => setFormIsPurchasable(e.target.checked)} className="size-4 accent-primary" /> Purchasable</label>
-              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1">

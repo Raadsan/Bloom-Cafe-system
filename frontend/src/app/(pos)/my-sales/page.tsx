@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Calendar,
   CheckCircle2,
+  Percent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -153,6 +154,7 @@ export default function MySalesPage() {
 
   const totalSales = rangeOrders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrders = rangeOrders.length;
+  const totalVat = rangeOrders.reduce((sum, o) => sum + (o.taxAmount || 0), 0);
   const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
   const highestSale = totalOrders > 0 ? Math.max(...rangeOrders.map((o) => o.total || 0)) : 0;
   const servedCount = rangeOrders.filter((o) => o.status === "served").length;
@@ -166,9 +168,9 @@ export default function MySalesPage() {
   const statCards = [
     { title: "Total Orders", value: totalOrders, icon: ClipboardList },
     { title: "Total Sales", value: formatCurrency(totalSales), icon: DollarSign },
+    { title: "Total VAT", value: formatCurrency(totalVat), icon: Percent },
     { title: "Avg Order", value: formatCurrency(avgOrderValue), icon: TrendingUp },
     { title: "Highest Sale", value: formatCurrency(highestSale), icon: Wallet },
-    // { title: "Served", value: servedCount, icon: CheckCircle2 },
   ];
 
   // Area chart — orders by weekday
@@ -245,7 +247,7 @@ export default function MySalesPage() {
       ) : (
         <>
           {/* ── Stat Cards ─────────────────────── */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6 px-4">
             {statCards.map((stat, i) => (
               <div
                 key={stat.title}
@@ -418,6 +420,7 @@ export default function MySalesPage() {
                       <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Date &amp; Time</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Customer</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Items Ordered</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Status</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Total</TableHead>
                     </TableRow>
@@ -426,7 +429,7 @@ export default function MySalesPage() {
                     {loading ? (
                       [...Array(5)].map((_, i) => (
                         <TableRow key={i} className="h-14 animate-pulse">
-                          {[...Array(5)].map((_, j) => (
+                          {[...Array(6)].map((_, j) => (
                             <TableCell key={j} className="px-6 py-3">
                               <div className="h-4 bg-muted rounded w-full" />
                             </TableCell>
@@ -435,7 +438,7 @@ export default function MySalesPage() {
                       ))
                     ) : paginatedOrders.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="px-6 py-16 text-center">
+                        <TableCell colSpan={6} className="px-6 py-16 text-center">
                           <div className="flex flex-col items-center gap-2 opacity-40">
                             <ClipboardList className="size-10 text-muted-foreground" />
                             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -451,26 +454,58 @@ export default function MySalesPage() {
                             <span className={dashboardTableIdClass}>{order.id}</span>
                           </TableCell>
                           <TableCell className={dashboardTableCellClass}>
-                            <span className="text-[12px] font-medium text-zinc-600 dark:text-white/90">
+                            <span className="text-[12px] font-medium text-zinc-600 dark:text-white/90 whitespace-nowrap">
                               {order.createdAt
                                 ? new Date(order.createdAt as unknown as string).toLocaleString()
                                 : "N/A"}
                             </span>
                           </TableCell>
                           <TableCell className={dashboardTableCellClass}>
-                            <span className="text-[13px] font-medium text-zinc-700 dark:text-white">
+                            <span className="text-[13px] font-medium text-zinc-700 dark:text-white whitespace-nowrap">
                               {order.customerName || "Walk-in Guest"}
                             </span>
+                          </TableCell>
+                          <TableCell className={cn(dashboardTableCellClass, "min-w-[220px] max-w-md")}>
+                            {order.orderitem && order.orderitem.length > 0 ? (
+                              <div className="flex flex-wrap items-center gap-1.5 py-1">
+                                {order.orderitem.map((item, idx) => {
+                                  const itemName = item.menuitem?.name || "Item";
+                                  return (
+                                    <span
+                                      key={item.id || idx}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200/80 dark:border-zinc-700 shadow-2xs"
+                                      title={`${item.quantity}× ${itemName}`}
+                                    >
+                                      <span className="font-bold text-primary dark:text-primary-foreground">
+                                        {item.quantity}×
+                                      </span>
+                                      <span className="font-semibold text-zinc-700 dark:text-zinc-200">
+                                        {itemName}
+                                      </span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">—</span>
+                            )}
                           </TableCell>
                           <TableCell className={dashboardTableCellClass}>
                             <span className={cn(dashboardStatusBadgeClass, getOrderStatusBadgeClass(order.status))}>
                               {formatStatusLabel(order.status)}
                             </span>
                           </TableCell>
-                          <TableCell className={cn(dashboardTableCellClass, "text-right")}>
-                            <span className="text-[13px] font-bold text-zinc-700 dark:text-white tabular-nums">
-                              {formatCurrency(order.total)}
-                            </span>
+                          <TableCell className={cn(dashboardTableCellClass, "text-right whitespace-nowrap")}>
+                            <div className="flex flex-col items-end">
+                              <span className="text-[13px] font-bold text-zinc-700 dark:text-white tabular-nums">
+                                {formatCurrency(order.total)}
+                              </span>
+                              {order.taxAmount != null && order.taxAmount > 0 && (
+                                <span className="text-[10px] text-zinc-400 font-medium tabular-nums">
+                                  VAT: {formatCurrency(order.taxAmount)}
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))

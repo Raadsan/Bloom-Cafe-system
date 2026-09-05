@@ -59,7 +59,7 @@ export default function MenuCategoriesPage() {
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(100);
 
   const fetchCategories = async (forceRefresh = false) => {
     try {
@@ -72,7 +72,7 @@ export default function MenuCategoriesPage() {
     }
   };
 
-  useEffect(() => { fetchCategories(); }, []);
+  useEffect(() => { fetchCategories(true); }, []);
 
   const filtered = categories.filter(c =>
     search === "" || c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -186,16 +186,43 @@ export default function MenuCategoriesPage() {
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
       {/* Standard Pro Header: Title and Button on the same row */}
-      <div className="mb-8 px-4 flex items-start justify-between">
+      <div className="mb-6 px-4 flex items-start justify-between gap-4">
         <div>
           <h1 className={pageHeaderTitleClass}>Categories Management</h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            {loading ? "Loading..." : `${categories.length} categories total`}
+          </p>
         </div>
 
-        {canAdd && (
-          <Button onClick={openAdd} className="h-[42px] px-6 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-md">
-            <Plus className="size-4" /> Add Category
+        <div className="flex items-center gap-3">
+          {/* Search */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search categories..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-[42px] pl-9 pr-4 w-56 bg-white border border-zinc-200 rounded-md outline-none focus:border-primary text-sm font-normal text-zinc-600"
+            />
+            <Tag className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+          </div>
+
+          {/* Refresh */}
+          <Button
+            variant="outline"
+            onClick={() => fetchCategories(true)}
+            disabled={loading}
+            className="h-[42px] px-3 gap-1.5 font-medium text-sm"
+          >
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
           </Button>
-        )}
+
+          {canAdd && (
+            <Button onClick={openAdd} className="h-[42px] px-6 bg-primary !text-white hover:bg-primary/90 hover:!text-white rounded-md flex items-center gap-2 transition-colors font-medium text-sm shadow-md">
+              <Plus className="size-4" /> Add Category
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="px-4 min-h-[400px] mt-2">          {loading ? (
