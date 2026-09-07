@@ -1113,7 +1113,6 @@ export const updateOrderStatus = async (req, res) => {
     const userRole = req.user?.role?.toLowerCase()
 
     if (userRole === 'kitchen' || userRole === 'pos') {
-      // Takeaway: allow direct jump to served (skip kitchen steps)
       const isTakeaway = order.orderType === 'takeaway'
       const directServeAllowed =
         isTakeaway &&
@@ -1121,21 +1120,19 @@ export const updateOrderStatus = async (req, res) => {
         status === 'served'
 
       const kitchenAllowed =
-        (order.status === 'pending' && status === 'preparing') ||
-        (order.status === 'paid' && status === 'preparing') ||
-        (order.status === 'preparing' && status === 'ready')
-      const posServeAllowed =
-        userRole === 'pos' &&
-        order.status === 'ready' &&
-        status === 'served'
+        (order.status === 'pending' && (status === 'preparing' || status === 'served')) ||
+        (order.status === 'paid' && (status === 'preparing' || status === 'served')) ||
+        (order.status === 'preparing' && (status === 'ready' || status === 'served')) ||
+        (order.status === 'ready' && status === 'served') ||
+        directServeAllowed
 
-      if (!kitchenAllowed && !posServeAllowed && !directServeAllowed) {
+      if (!kitchenAllowed) {
         return res.status(400).json({
           success: false,
           message:
             userRole === 'pos'
-              ? 'POS can move pending/paid → preparing, preparing → ready, or mark ready orders as served'
-              : 'Kitchen can only move pending/paid → preparing or preparing → ready',
+              ? 'POS can move pending/paid → preparing, preparing → ready, or mark orders as served'
+              : 'Kitchen can move orders to preparing, ready, or served',
         })
       }
     }

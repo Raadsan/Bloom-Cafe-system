@@ -153,10 +153,23 @@ function PosKitchenCard({
         <div className="mt-3 pt-3 border-t border-zinc-100 space-y-2">
           <KitchenCreatorBlock order={order} />
           {activeTab === "pending" && isKitchenPendingStatus(order.status) && (
-            <Button type="button" onClick={onView} className={cn(btnCreatePage, "w-full h-9 text-xs rounded-xl gap-1.5")}>
-              <Eye className="size-3.5" />
-              View & Prepare
-            </Button>
+            <div className="flex gap-1.5">
+              <Button type="button" onClick={onView} className={cn(btnCreatePage, "flex-1 h-9 text-xs rounded-xl gap-1.5")}>
+                <Eye className="size-3.5" />
+                View & Prepare
+              </Button>
+              <Button
+                type="button"
+                disabled={isUpdating}
+                onClick={onMarkServed}
+                variant="outline"
+                className="h-9 px-3 text-xs rounded-xl gap-1 shrink-0 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-primary"
+                title="Mark as Served directly"
+              >
+                {isUpdating ? <Loader2 className="size-3.5 animate-spin" /> : <PackageCheck className="size-3.5" />}
+                Serve
+              </Button>
+            </div>
           )}
           {activeTab === "preparing" && (
             <div className="flex flex-col gap-1.5">
@@ -164,15 +177,28 @@ function PosKitchenCard({
                 <Eye className="size-3.5" />
                 View
               </Button>
-              <Button
-                type="button"
-                disabled={isUpdating}
-                onClick={onMarkReady}
-                className="w-full h-9 text-xs rounded-xl gap-1.5 bg-emerald-600 !text-white hover:bg-emerald-700 border-none"
-              >
-                {isUpdating ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
-                Mark Ready
-              </Button>
+              <div className="flex gap-1.5">
+                <Button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={onMarkReady}
+                  className="flex-1 h-9 text-xs rounded-xl gap-1.5 bg-emerald-600 !text-white hover:bg-emerald-700 border-none"
+                >
+                  {isUpdating ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                  Mark Ready
+                </Button>
+                <Button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={onMarkServed}
+                  variant="outline"
+                  className="h-9 px-3 text-xs rounded-xl gap-1 shrink-0 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-primary"
+                  title="Mark as Served directly"
+                >
+                  {isUpdating ? <Loader2 className="size-3.5 animate-spin" /> : <PackageCheck className="size-3.5" />}
+                  Serve
+                </Button>
+              </div>
             </div>
           )}
           {activeTab === "ready" && (
@@ -223,6 +249,7 @@ export default function PosKitchenView({
   const [activeTab, setActiveTab] = useState<KitchenTab>("pending");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [viewOrderId, setViewOrderId] = useState<number | null>(null);
+  const [isServingAll, setIsServingAll] = useState(false);
 
   const viewOrder = useMemo(
     () => (viewOrderId ? orders.find(o => o.id === viewOrderId) ?? null : null),
@@ -304,6 +331,40 @@ export default function PosKitchenView({
       }
     },
     [onRefresh, showToast]
+  );
+
+  const handleServeAll = useCallback(
+    async () => {
+      const targets = filtered.filter(o => o.status !== "served");
+      if (targets.length === 0) return;
+      setIsServingAll(true);
+      let successCount = 0;
+      let failCount = 0;
+
+      // Process in batches of 8 for high performance
+      const batchSize = 8;
+      for (let i = 0; i < targets.length; i += batchSize) {
+        const batch = targets.slice(i, i + batchSize);
+        const results = await Promise.allSettled(
+          batch.map(order => orderApi.updateStatus(order.id, "served"))
+        );
+        for (const res of results) {
+          if (res.status === "fulfilled") successCount++;
+          else failCount++;
+        }
+      }
+
+      await onRefresh(true);
+      if (successCount > 0) {
+        showToast(`${successCount} order${successCount > 1 ? "s" : ""} marked as served`, "success");
+        setActiveTab("served");
+      }
+      if (failCount > 0) {
+        showToast(`Failed to serve ${failCount} order${failCount > 1 ? "s" : ""}`, "error");
+      }
+      setIsServingAll(false);
+    },
+    [filtered, onRefresh, showToast]
   );
 
   return (
@@ -401,6 +462,21 @@ export default function PosKitchenView({
           <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 text-xs font-semibold">
             {filtered.length}
           </span>
+          {activeTab !== "served" && filtered.length > 0 && (
+            <Button
+              type="button"
+              disabled={isServingAll}
+              onClick={handleServeAll}
+              className="ml-auto h-8 px-4 rounded-lg text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-white border-none shadow-sm"
+            >
+              {isServingAll ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <PackageCheck className="size-3.5" />
+              )}
+              Serve All ({filtered.length})
+            </Button>
+          )}
         </div>
 
         {loading ? (

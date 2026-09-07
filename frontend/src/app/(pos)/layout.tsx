@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authApi, AuthUser } from "@/lib/api/auth/authApi";
 import {
   LogOut,
@@ -17,6 +17,8 @@ import {
   CircleDollarSign,
   X,
   Receipt,
+  Calendar,
+  Search,
 } from "lucide-react";
 import { dispatchPosSoftRefresh, onDebouncedEvent, ORDERS_CHANGED, POS_SOFT_REFRESH } from "@/lib/live-updates";
 import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
@@ -70,6 +72,29 @@ function orderToReceiptSnapshot(o: Order): ReceiptSnapshot {
   };
 }
 
+function getLocalDateString(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getYesterdayDateString() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return getLocalDateString(d);
+}
+
+function getDateRangeForDay(dateStr: string) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const end = new Date(year, month - 1, day, 23, 59, 59, 999);
+  return {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+  };
+}
+
 function PosLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -79,12 +104,15 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
   const [brandLogo, setBrandLogo] = useState(STATIC_APP_LOGO);
   const [brandName, setBrandName] = useState("Bloom POS");
 
-  // Recent orders popup
+  // Recent orders popup with date & search filters
   const [showRecentOrders, setShowRecentOrders] = useState(false);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [receiptSettings, setReceiptSettings] = useState<ReceiptSettings | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [loadingRecent, setLoadingRecent] = useState(false);
+  const [dateFilterPreset, setDateFilterPreset] = useState<"today" | "yesterday" | "recent" | "custom">("today");
+  const [filterDate, setFilterDate] = useState<string>(() => getLocalDateString());
+  const [searchQuery, setSearchQuery] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
 
   const syncCounts = useCallback(async () => {
@@ -149,29 +177,65 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
     };
   }, [syncCounts]);
 
-  const openRecentOrders = async () => {
+  const fetchReceiptOrders = useCallback(
+    async (preset: "today" | "yesterday" | "recent" | "custom", dateStr: string) => {
+      setLoadingRecent(true);
+      try {
+        let params: { startDate?: string; endDate?: string; limit?: number; includeServed: boolean } = {
+          includeServed: true,
+          limit: 150,
+        };
+        if (preset === "recent") {
+          params = { includeServed: true, limit: 30 };
+        } else {
+          const { startDate, endDate } = getDateRangeForDay(dateStr);
+          params = { startDate, endDate, includeServed: true, limit: 200 };
+        }
+        const [orders, settings] = await Promise.all([
+          orderApi.getAllOrders(params, true),
+          receiptSettingsApi.getSettings(),
+        ]);
+        const validOrders = [...orders]
+          .filter(o => o.status !== "held")
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+          );
+        setRecentOrders(validOrders);
+        setReceiptSettings(settings);
+        if (validOrders.length > 0) {
+          setSelectedOrder(validOrders[0]);
+        } else {
+          setSelectedOrder(null);
+        }
+      } catch {
+        setRecentOrders([]);
+        setSelectedOrder(null);
+      } finally {
+        setLoadingRecent(false);
+      }
+    },
+    []
+  );
+
+  const openRecentOrders = () => {
     setShowRecentOrders(true);
-    setLoadingRecent(true);
-    setSelectedOrder(null);
-    try {
-      const [orders, settings] = await Promise.all([
-        orderApi.getAllOrders({ limit: 5, includeServed: true }, true),
-        receiptSettingsApi.getSettings(),
-      ]);
-      // Sort by most recent first, filter out held (not yet served), take top 5
-      const sorted = [...orders]
-        .filter(o => o.status !== 'held')
-        .sort((a, b) =>
-          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-        ).slice(0, 5);
-      setRecentOrders(sorted);
-      setReceiptSettings(settings);
-    } catch {
-      setRecentOrders([]);
-    } finally {
-      setLoadingRecent(false);
-    }
+    const todayStr = getLocalDateString();
+    setFilterDate(todayStr);
+    setDateFilterPreset("today");
+    setSearchQuery("");
+    fetchReceiptOrders("today", todayStr);
   };
+
+  const filteredReceiptOrders = useMemo(() => {
+    if (!searchQuery.trim()) return recentOrders;
+    const q = searchQuery.toLowerCase().trim();
+    return recentOrders.filter(o =>
+      String(o.id).includes(q) ||
+      (o.customerName || "").toLowerCase().includes(q) ||
+      (o.orderType || "").toLowerCase().includes(q)
+    );
+  }, [recentOrders, searchQuery]);
 
   const handlePrintSelected = () => {
     window.print();
@@ -328,50 +392,168 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
           className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={(e) => { if (e.target === e.currentTarget) { setShowRecentOrders(false); setSelectedOrder(null); } }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Receipt className="size-4 text-primary" />
+              <div className="flex items-center gap-2.5">
+                <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Receipt className="size-5 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-zinc-900">Recent Receipts</h2>
-                  <p className="text-xs text-zinc-400">Last 5 orders — click to view & print</p>
+                  <h2 className="text-base font-bold text-zinc-900">Receipts & Orders History</h2>
+                  <p className="text-xs text-zinc-400">
+                    {dateFilterPreset === "recent"
+                      ? `Showing latest ${recentOrders.length} orders`
+                      : `All receipts for ${filterDate} (${recentOrders.length} orders found)`}
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => { setShowRecentOrders(false); setSelectedOrder(null); }}
-                className="size-8 rounded-lg hover:bg-zinc-100 flex items-center justify-center text-zinc-400 transition-colors"
+                className="size-8 rounded-lg hover:bg-zinc-100 flex items-center justify-center text-zinc-400 hover:text-zinc-600 transition-colors"
               >
                 <X className="size-4" />
               </button>
             </div>
 
+            {/* Filter Bar */}
+            <div className="px-6 py-3 bg-zinc-50 border-b border-zinc-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Presets */}
+                <div className="flex items-center gap-1 rounded-lg bg-white border border-zinc-200 p-1 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = getLocalDateString();
+                      setFilterDate(d);
+                      setDateFilterPreset("today");
+                      fetchReceiptOrders("today", d);
+                    }}
+                    className={cn(
+                      "h-7 px-3 rounded-md text-xs font-semibold transition-all",
+                      dateFilterPreset === "today"
+                        ? "bg-primary text-white shadow-xs"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    )}
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = getYesterdayDateString();
+                      setFilterDate(d);
+                      setDateFilterPreset("yesterday");
+                      fetchReceiptOrders("yesterday", d);
+                    }}
+                    className={cn(
+                      "h-7 px-3 rounded-md text-xs font-semibold transition-all",
+                      dateFilterPreset === "yesterday"
+                        ? "bg-primary text-white shadow-xs"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    )}
+                  >
+                    Yesterday
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateFilterPreset("recent");
+                      fetchReceiptOrders("recent", filterDate);
+                    }}
+                    className={cn(
+                      "h-7 px-3 rounded-md text-xs font-semibold transition-all",
+                      dateFilterPreset === "recent"
+                        ? "bg-primary text-white shadow-xs"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    )}
+                  >
+                    Recent 30
+                  </button>
+                </div>
+
+                {/* Calendar Filter */}
+                <div className={cn(
+                  "flex items-center gap-2 h-9 px-3 rounded-lg border bg-white text-xs shadow-xs transition-colors",
+                  dateFilterPreset === "custom" ? "border-primary ring-1 ring-primary/20" : "border-zinc-200"
+                )}>
+                  <Calendar className="size-3.5 text-primary shrink-0" />
+                  <span className="text-zinc-400 text-[11px] font-semibold">Calendar:</span>
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        setFilterDate(val);
+                        setDateFilterPreset("custom");
+                        fetchReceiptOrders("custom", val);
+                      }
+                    }}
+                    className="outline-none bg-transparent text-xs font-bold text-zinc-800 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Search & Refresh */}
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="size-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search # or name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-8 pl-8 pr-3 text-xs rounded-lg border border-zinc-200 bg-white outline-none focus:border-primary w-44 shadow-xs"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fetchReceiptOrders(dateFilterPreset, filterDate)}
+                  disabled={loadingRecent}
+                  className="size-8 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-500 transition-colors shadow-xs"
+                  title="Refresh receipts"
+                >
+                  <RotateCw className={cn("size-3.5", loadingRecent && "animate-spin")} />
+                </button>
+              </div>
+            </div>
+
             <div className="flex flex-1 min-h-0 overflow-hidden">
               {/* Left: Order list */}
-              <div className="w-[260px] shrink-0 border-r border-zinc-100 overflow-y-auto">
+              <div className="w-[300px] shrink-0 border-r border-zinc-100 overflow-y-auto">
                 {loadingRecent ? (
-                  <div className="p-6 text-center text-zinc-400 text-sm">Loading...</div>
-                ) : recentOrders.length === 0 ? (
-                  <div className="p-6 text-center text-zinc-400 text-sm">No recent orders</div>
+                  <div className="p-8 text-center text-zinc-400 text-xs flex flex-col items-center justify-center gap-2">
+                    <RotateCw className="size-5 animate-spin text-primary" />
+                    <span>Loading receipts...</span>
+                  </div>
+                ) : filteredReceiptOrders.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-400 text-xs flex flex-col items-center justify-center gap-2">
+                    <Calendar className="size-8 text-zinc-200" />
+                    <p className="font-semibold text-zinc-600">No receipts found</p>
+                    <p className="text-[11px] text-zinc-400">Try selecting another date from the calendar filter.</p>
+                  </div>
                 ) : (
-                  <div className="p-2 space-y-1">
-                    {recentOrders.map((order) => (
+                  <div className="p-2 space-y-1.5">
+                    <div className="px-2 py-1 flex items-center justify-between text-[11px] text-zinc-400 font-bold uppercase tracking-wider">
+                      <span>Receipts</span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 font-semibold">{filteredReceiptOrders.length}</span>
+                    </div>
+                    {filteredReceiptOrders.map((order) => (
                       <button
                         key={order.id}
                         onClick={() => setSelectedOrder(order)}
                         className={cn(
-                          "w-full text-left px-3 py-3 rounded-xl transition-all border",
+                          "w-full text-left px-3 py-2.5 rounded-xl transition-all border",
                           selectedOrder?.id === order.id
                             ? "bg-primary text-white border-primary shadow-sm"
-                            : "bg-zinc-50 hover:bg-zinc-100 border-transparent text-zinc-800"
+                            : "bg-zinc-50 hover:bg-zinc-100 border-zinc-100 text-zinc-800"
                         )}
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-sm">#{order.id}</span>
+                          <span className="font-bold text-xs">#{order.id}</span>
                           <span className={cn(
-                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                            "text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize",
                             selectedOrder?.id === order.id
                               ? "bg-white/20 text-white"
                               : "bg-zinc-200 text-zinc-600"
@@ -379,15 +561,17 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
                             {order.status}
                           </span>
                         </div>
-                        <p className={cn("text-xs truncate", selectedOrder?.id === order.id ? "text-white/80" : "text-zinc-500")}>
+                        <p className={cn("text-[11px] truncate", selectedOrder?.id === order.id ? "text-white/80" : "text-zinc-500")}>
                           {order.customerName || "Guest"} • {order.orderType}
                         </p>
-                        <p className={cn("text-xs font-bold mt-0.5", selectedOrder?.id === order.id ? "text-white" : "text-zinc-700")}>
-                          ${Number(order.total).toFixed(2)}
-                        </p>
-                        <p className={cn("text-[10px] mt-0.5", selectedOrder?.id === order.id ? "text-white/60" : "text-zinc-400")}>
-                          {order.createdAt ? new Date(order.createdAt).toLocaleString() : ""}
-                        </p>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className={cn("text-xs font-bold", selectedOrder?.id === order.id ? "text-white" : "text-zinc-800")}>
+                            ${Number(order.total).toFixed(2)}
+                          </p>
+                          <p className={cn("text-[10px]", selectedOrder?.id === order.id ? "text-white/70" : "text-zinc-400")}>
+                            {order.createdAt ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                          </p>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -395,7 +579,7 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
               </div>
 
               {/* Right: Receipt preview */}
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 flex flex-col min-h-0 bg-zinc-50/40">
                 {selectedOrder ? (
                   <>
                     <div className="flex-1 overflow-y-auto p-4">
@@ -406,26 +590,31 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
                         />
                       </div>
                     </div>
-                    <div className="shrink-0 px-6 py-4 border-t border-zinc-100 flex gap-3 justify-end">
-                      <button
-                        onClick={() => setSelectedOrder(null)}
-                        className="px-4 py-2 rounded-xl border border-zinc-200 text-zinc-600 text-sm font-semibold hover:bg-zinc-50 transition-colors"
-                      >
-                        Back
-                      </button>
-                      <button
-                        onClick={handlePrintSelected}
-                        className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-bold shadow hover:opacity-90 transition-all flex items-center gap-2"
-                      >
-                        <Printer className="size-4" />
-                        Print Receipt
-                      </button>
+                    <div className="shrink-0 px-6 py-4 border-t border-zinc-100 bg-white flex items-center justify-between">
+                      <span className="text-xs text-zinc-500">
+                        Order <strong className="text-zinc-800">#{selectedOrder.id}</strong> · Total: <strong className="text-primary">${Number(selectedOrder.total).toFixed(2)}</strong>
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setSelectedOrder(null)}
+                          className="px-4 py-2 rounded-xl border border-zinc-200 text-zinc-600 text-sm font-semibold hover:bg-zinc-50 transition-colors"
+                        >
+                          Back
+                        </button>
+                        <button
+                          onClick={handlePrintSelected}
+                          className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-bold shadow-sm hover:opacity-90 transition-all flex items-center gap-2"
+                        >
+                          <Printer className="size-4" />
+                          Print Receipt
+                        </button>
+                      </div>
                     </div>
                   </>
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center gap-3 text-zinc-300 p-8">
                     <Receipt className="size-12" />
-                    <p className="text-sm font-medium">Select an order to preview its receipt</p>
+                    <p className="text-sm font-medium text-zinc-400">Select an order to preview its receipt</p>
                   </div>
                 )}
               </div>

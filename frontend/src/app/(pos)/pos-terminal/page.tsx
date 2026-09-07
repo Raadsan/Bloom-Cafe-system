@@ -1554,6 +1554,9 @@ export default function PosTerminalPage() {
               ]
                 .filter(Boolean)
                 .join(" · ");
+              const itemNet = lineNet(item);
+              const itemVat = itemNet * (Math.max(0, item.tax) / 100);
+              const itemTotal = itemNet + itemVat;
 
               return (
                 <div
@@ -1590,14 +1593,19 @@ export default function PosTerminalPage() {
                       <Plus className="size-3" />
                     </button>
                   </div>
-                  <span
-                    className={cn(
-                      "text-xs font-bold shrink-0 w-14 text-right tabular-nums",
-                      priceAmountClass
-                    )}
-                  >
-                    ${lineNet(item).toFixed(2)}
-                  </span>
+                  <div className="shrink-0 min-w-[70px] text-right">
+                    <span
+                      className={cn(
+                        "text-xs font-bold tabular-nums block",
+                        priceAmountClass
+                      )}
+                    >
+                      ${itemTotal.toFixed(2)}
+                    </span>
+                    <span className="text-[9.5px] text-zinc-500 font-medium tabular-nums block leading-tight">
+                      ${itemNet.toFixed(2)}{item.tax > 0 && <span className="text-amber-600 font-semibold"> +${itemVat.toFixed(2)} VAT</span>}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => openLineEditor(item)}
@@ -1611,8 +1619,9 @@ export default function PosTerminalPage() {
                     type="button"
                     onClick={() => removeFromCart(item.key)}
                     className="shrink-0 text-muted-foreground/50 hover:text-destructive p-0.5"
+                    title="Remove item"
                   >
-                    <X className="size-3.5" />
+                    <Trash2 className="size-3.5" />
                   </button>
                 </div>
               );
@@ -1636,7 +1645,7 @@ export default function PosTerminalPage() {
           <button
             type="button"
             onClick={() => setSummaryOpen(o => !o)}
-            className="w-full flex items-center justify-between text-sm font-semibold text-muted-foreground"
+            className="w-full flex items-center justify-between text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             Order Summary
             <ChevronDown className={cn("size-4 transition-transform", summaryOpen && "rotate-180")} />
