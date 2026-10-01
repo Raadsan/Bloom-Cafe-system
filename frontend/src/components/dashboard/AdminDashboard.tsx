@@ -70,7 +70,13 @@ interface DashboardData {
   totalTables: number;
   totalPaidPayments: number;
   totalPendingPayments: number;
+  totalPendingOrders?: number;
+  totalCancelledOrders?: number;
+  totalPaidRevenue?: number;
   totalRevenue: number;
+  totalVat?: number;
+  totalSubTotal?: number;
+  totalDiscount?: number;
 }
 
 const EMPTY_WEEKLY_DATA = [
@@ -158,35 +164,35 @@ export default function AdminDashboard({
   const statCards = [
     {
       title: "Total Orders",
-      value: data?.totalOrders || 0,
+      value: (data?.totalOrders || 0).toLocaleString(),
       icon: Briefcase,
       trend: "+12.5%",
       trendUp: true
     },
     {
       title: "Gross Revenue",
-      value: `$${(data?.totalRevenue || 0).toLocaleString()}`,
+      value: `$${Number(data?.totalRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: DollarSign,
       trend: "+8.2%",
       trendUp: true
     },
     {
       title: "Pending Orders",
-      value: data?.totalPendingPayments || 0,
+      value: (data?.totalPendingOrders ?? data?.totalPendingPayments ?? 0).toLocaleString(),
       icon: Clock,
       trend: "-2.4%",
       trendUp: false
     },
     {
       title: "Total Customers",
-      value: data?.totalCustomers || 0,
+      value: (data?.totalCustomers || 0).toLocaleString(),
       icon: Users,
       trend: "+15.1%",
       trendUp: true
     },
     {
       title: "Active Tables",
-      value: data?.totalTables || 0,
+      value: (data?.totalTables || 0).toLocaleString(),
       icon: Store,
       trend: "Stable",
       trendUp: null

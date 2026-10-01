@@ -44,7 +44,10 @@ function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function periodRange(period = 'This Month') {
+function periodRange(period = 'All Time') {
+  if (period === 'All Time' || period === 'All') {
+    return {};
+  }
   const now = new Date();
   if (period === 'Last Month') {
     return {
@@ -59,10 +62,13 @@ function periodRange(period = 'This Month') {
       endDate: isoDate(new Date(now.getFullYear(), quarterStartMonth + 3, 0)),
     };
   }
-  return {
-    startDate: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
-    endDate: isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-  };
+  if (period === 'This Month') {
+    return {
+      startDate: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+      endDate: isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    };
+  }
+  return {};
 }
 
 function emptyDashboard(): AccountingDashboardData {
@@ -107,7 +113,7 @@ function chartLabel(dateValue: unknown) {
 }
 
 export const accountingDashboardApi = {
-  getSummary: async (period = 'This Month'): Promise<AccountingDashboardData> => {
+  getSummary: async (period = 'All Time'): Promise<AccountingDashboardData> => {
     const companies = await companyApi.getAll();
     const company = companies.find((item) => item.is_active !== false) ?? companies[0];
     if (!company) {

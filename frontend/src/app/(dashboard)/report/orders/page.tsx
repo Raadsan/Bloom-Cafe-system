@@ -16,6 +16,9 @@ import {
   Coffee,
   Filter,
   Percent,
+  Trophy,
+  Award,
+  Moon,
 } from "lucide-react";
 import {
   AreaChart,
@@ -94,20 +97,38 @@ interface CategorySale {
   items: CategorySaleItem[];
 }
 
+export interface Top5SaleItem {
+  name: string;
+  categoryName: string;
+  quantity: number;
+  totalAmount: number;
+  vat?: number;
+  netAmount?: number;
+  unitPrice?: number;
+}
+
 interface OrdersReportData {
   totalOrders: number;
+  cancelledOrders?: number;
   totalAmount: number;
   totalVat?: number;
+  totalSubTotal?: number;
+  totalDiscount?: number;
+  totalNet?: number;
   totalItemsSold?: number;
+  top5Sales?: Top5SaleItem[];
   categorySales?: CategorySale[];
   breakdownByType?: Record<string, number>;
   breakdownBySource?: Record<string, number>;
 }
 
+type PresetType = "all" | "today" | "week" | "month" | "last30" | "custom";
+
 export default function OrdersReportPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<OrdersReportData | null>(null);
   const [weeklyData, setWeeklyData] = useState(EMPTY_WEEKLY);
+  const [nightlyCloseLoading, setNightlyCloseLoading] = useState(false);
   
   // Table state
   const [search, setSearch] = useState("");
@@ -115,19 +136,62 @@ export default function OrdersReportPage() {
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
+  // Date filters with preset support (defaults to 'all' so it syncs with Dashboard on load)
+  const [preset, setPreset] = useState<PresetType>("all");
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(new Date().setDate(new Date().getDate() - 30))
-      .toISOString()
-      .split("T")[0],
-    endDate: new Date().toISOString().split("T")[0],
+    startDate: "",
+    endDate: "",
   });
   const { showToast } = useToast();
+
+  const getLocalDateString = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleSelectPreset = (p: PresetType) => {
+    setPreset(p);
+    const now = new Date();
+    if (p === "all") {
+      setDateRange({ startDate: "", endDate: "" });
+    } else if (p === "today") {
+      const todayStr = getLocalDateString(now);
+      setDateRange({ startDate: todayStr, endDate: todayStr });
+    } else if (p === "week") {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now.setDate(diff));
+      setDateRange({
+        startDate: getLocalDateString(monday),
+        endDate: getLocalDateString(new Date()),
+      });
+    } else if (p === "month") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      setDateRange({
+        startDate: getLocalDateString(firstDay),
+        endDate: getLocalDateString(now),
+      });
+    } else if (p === "last30") {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      setDateRange({
+        startDate: getLocalDateString(d),
+        endDate: getLocalDateString(now),
+      });
+    }
+  };
 
   const fetchReport = useCallback(async () => {
     try {
       setLoading(true);
+      const queryParams: { startDate?: string; endDate?: string } = {};
+      if (dateRange.startDate) queryParams.startDate = dateRange.startDate;
+      if (dateRange.endDate) queryParams.endDate = dateRange.endDate;
+
       const [ordersRes, weeklyRes] = await Promise.all([
-        reportApi.getOrdersReport(dateRange),
+        reportApi.getOrdersReport(queryParams),
         reportApi.getWeeklyAnalytics(),
       ]);
 
@@ -153,6 +217,24 @@ export default function OrdersReportPage() {
     fetchReport();
   }, [fetchReport]);
 
+  const handleNightlyClose = async () => {
+    if (!window.confirm("Are you sure you want to close all open orders? This will cancel all pending, preparing, and held orders.")) return;
+    try {
+      setNightlyCloseLoading(true);
+      const res = await reportApi.triggerNightlyClose();
+      if (res.success) {
+        showToast(`✅ Closed ${res.data?.closed ?? 0} open orders for end of business day.`, "success");
+        fetchReport();
+      } else {
+        showToast(res.message || "Failed to close orders", "error");
+      }
+    } catch {
+      showToast("Failed to close orders. Please try again.", "error");
+    } finally {
+      setNightlyCloseLoading(false);
+    }
+  };
+
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount || 0);
 
@@ -173,6 +255,29 @@ export default function OrdersReportPage() {
       value,
     }));
   }, [data?.breakdownBySource]);
+
+  // Top 5 Sales Chart Data
+  const top5ChartData = useMemo(() => {
+    if (data?.top5Sales && data.top5Sales.length > 0) {
+      return data.top5Sales;
+    }
+    if (!data?.categorySales) return [];
+    const all: Top5SaleItem[] = [];
+    data.categorySales.forEach((cat) => {
+      cat.items.forEach((it) => {
+        all.push({
+          name: it.name,
+          categoryName: cat.categoryName,
+          quantity: it.quantity,
+          totalAmount: it.totalAmount,
+          vat: it.vat,
+          netAmount: it.netAmount,
+          unitPrice: it.unitPrice,
+        });
+      });
+    });
+    return all.sort((a, b) => b.totalAmount - a.totalAmount).slice(0, 5);
+  }, [data?.top5Sales, data?.categorySales]);
 
   // Category Filter Options
   const categoryOptions = useMemo(() => {
@@ -258,7 +363,7 @@ export default function OrdersReportPage() {
       showToast("No data to export", "error");
       return;
     }
-    const lines = ["Category,Item Name,Quantity Sold,Total Sales ($),VAT ($),Net Profit ($)"];
+    const lines = ["Category,Item Name,Quantity Sold,Total Sales ($),VAT ($),Net Sales ($)"];
     filteredCategorySales.forEach((cat) => {
       const catVat = cat.items.reduce((s, it) => s + (it.vat ?? 0), 0);
       const catNet = cat.items.reduce(
@@ -284,7 +389,7 @@ export default function OrdersReportPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `sales-by-category-${dateRange.startDate}-to-${dateRange.endDate}.csv`;
+    a.download = `sales-by-category-${dateRange.startDate || "all"}-to-${dateRange.endDate || "time"}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -363,7 +468,7 @@ export default function OrdersReportPage() {
               <div style="font-size: 13px; font-weight: 600; color: #334155; margin-top: 2px;">Orders Activity & Category Sales Report</div>
             </div>
             <div class="meta">
-              <div><strong>Period:</strong> ${dateRange.startDate} to ${dateRange.endDate}</div>
+              <div><strong>Period:</strong> ${dateRange.startDate && dateRange.endDate ? `${dateRange.startDate} to ${dateRange.endDate}` : "All Time"}</div>
               <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
             </div>
           </div>
@@ -376,7 +481,7 @@ export default function OrdersReportPage() {
                 <th style="text-align:right;">Qty Sold</th>
                 <th style="text-align:right;">Total Sales</th>
                 <th style="text-align:right;">VAT</th>
-                <th style="text-align:right;">Net Profit</th>
+                <th style="text-align:right;">Net Sales</th>
               </tr>
             </thead>
             <tbody>
@@ -414,7 +519,7 @@ export default function OrdersReportPage() {
   const statCards = [
     {
       title: "Total Orders",
-      value: data?.totalOrders ?? 0,
+      value: (data?.totalOrders ?? 0).toLocaleString(),
       icon: ShoppingBag,
     },
     {
@@ -428,19 +533,19 @@ export default function OrdersReportPage() {
       icon: Percent,
     },
     {
+      title: "Net Sales",
+      value: formatCurrency(data?.totalNet ?? totalCategoryNet ?? 0),
+      icon: Receipt,
+    },
+    {
       title: "Total Items Sold",
       value: (data?.totalItemsSold ?? 0).toLocaleString(),
       icon: Coffee,
     },
     {
-      title: "Active Categories",
-      value: data?.categorySales?.length ?? 0,
-      icon: Layers,
-    },
-    {
       title: "Avg Order Value",
       value: formatCurrency(avgOrderValue),
-      icon: Receipt,
+      icon: Layers,
     },
   ];
 
@@ -450,24 +555,55 @@ export default function OrdersReportPage() {
       style={dashboardPageStyle}
     >
       {/* Header Bar */}
-      <div className={cn(pageHeaderWrapperClass, "flex flex-col md:flex-row md:items-end justify-between gap-4")}>
+      <div className={cn(pageHeaderWrapperClass, "flex flex-col lg:flex-row lg:items-end justify-between gap-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>Orders & Sales Report</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2 trezo-card p-2">
+          {/* Preset Buttons */}
+          <div className="flex flex-wrap items-center gap-1 border-r border-border pr-2">
+            {[
+              { id: "all", label: "All Time" },
+              { id: "today", label: "Today" },
+              { id: "week", label: "This Week" },
+              { id: "month", label: "This Month" },
+              { id: "last30", label: "Last 30 Days" },
+            ].map((btn) => (
+              <button
+                key={btn.id}
+                type="button"
+                onClick={() => handleSelectPreset(btn.id as PresetType)}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                  preset === btn.id
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                )}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center gap-2 px-2">
             <Calendar className="size-3.5 text-muted-foreground" />
             <input
               type="date"
               value={dateRange.startDate}
-              onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))}
+              onChange={(e) => {
+                setPreset("custom");
+                setDateRange((prev) => ({ ...prev, startDate: e.target.value }));
+              }}
               className="text-xs font-semibold bg-transparent outline-none border-none cursor-pointer text-foreground"
             />
             <span className="text-muted-foreground">to</span>
             <input
               type="date"
               value={dateRange.endDate}
-              onChange={(e) => setDateRange((prev) => ({ ...prev, endDate: e.target.value }))}
+              onChange={(e) => {
+                setPreset("custom");
+                setDateRange((prev) => ({ ...prev, endDate: e.target.value }));
+              }}
               className="text-xs font-semibold bg-transparent outline-none border-none cursor-pointer text-foreground"
             />
           </div>
@@ -479,6 +615,16 @@ export default function OrdersReportPage() {
           >
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
             {loading ? "Updating..." : "Apply"}
+          </Button>
+          <Button
+            type="button"
+            onClick={handleNightlyClose}
+            disabled={nightlyCloseLoading || loading}
+            title="Close all open orders at end of business day (6 PM)"
+            className="h-9 px-3 rounded-lg text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 !text-white border-amber-700 shadow-sm"
+          >
+            <Moon className={cn("size-3.5", nightlyCloseLoading && "animate-spin")} />
+            {nightlyCloseLoading ? "Closing..." : "Close Day"}
           </Button>
         </div>
       </div>
@@ -625,6 +771,143 @@ export default function OrdersReportPage() {
             </div>
           </div>
 
+          {/* Top 5 Sales in Orders Report Section */}
+          <div className="px-4">
+            <div className="trezo-card p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-500/20 shadow-sm">
+                    <Trophy className="size-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-foreground flex items-center gap-2">
+                      Top 5 Sales in Orders Report
+                    </h3>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
+                      Highest revenue items • {preset === "all" ? "All Time" : `${dateRange.startDate || "Start"} to ${dateRange.endDate || "End"}`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Award className="size-3.5 text-amber-500" />
+                  <span className="text-[11px] font-semibold text-foreground">
+                    Ranked by Total Revenue ($)
+                  </span>
+                </div>
+              </div>
+
+              {top5ChartData.length === 0 ? (
+                <div className="h-44 flex flex-col items-center justify-center text-muted-foreground text-xs gap-2">
+                  <Coffee className="size-8 stroke-1 text-muted-foreground/40" />
+                  <p>No sales data recorded for the selected period</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                  {/* Left: Bar Chart (7 cols) */}
+                  <div className="lg:col-span-7 h-[270px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={top5ChartData}
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          horizontal={false}
+                          stroke="hsl(var(--border))"
+                          opacity={0.5}
+                        />
+                        <XAxis
+                          type="number"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={chartAxisTick}
+                          tickFormatter={(val) => `$${val}`}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "currentColor", fontSize: 11, fontWeight: 600 }}
+                          width={120}
+                        />
+                        <Tooltip
+                          contentStyle={chartTooltipStyle}
+                          formatter={(value: any, name: any, item: any) => [
+                            `$${Number(value || 0).toFixed(2)} (${item?.payload?.quantity ?? 0} sold)`,
+                            "Total Sales",
+                          ]}
+                        />
+                        <Bar dataKey="totalAmount" radius={[0, 6, 6, 0]}>
+                          {top5ChartData.map((_, index) => (
+                            <Cell
+                              key={`top5-bar-${index}`}
+                              fill={chartPrimaryVariants[index % chartPrimaryVariants.length]}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Right: Ranked List Badges (5 cols) */}
+                  <div className="lg:col-span-5 space-y-2.5">
+                    {top5ChartData.map((item, index) => {
+                      const rankBadges = [
+                        "bg-amber-500 text-white border-amber-600 shadow-sm",
+                        "bg-slate-400 text-white border-slate-500 shadow-sm",
+                        "bg-amber-700 text-white border-amber-800 shadow-sm",
+                        "bg-primary/80 text-white border-primary",
+                        "bg-primary/60 text-white border-primary/80",
+                      ];
+                      return (
+                        <div
+                          key={`top5-rank-card-${item.name}-${index}`}
+                          className="flex items-center justify-between p-3 rounded-xl bg-muted/25 border border-border/80 hover:border-primary/40 hover:bg-muted/40 transition-all group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span
+                              className={cn(
+                                "flex size-7 shrink-0 items-center justify-center rounded-lg text-xs font-black border",
+                                rankBadges[index] || "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              #{index + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                                {item.name}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                                  {item.categoryName}
+                                </span>
+                                <span className="size-1 rounded-full bg-border" />
+                                <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 tabular-nums">
+                                  {item.quantity} sold
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 pl-3">
+                            <p className="text-sm font-black text-foreground tabular-nums">
+                              {formatCurrency(item.totalAmount)}
+                            </p>
+                            <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                              Sales Revenue
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Full-width Main Activity Table matching Transaction Details */}
           <div className="px-4">
             <div className="trezo-card overflow-hidden">
@@ -719,7 +1002,7 @@ export default function OrdersReportPage() {
                       <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Qty Sold</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Total Sales</TableHead>
                       <TableHead className={cn(dashboardTableHeadClass, "text-right")}>VAT</TableHead>
-                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Net Profit</TableHead>
+                      <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Net Sales</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="bg-card">

@@ -861,6 +861,7 @@ export const createOrder = async (req, res) => {
         total: orderTotal,
         status: req.body.status || 'pending',
         source: req.body.source || 'pos',
+        createdAt: req.body.createdAt ? new Date(req.body.createdAt) : new Date(),
         orderitem: {
           create: orderItemsData
         }
@@ -1019,10 +1020,11 @@ export const createPosCheckout = async (req, res) => {
         discountType: discountAmount > 0 ? discountType || null : null,
         discountValue: discountAmount > 0 ? parsedDiscountValue : 0,
         total: orderTotal,
-        // Takeaway from POS is served immediately (no kitchen steps needed)
+        // POS orders (dine-in, takeaway, delivery) are confirmed and paid at POS, so mark as 'served' immediately
         // Mobile orders (source='mobile') keep the full pending→preparing→ready→served flow
-        status: (type === 'takeaway' && (req.body.source || 'pos') !== 'mobile') ? 'served' : 'pending',
+        status: (req.body.source || 'pos') !== 'mobile' ? 'served' : 'pending',
         source: req.body.source || 'pos',
+        createdAt: req.body.createdAt ? new Date(req.body.createdAt) : new Date(),
         orderitem: { create: orderItemsData },
         payment: {
           create: {

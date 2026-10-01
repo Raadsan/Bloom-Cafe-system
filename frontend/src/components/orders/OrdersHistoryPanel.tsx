@@ -51,13 +51,37 @@ function getLocationLabel(order: Order) {
   return "—";
 }
 
-function formatOrderDate(order: Order) {
-  const d = order.updatedAt || order.createdAt;
-  if (!d) return "—";
+/**
+ * Parses an order's timestamp into separate date, time, and dayKey strings
+ * using the browser's LOCAL timezone (so "12:47 AM" is always local time).
+ */
+function parseOrderDate(order: Order): { date: string; time: string; dayKey: string } {
+  const raw = order.updatedAt || order.createdAt;
+  if (!raw) return { date: "—", time: "", dayKey: "" };
   try {
-    return format(new Date(d), "MMM d, yyyy · h:mm a");
+    const dt = new Date(raw);
+    return {
+      date: format(dt, "MMM d, yyyy"),   // e.g. "Sep 30, 2026"
+      time: format(dt, "h:mm a"),        // e.g. "12:47 AM"
+      dayKey: format(dt, "yyyy-MM-dd"),  // e.g. "2026-09-30" — used for grouping
+    };
   } catch {
-    return "—";
+    return { date: "—", time: "", dayKey: "" };
+  }
+}
+
+/** Returns a human-friendly label for a day key relative to today */
+function dayLabel(dayKey: string): string {
+  if (!dayKey) return "Unknown Date";
+  const today = format(new Date(), "yyyy-MM-dd");
+  const yesterday = format(new Date(Date.now() - 86_400_000), "yyyy-MM-dd");
+  if (dayKey === today) return "Today";
+  if (dayKey === yesterday) return "Yesterday";
+  try {
+    const [y, m, d] = dayKey.split("-").map(Number);
+    return format(new Date(y, m - 1, d), "EEEE, MMM d, yyyy");
+  } catch {
+    return dayKey;
   }
 }
 
@@ -92,12 +116,9 @@ export default function OrdersHistoryPanel({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return orders.filter(o => {
-      const matchesStatus =
-        statusFilter === "all" || o.status === statusFilter;
-      const orderType = getOrderType(o);
-      const matchesType =
-        typeFilter === "all" || orderType === typeFilter;
+    return orders.filter((o) => {
+      const matchesStatus = statusFilter === "all" || o.status === statusFilter;
+      const matchesType = typeFilter === "all" || getOrderType(o) === typeFilter;
       const matchesSearch =
         !q ||
         String(o.id).includes(q) ||
@@ -121,13 +142,15 @@ export default function OrdersHistoryPanel({
 
   return (
     <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden mx-4 mb-8">
+      {/* ── Controls Bar ─────────────────────────────────────── */}
       <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50">
         <div className="flex items-center gap-4 flex-wrap">
+          {/* Page-size */}
           <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
             <span>Show</span>
             <select
               value={pageSize}
-              onChange={e => setPageSize(Number(e.target.value))}
+              onChange={(e) => setPageSize(Number(e.target.value))}
               className="w-16 h-[42px] px-2 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
             >
               <option value={10}>10</option>
@@ -137,15 +160,16 @@ export default function OrdersHistoryPanel({
             </select>
           </div>
 
+          {/* Status filter */}
           <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
             <span>Filter Status</span>
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={(e) => setStatusFilter(e.target.value)}
               className="w-36 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
             >
               <option value="all">All Status</option>
-              {HISTORY_STATUSES.map(s => (
+              {HISTORY_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s.charAt(0).toUpperCase() + s.slice(1)}
                 </option>
@@ -153,11 +177,12 @@ export default function OrdersHistoryPanel({
             </select>
           </div>
 
+          {/* Type filter */}
           <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
             <span>Filter Type</span>
             <select
               value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value)}
+              onChange={(e) => setTypeFilter(e.target.value)}
               className="w-36 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
             >
               <option value="all">All Types</option>
@@ -170,18 +195,20 @@ export default function OrdersHistoryPanel({
 
         <div className="flex-1" />
 
+        {/* Search */}
         <div className="relative w-64 group">
           <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
           <input
             type="text"
             placeholder="Search order #, customer, table..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             className="w-full h-[42px] pl-10 pr-4 bg-zinc-50 border border-zinc-200 rounded-md outline-none focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all text-sm font-normal text-zinc-600"
           />
         </div>
       </div>
 
+      {/* ── Panel Title ───────────────────────────────────────── */}
       <div className="px-8 py-3 border-b border-zinc-50 flex items-center gap-2">
         <h2 className="text-base font-bold text-[#1e293b]">{title}</h2>
         <span className="px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 text-xs font-semibold">
@@ -189,6 +216,7 @@ export default function OrdersHistoryPanel({
         </span>
       </div>
 
+      {/* ── Table ────────────────────────────────────────────── */}
       <div className="border-t border-zinc-100 overflow-hidden bg-white">
         <div className="overflow-x-auto">
           <Table className="w-full">
@@ -202,7 +230,7 @@ export default function OrdersHistoryPanel({
                 <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Items</TableHead>
                 <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Total</TableHead>
                 <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Status</TableHead>
-                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Date</TableHead>
+                <TableHead className={cn(dashboardTableHeadClass, "text-left")}>Date &amp; Time</TableHead>
                 <TableHead className={cn(dashboardTableHeadClass, "text-right")}>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -224,105 +252,147 @@ export default function OrdersHistoryPanel({
                   </TableCell>
                 </TableRow>
               ) : (
-                paginated.map((order, idx) => {
-                  const rowNo = (currentPage - 1) * pageSize + idx + 1;
-                  const itemCount =
-                    order.orderitem?.reduce((s, i) => s + i.quantity, 0) || 0;
-                  return (
-                    <TableRow key={order.id} className={dashboardTableBodyRowClass}>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-bold text-primary">{rowNo}</span>
-                      </TableCell>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-bold text-primary">#{order.id}</span>
-                        <p className="text-[12px] text-zinc-500 mt-0.5 truncate max-w-[160px]">
-                          {getOrderTitle(order)}
-                        </p>
-                      </TableCell>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-medium text-zinc-700">
-                          {order.customerName || "Guest"}
-                        </span>
-                        {order.customerPhone && (
-                          <p className="text-[12px] text-zinc-400">{order.customerPhone}</p>
-                        )}
-                      </TableCell>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] text-zinc-600">
-                          {getOrderTypeLabel(order)}
-                        </span>
-                      </TableCell>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] text-zinc-600 truncate max-w-[180px] block">
-                          {getLocationLabel(order)}
-                        </span>
-                      </TableCell>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] text-zinc-600">{itemCount}</span>
-                      </TableCell>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[13px] font-semibold text-zinc-800">
-                          ${order.total.toFixed(2)}
-                        </span>
-                      </TableCell>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span
-                          className={cn(
-                            dashboardStatusBadgeClass,
-                            STATUS_STYLE[order.status] ?? "bg-zinc-100 text-zinc-600"
-                          )}
+                (() => {
+                  const rows: React.ReactNode[] = [];
+                  let lastDayKey = "";
+
+                  paginated.forEach((order, idx) => {
+                    const rowNo = (currentPage - 1) * pageSize + idx + 1;
+                    const itemCount =
+                      order.orderitem?.reduce((s, i) => s + i.quantity, 0) || 0;
+                    const { date, time, dayKey } = parseOrderDate(order);
+
+                    // ── Date separator — inserted whenever the day changes ──
+                    if (dayKey && dayKey !== lastDayKey) {
+                      lastDayKey = dayKey;
+                      rows.push(
+                        <TableRow
+                          key={`sep-${dayKey}`}
+                          className="bg-primary/5 border-y border-primary/10"
                         >
-                          {order.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className={dashboardTableCellClass}>
-                        <span className="text-[12px] text-zinc-500">
-                          {formatOrderDate(order)}
-                        </span>
-                      </TableCell>
-                      <TableCell className={cn(dashboardTableCellClass, "text-right")}>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onView(order)}
-                            className={actionBtnView}
-                            title="View order"
+                          <TableCell colSpan={10} className="px-6 py-2">
+                            <div className="flex items-center gap-3">
+                              <div className="size-2 rounded-full bg-primary/50 shrink-0" />
+                              <span className="text-[11px] font-black uppercase tracking-[0.18em] text-primary/80">
+                                {dayLabel(dayKey)}
+                              </span>
+                              <div className="flex-1 h-px bg-primary/10" />
+                              <span className="text-[10px] font-semibold text-zinc-400">
+                                {date}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+
+                    // ── Order row ──────────────────────────────────────────
+                    rows.push(
+                      <TableRow key={order.id} className={dashboardTableBodyRowClass}>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] font-bold text-primary">{rowNo}</span>
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] font-bold text-primary">#{order.id}</span>
+                          <p className="text-[12px] text-zinc-500 mt-0.5 truncate max-w-[160px]">
+                            {getOrderTitle(order)}
+                          </p>
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] font-medium text-zinc-700">
+                            {order.customerName || "Guest"}
+                          </span>
+                          {order.customerPhone && (
+                            <p className="text-[12px] text-zinc-400">{order.customerPhone}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] text-zinc-600">
+                            {getOrderTypeLabel(order)}
+                          </span>
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] text-zinc-600 truncate max-w-[180px] block">
+                            {getLocationLabel(order)}
+                          </span>
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] text-zinc-600">{itemCount}</span>
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span className="text-[13px] font-semibold text-zinc-800">
+                            ${order.total.toFixed(2)}
+                          </span>
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          <span
+                            className={cn(
+                              dashboardStatusBadgeClass,
+                              STATUS_STYLE[order.status] ?? "bg-zinc-100 text-zinc-600"
+                            )}
                           >
-                            <Eye className="size-4" />
-                          </Button>
-                          {canDelete && onDelete && (
+                            {order.status}
+                          </span>
+                        </TableCell>
+                        <TableCell className={dashboardTableCellClass}>
+                          {/* Date on the top line, time below — clearly separated */}
+                          <span className="text-[12px] font-semibold text-zinc-700 block leading-tight">
+                            {date}
+                          </span>
+                          <span className="text-[11px] font-bold text-primary/70 block mt-0.5 tabular-nums">
+                            {time}
+                          </span>
+                        </TableCell>
+                        <TableCell className={cn(dashboardTableCellClass, "text-right")}>
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => onDelete(order)}
-                              className={actionBtnDelete}
-                              title="Delete order"
+                              onClick={() => onView(order)}
+                              className={actionBtnView}
+                              title="View order"
                             >
-                              <Trash2 className="size-4" />
+                              <Eye className="size-4" />
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+                            {canDelete && onDelete && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onDelete(order)}
+                                className={actionBtnDelete}
+                                title="Delete order"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  });
+
+                  return rows;
+                })()
               )}
             </TableBody>
           </Table>
         </div>
       </div>
 
+      {/* ── Pagination footer ─────────────────────────────────── */}
       <div className="py-2 px-8 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-zinc-400 border-t border-zinc-100 bg-zinc-50/30">
         <div>
           {filtered.length === 0
             ? "0 orders"
-            : `${Math.min(filtered.length, (currentPage - 1) * pageSize + 1)}-${Math.min(filtered.length, currentPage * pageSize)} of ${filtered.length}`}
+            : `${Math.min(filtered.length, (currentPage - 1) * pageSize + 1)}–${Math.min(
+                filtered.length,
+                currentPage * pageSize
+              )} of ${filtered.length}`}
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
             className="px-2 py-1 border border-zinc-200 rounded-md hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
@@ -333,7 +403,7 @@ export default function OrdersHistoryPanel({
           </div>
           <button
             type="button"
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
             className="px-2 py-1 border border-zinc-200 rounded-md hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >

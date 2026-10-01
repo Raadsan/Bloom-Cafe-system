@@ -30,7 +30,7 @@ const BRAND = '#5b1017';
 const BLUSH = '#f99bab';
 const ROSE = '#d94b63';
 
-const periods = ['This Month', 'Last Month', 'This Quarter'];
+const periods = ['All Time', 'This Month', 'Last Month', 'This Quarter'];
 
 const stats = [
   { label: 'Total Revenue', value: '$8,172', change: '16.1%', trend: 'up', icon: CircleDollarSign, tone: 'brand' },
@@ -121,7 +121,7 @@ function ChartCard({ title, period, onPeriodChange, children }: { title: string;
 }
 
 export default function AccountingDashboardPage() {
-  const [period, setPeriod] = useState('This Month');
+  const [period, setPeriod] = useState('All Time');
   const [summary, setSummary] = useState<AccountingDashboardData | null>(null);
   const data = summary?.chartData || [];
   const expenseBreakdown = summary?.expenseBreakdown || [];

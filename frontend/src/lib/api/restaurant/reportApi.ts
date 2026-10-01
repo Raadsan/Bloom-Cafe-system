@@ -14,7 +14,13 @@ export interface DashboardInitPayload {
     totalTables: number;
     totalPaidPayments: number;
     totalPendingPayments: number;
+    totalPendingOrders?: number;
+    totalCancelledOrders?: number;
+    totalPaidRevenue?: number;
     totalRevenue: number;
+    totalVat?: number;
+    totalSubTotal?: number;
+    totalDiscount?: number;
   };
   weekly: Array<{ name: string; revenue: number; orders: number }>;
   recentOrders: unknown[];
@@ -249,27 +255,39 @@ export const reportApi = {
     return res.data;
   },
 
-  getFinanceReport: async (params?: { startDate?: string; endDate?: string }): Promise<any> => {
+  getFinanceReport: async (params?: { startDate?: string; endDate?: string; tzOffset?: string }): Promise<any> => {
     const query = new URLSearchParams();
     if (params?.startDate) query.set('startDate', params.startDate);
     if (params?.endDate) query.set('endDate', params.endDate);
+    const tz = params?.tzOffset ?? (typeof window !== 'undefined' ? new Date().getTimezoneOffset().toString() : '-180');
+    query.set('tzOffset', tz);
     const res = await api.get(`/reports/finance?${query.toString()}`);
     return res.data;
   },
 
-  getOrdersReport: async (params?: { startDate?: string; endDate?: string }): Promise<any> => {
+  getOrdersReport: async (params?: { startDate?: string; endDate?: string; tzOffset?: string }): Promise<any> => {
     const query = new URLSearchParams();
     if (params?.startDate) query.set('startDate', params.startDate);
     if (params?.endDate) query.set('endDate', params.endDate);
+    const tz = params?.tzOffset ?? (typeof window !== 'undefined' ? new Date().getTimezoneOffset().toString() : '-180');
+    query.set('tzOffset', tz);
     const res = await api.get(`/reports/orders?${query.toString()}`);
     return res.data;
   },
 
-  getClientsReport: async (params?: { startDate?: string; endDate?: string }): Promise<any> => {
+  getClientsReport: async (params?: { startDate?: string; endDate?: string; tzOffset?: string }): Promise<any> => {
     const query = new URLSearchParams();
     if (params?.startDate) query.set('startDate', params.startDate);
     if (params?.endDate) query.set('endDate', params.endDate);
+    const tz = params?.tzOffset ?? (typeof window !== 'undefined' ? new Date().getTimezoneOffset().toString() : '-180');
+    query.set('tzOffset', tz);
     const res = await api.get(`/reports/clients?${query.toString()}`);
+    return res.data;
+  },
+
+  /** Manually trigger the nightly 6 PM order close (admin/manager only) */
+  triggerNightlyClose: async (): Promise<any> => {
+    const res = await api.post('/reports/nightly-close');
     return res.data;
   },
 };

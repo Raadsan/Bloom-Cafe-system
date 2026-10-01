@@ -13,6 +13,7 @@ import {
   getOrdersReport,
   getClientsReport
 } from './report.controller.js'
+import { runNightlyOrderClose } from '../../../../utils/nightlyOrderClose.js'
 import { protect, checkPermission } from '../../../../middlewares/authMiddleware.js'
 
 const router = express.Router()
@@ -30,5 +31,19 @@ router.get('/finance', protect, checkPermission('/report', 'canView'), getFinanc
 router.get('/weekly', protect, checkPermission('/report', 'canView'), getWeeklyAnalytics)
 router.get('/orders', protect, checkPermission('/report', 'canView'), getOrdersReport)
 router.get('/clients', protect, checkPermission('/report', 'canView'), getClientsReport)
+
+// Manual trigger for nightly order close (admin only)
+router.post('/nightly-close', protect, async (req, res) => {
+  try {
+    const role = req.user?.role?.toLowerCase()
+    if (role !== 'admin' && role !== 'manager') {
+      return res.status(403).json({ success: false, message: 'Access denied' })
+    }
+    const result = await runNightlyOrderClose()
+    return res.status(200).json({ success: true, data: result })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
+  }
+})
 
 export default router

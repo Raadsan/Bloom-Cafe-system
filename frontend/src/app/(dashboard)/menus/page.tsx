@@ -242,8 +242,17 @@ export default function MenuPage() {
 
   const handleSave = async () => {
     if (!formName.trim()) return showToast("Item name is required", "error");
-    if (!formPrice || isNaN(Number(formPrice))) return showToast("Valid price is required", "error");
     if (!formCategoryId) return showToast("Please select a category", "error");
+    if (!formIsSellable && !formIsPurchasable) {
+      return showToast("Please select at least Sellable or Purchasable", "error");
+    }
+    const resolvedPrice = formIsSellable
+      ? Number(formPrice)
+      : (Number(formPrice) || Number(formCostPrice) || 0);
+
+    if (formIsSellable && (!formPrice || isNaN(Number(formPrice)) || Number(formPrice) < 0)) {
+      return showToast("Valid selling price is required for sellable items", "error");
+    }
 
     setSaving(true);
     try {
@@ -251,7 +260,7 @@ export default function MenuPage() {
         name: formName.trim(),
         description: formDesc.trim() || undefined,
         costPrice: formCostPrice ? Number(formCostPrice) : undefined,
-        price: Number(formPrice),
+        price: resolvedPrice,
         tax: Number(formTax || 0),
         categoryId: Number(formCategoryId),
         isAvailable: formIsAvailable,
@@ -441,6 +450,18 @@ export default function MenuPage() {
                               {item.isRecommended && <Star className="size-3 fill-amber-400 text-amber-400" />}
                             </span>
                             <span className="text-[10px] text-zinc-400 uppercase tracking-wider">{item.category?.name || "No Category"}</span>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              {item.isPurchasable && item.isSellable !== false && (
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+                                  Resellable
+                                </span>
+                              )}
+                              {item.isPurchasable && item.isSellable === false && (
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800">
+                                  Purchasable Only
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
@@ -448,7 +469,9 @@ export default function MenuPage() {
                         ${(item.costPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="px-6 py-3 text-right">
-                        {menuItemHasDiscount(item) ? (() => {
+                        {item.isSellable === false ? (
+                          <span className="text-[12px] text-zinc-400 italic font-normal">Not sellable</span>
+                        ) : menuItemHasDiscount(item) ? (() => {
                           const effPrice = getMenuItemEffectivePrice(item);
                           const taxRate = item.tax || 0;
                           const priceWithVat = effPrice * (1 + taxRate / 100);
@@ -618,6 +641,70 @@ export default function MenuPage() {
               </div>
             </div>
 
+            <div className="px-6 py-3 border-b border-zinc-100 dark:border-[#2a2a2a] bg-zinc-50/50 dark:bg-[#161616]/40 space-y-2">
+              <div className="flex items-center gap-6">
+                <label className="flex items-center gap-2.5 cursor-pointer group select-none">
+                  <span
+                    onClick={() => setFormIsSellable(!formIsSellable)}
+                    className={cn(
+                      "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-150 shrink-0",
+                      formIsSellable
+                        ? "bg-primary border-primary"
+                        : "border-zinc-300 dark:border-zinc-600 group-hover:border-primary/50"
+                    )}
+                  >
+                    {formIsSellable && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
+                  <div>
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Sellable</span>
+                    <span className="text-[10px] text-zinc-400 block">Waan sii iibinaynaa (POS)</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-2.5 cursor-pointer group select-none">
+                  <span
+                    onClick={() => setFormIsPurchasable(!formIsPurchasable)}
+                    className={cn(
+                      "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-150 shrink-0",
+                      formIsPurchasable
+                        ? "bg-primary border-primary"
+                        : "border-zinc-300 dark:border-zinc-600 group-hover:border-primary/50"
+                    )}
+                  >
+                    {formIsPurchasable && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
+                  <div>
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Purchasable</span>
+                    <span className="text-[10px] text-zinc-400 block">Waa soo gadaneynaa (Vendor)</span>
+                  </div>
+                </label>
+              </div>
+              <div className="text-[11px] pt-1">
+                {formIsSellable && formIsPurchasable && (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                    ✓ Resellable: Inta soo gadano aan sii iibin karno (Purchased from vendor & resold to customers).
+                  </span>
+                )}
+                {!formIsSellable && formIsPurchasable && (
+                  <span className="text-blue-600 dark:text-blue-400 font-medium">
+                    📦 Purchasable Only: Waa soo gadaneynaa kaliya (Vendor raw supply/material, not sold on POS).
+                  </span>
+                )}
+                {formIsSellable && !formIsPurchasable && (
+                  <span className="text-zinc-500 font-medium">
+                    ☕ Sellable Only: Direct cafe dish / drink prepared in kitchen and sold to customers.
+                  </span>
+                )}
+              </div>
+            </div>
+
             <div className="px-6 py-4 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -662,14 +749,20 @@ export default function MenuPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className={formLabelClass}>Selling price ($) *</label>
+                  <label className={formLabelClass}>
+                    Selling price ($) {formIsSellable && <span className="text-rose-500">*</span>}
+                  </label>
                   <input
                     type="number"
-                    step="1"
+                    step="0.01"
+                    disabled={!formIsSellable}
                     value={formPrice}
                     onChange={(e) => setFormPrice(e.target.value)}
-                    placeholder="0.00"
-                    className={formInputClass}
+                    placeholder={formIsSellable ? "0.00" : "Not sellable"}
+                    className={cn(
+                      formInputClass,
+                      !formIsSellable && "opacity-60 cursor-not-allowed bg-zinc-100 dark:bg-zinc-800"
+                    )}
                   />
                 </div>
                 <div className="space-y-1">
@@ -882,6 +975,18 @@ export default function MenuPage() {
                 <p className={viewLabelClass}>Availability</p>
                 <p className={viewValueClass}>
                   {selectedItem?.isAvailable ? "Available" : "Out of stock"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Sellable</p>
+                <p className={viewValueClass}>
+                  {selectedItem?.isSellable !== false ? "Yes" : "No"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className={viewLabelClass}>Purchasable</p>
+                <p className={viewValueClass}>
+                  {selectedItem?.isPurchasable === true ? "Yes" : "No"}
                 </p>
               </div>
               <div className="space-y-1">

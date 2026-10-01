@@ -547,10 +547,10 @@ export const createPayment = async (req, res) => {
             data: { userId: req.user.id },
           })
         : Promise.resolve(),
-      order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'served'
+      order.status !== 'served'
         ? prisma.order.update({
             where: { id: order.id },
-            data: { status: 'pending' },
+            data: { status: 'served' },
           })
         : Promise.resolve(),
       order.tableId && !MOBILE_WALLET_METHODS.includes((method || 'cash').toLowerCase())

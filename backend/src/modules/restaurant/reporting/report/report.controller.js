@@ -19,43 +19,73 @@ export const clearReportCache = () => {
 async function fetchDashboardSummaryData(query) {
   const dateRange = parseDateRange(query)
 
-  const orderWhere = dateRange ? { createdAt: dateRange } : {}
-
-  const paidPaymentWhere = {
-    status: 'paid',
-    ...(dateRange ? { paidAt: dateRange } : {}),
+  const orderWhere = {
+    ...(dateRange ? { createdAt: dateRange } : {}),
+    status: { not: 'cancelled' },
   }
 
-  const [totalOrders, totalCustomers, totalTables, totalRevenueResult, paidPayments, pendingPayments] =
-    await Promise.all([
-      prisma.order.count({ where: orderWhere }),
-      prisma.customers.count(),
-      prisma.table.count(),
-      prisma.payment.aggregate({
-        where: paidPaymentWhere,
-        _sum: { amount: true },
-      }),
-      prisma.payment.count({
-        where: {
-          status: 'paid',
-          ...(dateRange ? { paidAt: dateRange } : {}),
-        },
-      }),
-      prisma.payment.count({
-        where: {
-          status: 'pending',
-          ...(dateRange ? { createdAt: dateRange } : {}),
-        },
-      }),
-    ])
+  const [
+    orderStats,
+    totalCustomers,
+    totalTables,
+    paidPaymentsAgg,
+    paidPaymentsCount,
+    pendingOrdersCount,
+    cancelledOrdersCount,
+  ] = await Promise.all([
+    prisma.order.aggregate({
+      where: orderWhere,
+      _count: { id: true },
+      _sum: { total: true, subTotal: true, taxAmount: true, discountAmount: true },
+    }),
+    prisma.customers.count(),
+    prisma.table.count(),
+    prisma.payment.aggregate({
+      where: {
+        status: 'paid',
+        ...(dateRange ? { paidAt: dateRange } : {}),
+      },
+      _sum: { amount: true },
+    }),
+    prisma.payment.count({
+      where: {
+        status: 'paid',
+        ...(dateRange ? { paidAt: dateRange } : {}),
+      },
+    }),
+    prisma.order.count({
+      where: {
+        ...(dateRange ? { createdAt: dateRange } : {}),
+        status: { in: ['pending', 'preparing', 'held'] },
+      },
+    }),
+    prisma.order.count({
+      where: {
+        ...(dateRange ? { createdAt: dateRange } : {}),
+        status: 'cancelled',
+      },
+    }),
+  ])
+
+  const totalOrders = orderStats._count.id || 0
+  const totalRevenue = Number((orderStats._sum.total || 0).toFixed(2))
+  const totalVat = Number((orderStats._sum.taxAmount || 0).toFixed(2))
+  const totalSubTotal = Number((orderStats._sum.subTotal || 0).toFixed(2))
+  const totalDiscount = Number((orderStats._sum.discountAmount || 0).toFixed(2))
 
   return {
     totalOrders,
     totalCustomers,
     totalTables,
-    totalPaidPayments: paidPayments,
-    totalPendingPayments: pendingPayments,
-    totalRevenue: totalRevenueResult._sum.amount || 0,
+    totalPaidPayments: paidPaymentsCount,
+    totalPendingPayments: pendingOrdersCount, // backward compatibility for UI
+    totalPendingOrders: pendingOrdersCount,
+    totalCancelledOrders: cancelledOrdersCount,
+    totalPaidRevenue: Number((paidPaymentsAgg._sum.amount || 0).toFixed(2)),
+    totalRevenue, // Exactly matches order total sales
+    totalVat,
+    totalSubTotal,
+    totalDiscount,
   }
 }
 
@@ -82,32 +112,28 @@ async function fetchWeeklyAnalyticsData() {
     })
   }
 
-  const payments = await prisma.payment.findMany({
+  const orders = await prisma.order.findMany({
     where: {
-      status: 'paid',
-      paidAt: { gte: start, lte: end },
+      status: { not: 'cancelled' },
+      createdAt: { gte: start, lte: end },
     },
     select: {
-      amount: true,
-      paidAt: true,
-      orderId: true,
+      total: true,
+      createdAt: true,
     },
   })
 
-  const ordersPerDay = {}
-
-  for (const payment of payments) {
-    const key = new Date(payment.paidAt).toISOString().split('T')[0]
+  for (const order of orders) {
+    const key = new Date(order.createdAt).toISOString().split('T')[0]
     const bucket = buckets.find((b) => b.key === key)
     if (!bucket) continue
 
-    bucket.revenue += payment.amount
-    if (!ordersPerDay[key]) ordersPerDay[key] = new Set()
-    ordersPerDay[key].add(payment.orderId)
+    bucket.revenue += Number(order.total) || 0
+    bucket.orders += 1
   }
 
   buckets.forEach((bucket) => {
-    bucket.orders = ordersPerDay[bucket.key]?.size || 0
+    bucket.revenue = Number(bucket.revenue.toFixed(2))
     delete bucket.key
   })
 
@@ -153,50 +179,90 @@ export async function warmReportCaches() {
   ]).catch(() => {})
 }
 
-// 🔹 DATE RANGE
-const parseDateRange = (query) => {
+// 🔹 DATE RANGE (Strict 12:00 AM Midnight Boundary)
+const DEFAULT_TZ_OFFSET_MINUTES = -180 // UTC+3 (East Africa Time - Somalia / Kenya)
+
+function resolveTzOffsetMinutes(query = {}) {
+  if (query.tzOffset !== undefined && query.tzOffset !== null && query.tzOffset !== '') {
+    const val = Number(query.tzOffset)
+    if (!isNaN(val)) return val
+  }
+  return DEFAULT_TZ_OFFSET_MINUTES
+}
+
+const parseDateRange = (query = {}) => {
   const { startDate, endDate } = query
 
   if (!startDate && !endDate) return null
 
+  const offsetMinutes = resolveTzOffsetMinutes(query)
   const range = {}
 
   if (startDate) {
-    const start = new Date(startDate)
-    start.setHours(0, 0, 0, 0)
-    range.gte = start
+    const parts = startDate.split('-').map(Number)
+    if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+      const [y, m, d] = parts
+      // 00:00:00.000 local time (12:00 AM Midnight sharp)
+      range.gte = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) + offsetMinutes * 60 * 1000)
+    } else {
+      const start = new Date(startDate)
+      start.setHours(0, 0, 0, 0)
+      range.gte = start
+    }
   }
 
   if (endDate) {
-    const end = new Date(endDate)
-    end.setHours(23, 59, 59, 999)
-    range.lte = end
+    const parts = endDate.split('-').map(Number)
+    if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+      const [y, m, d] = parts
+      // 23:59:59.999 local time (Right before next 12:00 AM Midnight)
+      range.lte = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) + offsetMinutes * 60 * 1000)
+    } else {
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
+      range.lte = end
+    }
   }
 
   return range
 }
 
-// 🔹 MOVE OUTSIDE (VERY IMPORTANT)
-const getStartOfDay = () => {
-  const date = new Date()
-  date.setHours(0, 0, 0, 0)
-  return date
+const getStartOfDay = (query = {}) => {
+  const offsetMinutes = resolveTzOffsetMinutes(query)
+  const now = new Date()
+  const localNow = new Date(now.getTime() - offsetMinutes * 60 * 1000)
+  const y = localNow.getUTCFullYear()
+  const m = localNow.getUTCMonth()
+  const d = localNow.getUTCDate()
+  return new Date(Date.UTC(y, m, d, 0, 0, 0, 0) + offsetMinutes * 60 * 1000)
 }
 
-const getEndOfDay = () => {
-  const date = new Date()
-  date.setHours(23, 59, 59, 999)
-  return date
+const getEndOfDay = (query = {}) => {
+  const offsetMinutes = resolveTzOffsetMinutes(query)
+  const now = new Date()
+  const localNow = new Date(now.getTime() - offsetMinutes * 60 * 1000)
+  const y = localNow.getUTCFullYear()
+  const m = localNow.getUTCMonth()
+  const d = localNow.getUTCDate()
+  return new Date(Date.UTC(y, m, d, 23, 59, 59, 999) + offsetMinutes * 60 * 1000)
 }
 
-const getStartOfMonth = () => {
-  const date = new Date()
-  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0)
+const getStartOfMonth = (query = {}) => {
+  const offsetMinutes = resolveTzOffsetMinutes(query)
+  const now = new Date()
+  const localNow = new Date(now.getTime() - offsetMinutes * 60 * 1000)
+  const y = localNow.getUTCFullYear()
+  const m = localNow.getUTCMonth()
+  return new Date(Date.UTC(y, m, 1, 0, 0, 0, 0) + offsetMinutes * 60 * 1000)
 }
 
-const getEndOfMonth = () => {
-  const date = new Date()
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
+const getEndOfMonth = (query = {}) => {
+  const offsetMinutes = resolveTzOffsetMinutes(query)
+  const now = new Date()
+  const localNow = new Date(now.getTime() - offsetMinutes * 60 * 1000)
+  const y = localNow.getUTCFullYear()
+  const m = localNow.getUTCMonth()
+  return new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999) + offsetMinutes * 60 * 1000)
 }
 
 // DASHBOARD INIT — summary + weekly chart + recent orders in one round trip
@@ -804,10 +870,14 @@ export const getWeeklyAnalytics = async (req, res) => {
 export const getOrdersReport = async (req, res) => {
   try {
     const dateRange = parseDateRange(req.query)
+    const orderWhere = {
+      ...(dateRange ? { createdAt: dateRange } : {}),
+      status: { not: 'cancelled' },
+    }
 
-    const [orders, stats] = await Promise.all([
+    const [orders, stats, cancelledCount] = await Promise.all([
       prisma.order.findMany({
-        where: dateRange ? { createdAt: dateRange } : {},
+        where: orderWhere,
         include: {
           table: true,
           customer: true,
@@ -815,19 +885,30 @@ export const getOrdersReport = async (req, res) => {
             include: {
               menuitem: {
                 include: {
-                  category: true
-                }
-              }
-            }
-          }
+                  category: true,
+                },
+              },
+            },
+          },
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
       }),
       prisma.order.aggregate({
-        where: dateRange ? { createdAt: dateRange } : {},
+        where: orderWhere,
         _count: { id: true },
-        _sum: { total: true }
-      })
+        _sum: {
+          total: true,
+          subTotal: true,
+          taxAmount: true,
+          discountAmount: true,
+        },
+      }),
+      prisma.order.count({
+        where: {
+          ...(dateRange ? { createdAt: dateRange } : {}),
+          status: 'cancelled',
+        },
+      }),
     ])
 
     const breakdownByType = {}
@@ -835,95 +916,135 @@ export const getOrdersReport = async (req, res) => {
     const categoryMap = {}
     let totalItemsSold = 0
 
-    orders.forEach(o => {
+    orders.forEach((o) => {
       breakdownByType[o.orderType] = (breakdownByType[o.orderType] || 0) + 1
       breakdownBySource[o.source] = (breakdownBySource[o.source] || 0) + 1
 
-      // Aggregate sold items per category
-      if (o.status !== 'cancelled' && o.orderitem && o.orderitem.length > 0) {
-        o.orderitem.forEach(item => {
-          const catName = item.menuitem?.category?.name || 'Uncategorized'
-          const itemName = item.menuitem?.name || 'Unknown Item'
-          const qty = Number(item.quantity) || 1
-          const unitPrice = Number(item.unitPrice) || 0
-          const amount = unitPrice * qty
+      if (!o.orderitem || o.orderitem.length === 0) return
 
-          const itemTaxRate = Number(item.tax) || 0
-          const orderVat = Number(o.taxAmount) || 0
-          let itemVat = 0
-          if (itemTaxRate > 0) {
-            itemVat = amount * (itemTaxRate / 100)
-          } else if (orderVat > 0 && (o.subTotal || 0) > 0) {
-            itemVat = orderVat * (amount / o.subTotal)
+      const orderTaxAmount = Number(o.taxAmount) || 0
+      const orderDiscountAmount = Number(o.discountAmount) || 0
+
+      // Calculate raw items subtotal for this order to apportion tax & discount proportionally
+      const itemsRawSum = o.orderitem.reduce(
+        (s, it) => s + (Number(it.unitPrice) || 0) * (Number(it.quantity) || 1),
+        0
+      )
+
+      o.orderitem.forEach((item) => {
+        const catName = item.menuitem?.category?.name || 'Uncategorized'
+        const itemName = item.menuitem?.name || 'Unknown Item'
+        const qty = Number(item.quantity) || 1
+        const unitPrice = Number(item.unitPrice) || 0
+        const rawSub = unitPrice * qty
+
+        const ratio = itemsRawSum > 0 ? rawSub / itemsRawSum : 1 / o.orderitem.length
+        const itemTax =
+          orderTaxAmount > 0
+            ? orderTaxAmount * ratio
+            : rawSub * ((Number(item.tax) || 0) / 100)
+        const itemDiscount = orderDiscountAmount > 0 ? orderDiscountAmount * ratio : 0
+        const itemNet = rawSub - itemDiscount
+        const itemTotal = itemNet + itemTax
+
+        totalItemsSold += qty
+
+        if (!categoryMap[catName]) {
+          categoryMap[catName] = {
+            categoryName: catName,
+            totalQuantity: 0,
+            totalAmount: 0,
+            totalVat: 0,
+            totalNet: 0,
+            itemsMap: {},
           }
-          const netAmount = amount - itemVat
+        }
 
-          totalItemsSold += qty
+        categoryMap[catName].totalQuantity += qty
+        categoryMap[catName].totalAmount += itemTotal
+        categoryMap[catName].totalVat += itemTax
+        categoryMap[catName].totalNet += itemNet
 
-          if (!categoryMap[catName]) {
-            categoryMap[catName] = {
-              categoryName: catName,
-              totalQuantity: 0,
-              totalAmount: 0,
-              totalVat: 0,
-              totalNet: 0,
-              itemsMap: {}
-            }
+        if (!categoryMap[catName].itemsMap[itemName]) {
+          categoryMap[catName].itemsMap[itemName] = {
+            name: itemName,
+            quantity: 0,
+            totalAmount: 0,
+            vat: 0,
+            netAmount: 0,
+            unitPrice: unitPrice,
           }
+        }
 
-          categoryMap[catName].totalQuantity += qty
-          categoryMap[catName].totalAmount += amount
-          categoryMap[catName].totalVat += itemVat
-          categoryMap[catName].totalNet += netAmount
-
-          if (!categoryMap[catName].itemsMap[itemName]) {
-            categoryMap[catName].itemsMap[itemName] = {
-              name: itemName,
-              quantity: 0,
-              totalAmount: 0,
-              vat: 0,
-              netAmount: 0,
-              unitPrice: unitPrice
-            }
-          }
-
-          categoryMap[catName].itemsMap[itemName].quantity += qty
-          categoryMap[catName].itemsMap[itemName].totalAmount += amount
-          categoryMap[catName].itemsMap[itemName].vat += itemVat
-          categoryMap[catName].itemsMap[itemName].netAmount += netAmount
-        })
-      }
+        categoryMap[catName].itemsMap[itemName].quantity += qty
+        categoryMap[catName].itemsMap[itemName].totalAmount += itemTotal
+        categoryMap[catName].itemsMap[itemName].vat += itemTax
+        categoryMap[catName].itemsMap[itemName].netAmount += itemNet
+      })
     })
 
-    const categorySales = Object.values(categoryMap).map(cat => ({
-      categoryName: cat.categoryName,
-      totalQuantity: Number(cat.totalQuantity.toFixed(1)),
-      totalAmount: Number(cat.totalAmount.toFixed(2)),
-      totalVat: Number(cat.totalVat.toFixed(2)),
-      totalNet: Number(cat.totalNet.toFixed(2)),
-      items: Object.values(cat.itemsMap).map(it => ({
-        name: it.name,
-        quantity: Number(it.quantity.toFixed(1)),
-        totalAmount: Number(it.totalAmount.toFixed(2)),
-        vat: Number(it.vat.toFixed(2)),
-        netAmount: Number(it.netAmount.toFixed(2)),
-        unitPrice: it.unitPrice
-      })).sort((a, b) => b.totalAmount - a.totalAmount)
-    })).sort((a, b) => b.totalAmount - a.totalAmount)
+    const categorySales = Object.values(categoryMap)
+      .map((cat) => ({
+        categoryName: cat.categoryName,
+        totalQuantity: Number(cat.totalQuantity.toFixed(1)),
+        totalAmount: Number(cat.totalAmount.toFixed(2)),
+        totalVat: Number(cat.totalVat.toFixed(2)),
+        totalNet: Number(cat.totalNet.toFixed(2)),
+        items: Object.values(cat.itemsMap)
+          .map((it) => ({
+            name: it.name,
+            quantity: Number(it.quantity.toFixed(1)),
+            totalAmount: Number(it.totalAmount.toFixed(2)),
+            vat: Number(it.vat.toFixed(2)),
+            netAmount: Number(it.netAmount.toFixed(2)),
+            unitPrice: it.unitPrice,
+          }))
+          .sort((a, b) => b.totalAmount - a.totalAmount),
+      }))
+      .sort((a, b) => b.totalAmount - a.totalAmount)
 
-    const totalVat = Number(categorySales.reduce((sum, c) => sum + (c.totalVat || 0), 0).toFixed(2))
+    const totalOrders = stats._count.id || orders.length
+    const totalAmount = Number((stats._sum.total || 0).toFixed(2))
+    const totalVat = Number((stats._sum.taxAmount || 0).toFixed(2))
+    const totalSubTotal = Number((stats._sum.subTotal || 0).toFixed(2))
+    const totalDiscount = Number((stats._sum.discountAmount || 0).toFixed(2))
+    const totalNet = Number((totalSubTotal - totalDiscount).toFixed(2))
+
+    // Top 5 Sales items by total sales revenue
+    const allItemsList = []
+    categorySales.forEach((cat) => {
+      cat.items.forEach((it) => {
+        allItemsList.push({
+          name: it.name,
+          categoryName: cat.categoryName,
+          quantity: it.quantity,
+          totalAmount: it.totalAmount,
+          vat: it.vat,
+          netAmount: it.netAmount,
+          unitPrice: it.unitPrice,
+        })
+      })
+    })
+    const top5Sales = allItemsList
+      .sort((a, b) => b.totalAmount - a.totalAmount)
+      .slice(0, 5)
 
     return res.status(200).json({
       success: true,
       data: {
-        totalOrders: stats._count.id || orders.length,
-        totalAmount: Number((stats._sum.total || 0).toFixed(2)),
+        totalOrders,
+        cancelledOrders: cancelledCount,
+        totalAmount,
         totalVat,
+        totalSubTotal,
+        totalDiscount,
+        totalNet,
         totalItemsSold,
+        top5Sales,
         categorySales,
         breakdownByType,
         breakdownBySource,
-        orders: orders.map(o => ({
+        orders: orders.map((o) => ({
           id: o.id,
           orderNumber: o.orderNumber,
           customerName: o.customerName || o.customer?.name || null,
@@ -933,12 +1054,14 @@ export const getOrdersReport = async (req, res) => {
           status: o.status,
           total: o.total,
           taxAmount: o.taxAmount,
+          subTotal: o.subTotal,
+          discountAmount: o.discountAmount,
           createdAt: o.createdAt,
           tableId: o.tableId,
           table: o.table ? { number: o.table.number } : null,
-          itemCount: o.orderitem?.reduce((sum, it) => sum + (it.quantity || 1), 0) || 0
-        }))
-      }
+          itemCount: o.orderitem?.reduce((sum, it) => sum + (it.quantity || 1), 0) || 0,
+        })),
+      },
     })
   } catch (error) {
     console.error('Orders Report Error:', error)
