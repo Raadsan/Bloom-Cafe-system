@@ -245,8 +245,10 @@ export async function processCompletedPOSOrder(orderId, { db = prisma } = {}) {
         return { status: 'already_posted', journalEntryId: existing.id }
       }
       const orderStatus = normalize(order.status)
-      const isSuccessfulPOSOrder = normalize(order.source) === 'pos' &&
-        ['served', 'completed'].includes(orderStatus) &&
+      const orderType = normalize(order.orderType) || 'dine-in'
+      const isSuccessfulPOSOrder =
+        ['dine-in', 'takeaway', 'delivery', 'eating'].includes(orderType) &&
+        ['served', 'completed', 'paid'].includes(orderStatus) &&
         normalize(order.payment?.status) === 'paid'
       if (!isSuccessfulPOSOrder) {
         return { status: 'not_eligible', orderSource: order.source, orderStatus: order.status, paymentStatus: order.payment?.status || null }
@@ -313,7 +315,7 @@ export async function processCompletedPOSOrder(orderId, { db = prisma } = {}) {
   } catch (error) {
     const text = error instanceof Error ? error.message : 'Unknown POS accounting error'
     await db.order.updateMany({
-      where: { id: parsedId, status: 'completed', accountingStatus: { not: 'posted' } },
+      where: { id: parsedId, status: { in: ['served', 'completed', 'paid'] }, accountingStatus: { not: 'posted' } },
       data: { accountingStatus: 'failed', accountingError: text.slice(0, 4000) },
     }).catch((updateError) => console.error('Unable to save POS accounting failure:', updateError))
     throw error

@@ -1020,8 +1020,8 @@ export const createPosCheckout = async (req, res) => {
         discountType: discountAmount > 0 ? discountType || null : null,
         discountValue: discountAmount > 0 ? parsedDiscountValue : 0,
         total: orderTotal,
-        // POS orders (dine-in, takeaway, delivery) are confirmed and paid at POS, so mark as 'served' immediately
-        // Mobile orders (source='mobile') keep the full pending→preparing→ready→served flow
+        // Dine-in, takeaway, and delivery paid at POS are finished sales.
+        // Mobile orders keep pending → preparing → ready → served.
         status: (req.body.source || 'pos') !== 'mobile' ? 'served' : 'pending',
         source: req.body.source || 'pos',
         createdAt: req.body.createdAt ? new Date(req.body.createdAt) : new Date(),
@@ -1159,8 +1159,8 @@ export const updateOrderStatus = async (req, res) => {
       }
     })
 
-    if (status === 'completed') {
-      await processCompletedPOSOrderSafely(updatedOrder.id, 'order completion')
+    if (status === 'served' || status === 'completed') {
+      await processCompletedPOSOrderSafely(updatedOrder.id, 'order served')
     }
 
     /*

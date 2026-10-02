@@ -140,10 +140,48 @@ function normalizeDiscountInput(discountType, discountValue, price) {
   return { discountType: type, discountValue: Math.min(basePrice, value) }
 }
 
+function cleanPriceRows(list, labelKey) {
+  if (!Array.isArray(list)) return []
+  const rows = []
+  for (const row of list) {
+    if (!row || typeof row !== 'object') continue
+    const label = String(row[labelKey] ?? '').trim()
+    const price = Number(row.price)
+    if (!label || !Number.isFinite(price) || price < 0) continue
+    rows.push({ [labelKey]: label, price })
+  }
+  return rows
+}
+
+function normalizeOptionsObject(raw) {
+  const next = { ...raw }
+  if ('variations' in next) {
+    const variations = cleanPriceRows(next.variations, 'size')
+    if (variations.length) next.variations = variations
+    else delete next.variations
+  }
+  if ('addons' in next) {
+    const addons = cleanPriceRows(next.addons, 'name')
+    if (addons.length) next.addons = addons
+    else delete next.addons
+  }
+  return Object.keys(next).length ? next : null
+}
+
+function variationBasePrice(options) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) return null
+  if (!Array.isArray(options.variations) || options.variations.length === 0) return null
+  const prices = options.variations
+    .map((row) => Number(row?.price))
+    .filter((price) => Number.isFinite(price) && price >= 0)
+  if (!prices.length) return null
+  return Math.min(...prices)
+}
+
 function normalizeOptionsInput(raw) {
   if (raw === undefined) return undefined
   if (raw === null || raw === '') return null
-  if (typeof raw === 'object' && !Array.isArray(raw)) return raw
+  if (typeof raw === 'object' && !Array.isArray(raw)) return normalizeOptionsObject(raw)
   if (Array.isArray(raw)) {
     const list = raw.map(String).map(s => s.trim()).filter(Boolean)
     return list.length ? list : null
@@ -151,7 +189,7 @@ function normalizeOptionsInput(raw) {
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw)
-      if (typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) return normalizeOptionsObject(parsed)
       if (Array.isArray(parsed)) {
         const list = parsed.map(String).map(s => s.trim()).filter(Boolean)
         return list.length ? list : null
@@ -189,10 +227,10 @@ export const createMenuItem = async (req, res) => {
       })
     }
 
-    const parsedPrice = Number(effectivePrice)
-    const discount = normalizeDiscountInput(discountType, discountValue, parsedPrice)
-
     let finalOptions = normalizeOptionsInput(options)
+    const fromVariations = options !== undefined ? variationBasePrice(finalOptions) : null
+    const parsedPrice = fromVariations != null ? fromVariations : Number(effectivePrice)
+    const discount = normalizeDiscountInput(discountType, discountValue, parsedPrice)
     if (vendorName || vendorId) {
       finalOptions = {
         ...(typeof finalOptions === 'object' && !Array.isArray(finalOptions) ? finalOptions : {}),
@@ -456,12 +494,24 @@ export const updateMenuItem = async (req, res) => {
       }
     }
 
+    let finalOptions = options !== undefined ? normalizeOptionsInput(options) : existing.options
+    if (vendorName !== undefined || vendorId !== undefined) {
+      finalOptions = {
+        ...(typeof finalOptions === 'object' && !Array.isArray(finalOptions) ? finalOptions : {}),
+        ...(vendorId !== undefined ? { vendorId: vendorId ? Number(vendorId) : null } : {}),
+        ...(vendorName !== undefined ? { vendorName: vendorName ? String(vendorName).trim() : null } : {}),
+      }
+    }
+
+    const fromVariations = options !== undefined ? variationBasePrice(finalOptions) : null
     const nextPrice =
-      price !== undefined
-        ? Number(price)
-        : costPrice !== undefined && (existing.price === 0 || !existing.isSellable)
-          ? Number(costPrice)
-          : existing.price
+      fromVariations != null
+        ? fromVariations
+        : price !== undefined
+          ? Number(price)
+          : costPrice !== undefined && (existing.price === 0 || !existing.isSellable)
+            ? Number(costPrice)
+            : existing.price
     const discount = normalizeDiscountInput(
       discountType !== undefined ? discountType : existing.discountType,
       discountValue !== undefined ? discountValue : existing.discountValue,
@@ -492,15 +542,6 @@ export const updateMenuItem = async (req, res) => {
           await deleteMenuImageFile(existing.imageUrl)
         }
         nextImageUrl = imageUrl
-      }
-    }
-
-    let finalOptions = options !== undefined ? normalizeOptionsInput(options) : existing.options
-    if (vendorName !== undefined || vendorId !== undefined) {
-      finalOptions = {
-        ...(typeof finalOptions === 'object' && !Array.isArray(finalOptions) ? finalOptions : {}),
-        ...(vendorId !== undefined ? { vendorId: vendorId ? Number(vendorId) : null } : {}),
-        ...(vendorName !== undefined ? { vendorName: vendorName ? String(vendorName).trim() : null } : {}),
       }
     }
 

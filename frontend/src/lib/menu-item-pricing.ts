@@ -1,4 +1,4 @@
-import { MenuItem } from "@/lib/api/restaurant/menuItemApi";
+import { MenuItem, parseMenuAddons, parseMenuVariations } from "@/lib/api/restaurant/menuItemApi";
 
 export type MenuItemDiscountType = "percentage" | "fixed";
 
@@ -21,6 +21,26 @@ export function getMenuItemDiscountAmount(item: PricedItem): number {
 export function getMenuItemEffectivePrice(item: PricedItem): number {
   const price = Number(item.price) || 0;
   return Math.max(0, price - getMenuItemDiscountAmount(item));
+}
+
+/** Unit price for a size and optional add-ons. Sizes replace the base price; add-ons are added on top. */
+export function selectionUnitPrice(
+  item: PricedItem & { options?: unknown },
+  selection?: { size?: string; addonNames?: string[] }
+): number {
+  const variations = parseMenuVariations(item);
+  let base = Number(item.price) || 0;
+  if (variations.length) {
+    const match = selection?.size
+      ? variations.find((row) => row.size === selection.size)
+      : undefined;
+    base = match ? match.price : Math.min(...variations.map((row) => row.price));
+  }
+  const extras = (selection?.addonNames || []).reduce((sum, name) => {
+    const addon = parseMenuAddons(item).find((row) => row.name === name);
+    return sum + (addon ? addon.price : 0);
+  }, 0);
+  return getMenuItemEffectivePrice({ ...item, price: base }) + extras;
 }
 
 export function menuItemHasDiscount(item: PricedItem): boolean {

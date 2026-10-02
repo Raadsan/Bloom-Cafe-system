@@ -31,12 +31,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { categoryApi, Category } from "@/lib/api/restaurant/categoryApi";
-import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/restaurant/menuItemApi";
+import { menuItemApi, MenuItem, menuSelectionKey, parseMenuAddons, parseMenuItemOptions, parseMenuVariations } from "@/lib/api/restaurant/menuItemApi";
 import { compositeApi, CompositeMenuItem } from "@/lib/api/restaurant/compositeApi";
 import {
   getMenuItemEffectivePrice,
   menuItemHasDiscount,
   getMenuItemDiscountPercent,
+  selectionUnitPrice,
 } from "@/lib/menu-item-pricing";
 import { tableApi, Table } from "@/lib/api/restaurant/tableApi";
 import { orderApi } from "@/lib/api/restaurant/orderApi";
@@ -153,10 +154,6 @@ function mergeCatalogWithComposites(
   return Array.from(byId.values());
 }
 
-interface ProductOpts {
-  variant?: string;
-}
-
 interface CartLine {
   key: string;
   id: number;
@@ -167,6 +164,7 @@ interface CartLine {
   imageUrl?: string;
   categoryName?: string;
   variant?: string;
+  addons?: string[];
   lineNote?: string;
   lineDiscount: number;
   isComposite?: boolean;
@@ -181,8 +179,8 @@ interface LineEditDraft {
   note: string;
 }
 
-function cartLineKey(id: number, variant?: string): string {
-  return `${id}-${variant || "default"}`;
+function cartLineKey(id: number, variant?: string, addons?: string[]): string {
+  return menuSelectionKey(id, variant, addons);
 }
 
 function normalizeCartLine(raw: unknown): CartLine | null {
@@ -191,8 +189,9 @@ function normalizeCartLine(raw: unknown): CartLine | null {
   const id = Number(item.id ?? item.menuItemId);
   if (!id) return null;
   const variant = item.variant as string | undefined;
+  const addons = Array.isArray(item.addons) ? item.addons.map(String) : [];
   return {
-    key: String(item.key || cartLineKey(id, variant)),
+    key: String(item.key || cartLineKey(id, variant, addons)),
     id,
     name: String(item.name || "Item"),
     price: Number(item.price) || 0,
@@ -201,19 +200,18 @@ function normalizeCartLine(raw: unknown): CartLine | null {
     imageUrl: item.imageUrl as string | undefined,
     categoryName: item.categoryName as string | undefined,
     variant,
+    addons,
     lineNote: item.lineNote as string | undefined,
     lineDiscount: Math.max(0, Number(item.lineDiscount) || 0),
     isComposite: Boolean(item.isComposite),
   };
 }
 
-function optionChip(active: boolean) {
-  return cn(
-    "px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all",
-    active
-      ? "bg-zinc-200 border-zinc-300 text-foreground"
-      : "bg-white border-border text-muted-foreground hover:border-zinc-300"
-  );
+function itemChoiceLists(product: MenuItem) {
+  const variations = parseMenuVariations(product);
+  const addons = parseMenuAddons(product);
+  const legacySizes = variations.length ? [] : parseMenuItemOptions(product);
+  return { variations, addons, legacySizes };
 }
 
 export default function PosTerminalPage() {
@@ -260,7 +258,12 @@ export default function PosTerminalPage() {
   const [activeHeldOrderId, setActiveHeldOrderId] = useState<number | null>(null);
   const [draftSeq, setDraftSeq] = useState(1);
 
-  const [productOptions, setProductOptions] = useState<Record<number, ProductOpts>>({});
+  const [picker, setPicker] = useState<{
+    product: MenuItem;
+    size?: string;
+    addons: string[];
+    quantity: number;
+  } | null>(null);
   const [activeProductId, setActiveProductId] = useState<number | null>(null);
   const [editingLineKey, setEditingLineKey] = useState<string | null>(null);
   const [lineEditDraft, setLineEditDraft] = useState<LineEditDraft | null>(null);
@@ -649,20 +652,29 @@ export default function PosTerminalPage() {
 
   const draftOrderId = `#${String(draftSeq).padStart(3, "0")}`;
 
-  const addToCart = (product: MenuItem) => {
+  const addToCart = (
+    product: MenuItem,
+    selection?: { size?: string; addons?: string[]; quantity?: number }
+  ) => {
     if (!product.isAvailable) return;
     if (product.isComposite && product.components?.some(c => c.isAvailable === false)) {
       showToast("This combo has unavailable items", "error");
       return;
     }
-    const itemOptions = parseMenuItemOptions(product);
-    const variant = productOptions[product.id]?.variant;
-    if (!product.isComposite && itemOptions.length > 0 && !variant) {
-      showToast("Select an option first", "error");
+    const { variations, legacySizes } = itemChoiceLists(product);
+    const needsSize = variations.length > 0 || legacySizes.length > 0;
+    const variant = selection?.size;
+    const selectedAddons = selection?.addons || [];
+    if (!product.isComposite && needsSize && !variant) {
+      showToast("Select a size first", "error");
       return;
     }
+    const quantity = Math.max(1, Math.floor(selection?.quantity || 1));
     setActiveProductId(product.id);
-    const key = cartLineKey(product.id, variant);
+    const key = cartLineKey(product.id, variant, selectedAddons);
+    const unitPrice = variations.length || selectedAddons.length
+      ? selectionUnitPrice(product, { size: variant, addonNames: selectedAddons })
+      : getMenuItemEffectivePrice(product);
     const comboNote =
       product.isComposite && product.components?.length
         ? product.components.map(c => `${c.quantity}× ${c.name}`).join(", ")
@@ -672,7 +684,7 @@ export default function PosTerminalPage() {
       const existing = prev.find(item => item.key === key);
       if (existing) {
         return prev.map(item =>
-          item.key === key ? { ...item, quantity: item.quantity + 1 } : item
+          item.key === key ? { ...item, quantity: item.quantity + quantity } : item
         );
       }
       return [
@@ -681,12 +693,13 @@ export default function PosTerminalPage() {
           key,
           id: product.id,
           name: product.name,
-          price: getMenuItemEffectivePrice(product),
+          price: unitPrice,
           tax: product.tax || 0,
-          quantity: 1,
+          quantity,
           imageUrl: product.imageUrl,
           categoryName: categoryName(product.categoryId),
           variant,
+          addons: selectedAddons,
           isComposite: product.isComposite,
           lineNote: comboNote,
           lineDiscount: 0,
@@ -773,17 +786,45 @@ export default function PosTerminalPage() {
     discountType === "percentage" ? (subtotal * discount) / 100 : discount;
   const total = Math.max(0, subtotal + taxAmount - discountAmount);
 
-  const setProductVariant = (productId: number, value: string) => {
-    setProductOptions(prev => ({
-      ...prev,
-      [productId]: {
-        variant: prev[productId]?.variant === value ? undefined : value,
-      },
-    }));
+  const openProduct = (product: MenuItem) => {
+    if (!product.isAvailable) return;
+    if (product.isComposite && product.components?.some(c => c.isAvailable === false)) {
+      showToast("This combo has unavailable items", "error");
+      return;
+    }
+    const { variations, legacySizes } = itemChoiceLists(product);
+    setPicker({
+      product,
+      size: variations[0]?.size || legacySizes[0],
+      addons: [],
+      quantity: 1,
+    });
   };
 
+  const confirmPicker = () => {
+    if (!picker) return;
+    const { variations, legacySizes } = itemChoiceLists(picker.product);
+    if ((variations.length > 0 || legacySizes.length > 0) && !picker.size) {
+      showToast("Select a size first", "error");
+      return;
+    }
+    addToCart(picker.product, {
+      size: picker.size,
+      addons: picker.addons,
+      quantity: picker.quantity,
+    });
+    setPicker(null);
+  };
+
+  const pickerChoices = picker ? itemChoiceLists(picker.product) : null;
+  const pickerUnit = picker
+    ? selectionUnitPrice(picker.product, { size: picker.size, addonNames: picker.addons })
+    : 0;
+  const pickerTaxRate = picker?.product.tax || 0;
+  const pickerTotal = pickerUnit * (picker?.quantity || 1) * (1 + pickerTaxRate / 100);
+
   const formatCartOptions = (item: CartLine) =>
-    item.variant ? `Option: ${item.variant}` : "";
+    [item.variant, ...(item.addons || [])].filter(Boolean).join(" · ");
 
   const resetOrderDetails = () => {
     setOrderType("takeaway");
@@ -830,6 +871,13 @@ export default function PosTerminalPage() {
     if (orderType === "takeaway" && takeawayTiming === "later" && (pickupDate || pickupTime)) {
       parts.push(`Pickup: ${[pickupDate, pickupTime].filter(Boolean).join(" ")}`);
     }
+    const selections = cart
+      .map((item) => {
+        const bits = [item.variant, ...(item.addons || [])].filter(Boolean);
+        return bits.length ? `${item.quantity}× ${item.name}: ${bits.join(", ")}` : "";
+      })
+      .filter(Boolean);
+    if (selections.length) parts.push(selections.join("; "));
     return parts.join(" | ") || fallback;
   };
 
@@ -1166,7 +1214,9 @@ export default function PosTerminalPage() {
       locationLabel: orderLocationLabel,
       items: cart.map(item => ({
         menuItemId: item.id,
-        name: item.variant ? `${item.name} (${item.variant})` : item.name,
+        name: [item.variant, ...(item.addons || [])].filter(Boolean).length
+          ? `${item.name} (${[item.variant, ...(item.addons || [])].filter(Boolean).join(", ")})`
+          : item.name,
         price: item.quantity > 0 ? lineNet(item) / item.quantity : 0,
         quantity: item.quantity,
       })),
@@ -1234,7 +1284,6 @@ export default function PosTerminalPage() {
     }
     resetTransaction();
     resetOrderDetails();
-    setProductOptions({});
     showToast(
       hadItems ? "Order saved — new order started" : "New order started",
       "success"
@@ -1356,16 +1405,20 @@ export default function PosTerminalPage() {
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
               {filteredProducts.map(product => {
-                const opts = productOptions[product.id] || {};
-                const itemOptions = parseMenuItemOptions(product);
+                const variations = parseMenuVariations(product);
                 const selected = isInCart(product.id) || activeProductId === product.id;
                 const outOfStock = !product.isAvailable;
-                const hasDiscount = menuItemHasDiscount(product);
-                const effectivePrice = getMenuItemEffectivePrice(product);
+                const pricedBase = variations.length
+                  ? Math.min(...variations.map((row) => row.price))
+                  : product.price;
+                const pricedItem = { ...product, price: pricedBase };
+                const hasDiscount = menuItemHasDiscount(pricedItem);
+                const effectivePrice = getMenuItemEffectivePrice(pricedItem);
                 const taxRate = product.tax || 0;
                 const priceWithVat = effectivePrice * (1 + taxRate / 100);
-                const originalPriceWithVat = hasDiscount ? product.price * (1 + taxRate / 100) : undefined;
-                const discountPct = getMenuItemDiscountPercent(product);
+                const originalPriceWithVat = hasDiscount ? pricedBase * (1 + taxRate / 100) : undefined;
+                const discountPct = getMenuItemDiscountPercent(pricedItem);
+                const fromPrice = variations.length > 1 && new Set(variations.map((row) => row.price)).size > 1;
                 const comboLabel = product.isComposite && product.components?.length
                   ? product.components.map(c => `${c.quantity}× ${c.name}`).join(" + ")
                   : undefined;
@@ -1381,6 +1434,7 @@ export default function PosTerminalPage() {
                     }
                     imageUrl={product.imageUrl}
                     price={priceWithVat}
+                    fromPrice={fromPrice}
                     originalPrice={hasDiscount ? originalPriceWithVat : product.savings ? product.componentsTotal : undefined}
                     discountPercent={discountPct}
                     hasDiscount={hasDiscount || (product.savings != null && product.savings > 0)}
@@ -1388,34 +1442,27 @@ export default function PosTerminalPage() {
                     selected={selected}
                     isComposite={product.isComposite}
                     comboLabel={comboLabel}
-                    onClick={() => !outOfStock && addToCart(product)}
-                  >
-                    {!outOfStock && !product.isComposite && itemOptions.length > 0 && (
-                      <div className="mt-2.5 flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
-                        {itemOptions.map(opt => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setProductVariant(product.id, opt)}
-                            className={optionChip(opts.variant === opt)}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </PosProductCard>
+                    onClick={() => !outOfStock && openProduct(product)}
+                  />
                 );
               })}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {filteredProducts.map(product => (
+              {filteredProducts.map(product => {
+                const variations = parseMenuVariations(product);
+                const pricedBase = variations.length
+                  ? Math.min(...variations.map((row) => row.price))
+                  : product.price;
+                const taxRate = product.tax || 0;
+                const fromPrice = variations.length > 1 && new Set(variations.map((row) => row.price)).size > 1;
+                const unit = getMenuItemEffectivePrice({ ...product, price: pricedBase });
+                return (
                 <button
                   key={product.id}
                   type="button"
                   disabled={!product.isAvailable}
-                  onClick={() => addToCart(product)}
+                  onClick={() => openProduct(product)}
                   className="flex items-center gap-4 bg-white rounded-xl border border-zinc-100 p-3 text-left hover:border-primary/30 hover:shadow-sm disabled:opacity-50"
                 >
                   <div className="size-14 rounded-xl overflow-hidden bg-zinc-100 shrink-0">
@@ -1429,20 +1476,21 @@ export default function PosTerminalPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <span className={cn("text-sm font-bold block", priceAmountClass)}>
-                      ${(getMenuItemEffectivePrice(product) * (1 + (product.tax || 0) / 100)).toFixed(2)}
+                      {fromPrice ? "from " : ""}${(unit * (1 + taxRate / 100)).toFixed(2)}
                     </span>
-                    {menuItemHasDiscount(product) && (
+                    {menuItemHasDiscount({ ...product, price: pricedBase }) && (
                       <span className="text-[10px] text-zinc-400 line-through">
-                        ${(product.price * (1 + (product.tax || 0) / 100)).toFixed(2)}
+                        ${(pricedBase * (1 + taxRate / 100)).toFixed(2)}
                       </span>
                     )}
-                    {(product.tax || 0) > 0 && (
+                    {taxRate > 0 && (
                       <span className="text-[9px] text-amber-500 block">incl. VAT</span>
                     )}
                   </div>
                   <Plus className="size-4 text-primary" />
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1569,10 +1617,25 @@ export default function PosTerminalPage() {
                   <button
                     type="button"
                     onClick={() => openLineEditor(item)}
-                    className="flex-1 min-w-0 text-left text-xs font-medium text-foreground truncate hover:text-primary"
+                    className="flex-1 min-w-0 text-left hover:text-primary"
                     title={lineLabel}
                   >
-                    {lineLabel}
+                    <p className="text-xs font-semibold truncate">{item.name}</p>
+                    {(item.variant || (item.addons && item.addons.length > 0)) && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {item.variant && (
+                          <span className="inline-flex rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
+                            {item.variant}
+                          </span>
+                        )}
+                        {item.addons?.map((name) => (
+                          <span key={name} className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <p className="mt-0.5 text-[10px] text-zinc-400 tabular-nums">${item.price.toFixed(2)} each</p>
                   </button>
                   <div className="flex items-center gap-0.5 shrink-0">
                     <button
@@ -1709,6 +1772,180 @@ export default function PosTerminalPage() {
           </div>
         </div>
       </aside>
+
+      <Dialog open={!!picker} onOpenChange={(open) => { if (!open) setPicker(null); }}>
+        <DialogContent className="sm:max-w-[460px] gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 [&>button]:hidden">
+          {picker && pickerChoices && (
+            <div className="grid grid-cols-1 sm:grid-cols-[148px_1fr]">
+              <div className="relative h-36 sm:h-full sm:min-h-[180px] bg-zinc-100">
+                <PosMenuItemImage
+                  src={picker.product.imageUrl}
+                  alt={picker.product.name}
+                  className="h-full w-full object-cover"
+                  iconClassName="size-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPicker(null)}
+                  className="absolute top-3 right-3 size-8 rounded-full bg-white/90 text-zinc-500 flex items-center justify-center shadow-sm hover:text-zinc-800 sm:hidden"
+                  aria-label="Close"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="flex flex-col min-w-0 max-h-[85vh]">
+                <div className="flex items-start justify-between gap-2 px-4 pt-4">
+                  <div className="min-w-0">
+                    <DialogHeader className="space-y-1 text-left">
+                      <DialogTitle className="text-lg font-bold text-zinc-900">{picker.product.name}</DialogTitle>
+                      <DialogDescription className="text-sm text-zinc-500 line-clamp-3">
+                        {picker.product.description || (pickerChoices.variations.length || pickerChoices.legacySizes.length
+                          ? "Choose a size, then add it to the order."
+                          : "Set the quantity, then add it to the order.")}
+                      </DialogDescription>
+                    </DialogHeader>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPicker(null)}
+                    className="hidden sm:flex size-8 rounded-full border border-zinc-200 text-zinc-400 items-center justify-center hover:text-zinc-700 shrink-0"
+                    aria-label="Close"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+                  {(pickerChoices.variations.length > 0 || pickerChoices.legacySizes.length > 0) && (
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-800 mb-2">Sizes</p>
+                      <div className="flex flex-wrap gap-2">
+                        {pickerChoices.variations.map((row) => {
+                          const active = picker.size === row.size;
+                          const price = selectionUnitPrice(picker.product, { size: row.size });
+                          return (
+                            <button
+                              key={row.size}
+                              type="button"
+                              onClick={() => setPicker({ ...picker, size: row.size })}
+                              className={cn(
+                                "h-10 px-4 rounded-lg border text-sm font-semibold transition-all",
+                                active
+                                  ? "border-primary bg-primary text-white"
+                                  : "border-zinc-200 bg-white text-zinc-700 hover:border-primary/40"
+                              )}
+                            >
+                              {row.size} ${price.toFixed(2)}
+                            </button>
+                          );
+                        })}
+                        {pickerChoices.legacySizes.map((size) => {
+                          const active = picker.size === size;
+                          const price = getMenuItemEffectivePrice(picker.product);
+                          return (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => setPicker({ ...picker, size })}
+                              className={cn(
+                                "h-10 px-4 rounded-lg border text-sm font-semibold transition-all",
+                                active
+                                  ? "border-primary bg-primary text-white"
+                                  : "border-zinc-200 bg-white text-zinc-700 hover:border-primary/40"
+                              )}
+                            >
+                              {size} ${price.toFixed(2)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {pickerChoices.addons.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-800 mb-2">Add-ons</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {pickerChoices.addons.map((row) => {
+                          const active = picker.addons.includes(row.name);
+                          return (
+                            <button
+                              key={row.name}
+                              type="button"
+                              onClick={() => setPicker({
+                                ...picker,
+                                addons: active
+                                  ? picker.addons.filter((name) => name !== row.name)
+                                  : [...picker.addons, row.name],
+                              })}
+                              className={cn(
+                                "flex items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition-all",
+                                active
+                                  ? "border-primary bg-primary/5"
+                                  : "border-zinc-200 bg-white hover:border-primary/30"
+                              )}
+                            >
+                              <span className="text-sm font-semibold text-zinc-800">{row.name}</span>
+                              <span className={cn("text-sm font-bold shrink-0", active ? "text-primary" : "text-zinc-500")}>
+                                +${row.price.toFixed(2)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-zinc-100 px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-zinc-700">Total</span>
+                    <span className="text-xl font-bold text-zinc-900 tabular-nums">${pickerTotal.toFixed(2)}</span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    {[
+                      picker.size,
+                      picker.addons.length > 0 ? picker.addons.join(", ") : "",
+                    ].filter(Boolean).join(" + ")}
+                    {(picker.size || picker.addons.length > 0) ? " · " : ""}
+                    ${pickerUnit.toFixed(2)} each
+                    {pickerTaxRate > 0 ? " · total includes VAT" : ""}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPicker({ ...picker, quantity: Math.max(1, picker.quantity - 1) })}
+                        className="size-10 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-600 hover:border-primary hover:text-primary"
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus className="size-4" />
+                      </button>
+                      <span className="w-6 text-center text-base font-bold">{picker.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPicker({ ...picker, quantity: picker.quantity + 1 })}
+                        className="size-10 rounded-full border border-zinc-200 flex items-center justify-center text-zinc-600 hover:border-primary hover:text-primary"
+                        aria-label="Increase quantity"
+                      >
+                        <Plus className="size-4" />
+                      </button>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={confirmPicker}
+                      className="flex-1 h-11 rounded-xl bg-primary !text-white hover:bg-primary/90 text-sm font-semibold gap-2"
+                    >
+                      <ShoppingBag className="size-4" />
+                      Add to Cart
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Cart line update */}
       <Dialog open={!!editingLineKey && !!lineEditDraft} onOpenChange={open => !open && closeLineEditor()}>

@@ -8,6 +8,7 @@ type PosProductCardProps = {
   categoryLabel: string;
   imageUrl?: string | null;
   price: number;
+  fromPrice?: boolean;
   originalPrice?: number;
   discountPercent?: number;
   hasDiscount?: boolean;
@@ -25,6 +26,7 @@ export default function PosProductCard({
   categoryLabel,
   imageUrl,
   price,
+  fromPrice,
   originalPrice,
   discountPercent,
   hasDiscount,
@@ -64,7 +66,7 @@ export default function PosProductCard({
         </div>
         <div className="absolute top-2 right-2 flex flex-col items-end gap-0.5">
           <span className="bg-primary text-white px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm tabular-nums leading-tight">
-            ${price.toFixed(2)}
+            {fromPrice ? "from " : ""}${price.toFixed(2)}
           </span>
           {hasDiscount && discountPercent != null && discountPercent > 0 && (
             <span className="bg-secondary text-white px-1.5 py-0.5 rounded-md text-[9px] font-bold shadow-sm leading-tight">

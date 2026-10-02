@@ -56,8 +56,8 @@ export interface MenuItem {
   category?: { id: number; name: string };
   vendorId?: number | null;
   vendorName?: string | null;
-  /** POS variants e.g. ["Small", "Medium", "Large"] */
-  options?: string[] | null;
+  /** Legacy size labels, or an object with variations and add-ons. */
+  options?: MenuItemOptions | null;
   isComposite?: boolean;
   compositePricing?: 'sum' | 'fixed';
   components?: Array<{
@@ -93,7 +93,7 @@ export interface CreateMenuItemPayload {
   categoryId: number;
   vendorId?: number | null;
   vendorName?: string | null;
-  options?: string[] | string | null;
+  options?: MenuItemOptions | string | null;
 }
 
 export interface UpdateMenuItemPayload {
@@ -112,10 +112,81 @@ export interface UpdateMenuItemPayload {
   categoryId?: number;
   vendorId?: number | null;
   vendorName?: string | null;
-  options?: string[] | string | null;
+  options?: MenuItemOptions | string | null;
 }
 
-export function parseMenuItemOptions(product: { options?: string[] | string | null }): string[] {
+export interface MenuItemVariation {
+  size: string;
+  price: number;
+}
+
+export interface MenuItemAddon {
+  name: string;
+  price: number;
+}
+
+export interface MenuItemOptionsObject {
+  vendorId?: number | null;
+  vendorName?: string | null;
+  variations?: MenuItemVariation[];
+  addons?: MenuItemAddon[];
+}
+
+export type MenuItemOptions = string[] | MenuItemOptionsObject;
+
+function asOptionsObject(raw: unknown): MenuItemOptionsObject | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as MenuItemOptionsObject;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as MenuItemOptionsObject;
+  }
+  return null;
+}
+
+function readPriceRows<T extends MenuItemVariation | MenuItemAddon>(
+  list: unknown,
+  labelKey: 'size' | 'name'
+): T[] {
+  if (!Array.isArray(list)) return [];
+  const rows: T[] = [];
+  for (const row of list) {
+    if (!row || typeof row !== 'object') continue;
+    const record = row as Record<string, unknown>;
+    const label = String(record[labelKey] ?? '').trim();
+    const price = Number(record.price);
+    if (!label || !Number.isFinite(price) || price < 0) continue;
+    rows.push({ [labelKey]: label, price } as unknown as T);
+  }
+  return rows;
+}
+
+export function parseMenuVariations(product: { options?: unknown }): MenuItemVariation[] {
+  return readPriceRows<MenuItemVariation>(asOptionsObject(product.options)?.variations, 'size');
+}
+
+export function parseMenuAddons(product: { options?: unknown }): MenuItemAddon[] {
+  return readPriceRows<MenuItemAddon>(asOptionsObject(product.options)?.addons, 'name');
+}
+
+export function menuSelectionKey(id: number, size?: string, addonNames?: string[]): string {
+  const extras = [...(addonNames || [])].sort().join('+');
+  return `${id}::${size || ''}::${extras}`;
+}
+
+export function parseMenuItemOptions(product: { options?: MenuItemOptions | string | null }): string[] {
+  const variations = parseMenuVariations(product);
+  if (variations.length) return variations.map((row) => row.size);
+
   const raw = product.options;
   if (!raw) return [];
   if (Array.isArray(raw)) return raw.map(String).filter(Boolean);

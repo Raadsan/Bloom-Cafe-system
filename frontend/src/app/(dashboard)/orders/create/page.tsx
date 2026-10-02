@@ -27,13 +27,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { categoryApi, Category } from "@/lib/api/restaurant/categoryApi";
-import { menuItemApi, MenuItem } from "@/lib/api/restaurant/menuItemApi";
+import { menuItemApi, MenuItem, menuSelectionKey, parseMenuAddons, parseMenuVariations } from "@/lib/api/restaurant/menuItemApi";
 import { tableApi, Table as RestaurantTable } from "@/lib/api/restaurant/tableApi";
 import { orderApi, Order } from "@/lib/api/restaurant/orderApi";
 import { paymentApi, PaymentMethod } from "@/lib/api/restaurant/paymentApi";
 import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receiptSettingsApi";
 import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { useToast } from "@/components/ui/toast";
+import { selectionUnitPrice } from "@/lib/menu-item-pricing";
 import { cn } from "@/lib/utils";
 import {
   dashboardPageClass,
@@ -43,11 +44,14 @@ import {
 } from "@/lib/dashboard-ui";
 
 interface CartLine {
+  key: string;
   menuItemId: number;
   name: string;
   price: number;
   quantity: number;
   tax: number;
+  variant?: string;
+  addons?: string[];
 }
 
 type OrderPaymentMethod = Extract<PaymentMethod, "evc_plus" | "edahab" | "premier_wallet">;
@@ -120,6 +124,7 @@ export default function WaiterCreateOrderPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | "all">("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [picks, setPicks] = useState<Record<number, { size?: string; addons: string[] }>>({});
   const [formTableId, setFormTableId] = useState<number | "">("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -139,7 +144,13 @@ export default function WaiterCreateOrderPage() {
   useEffect(() => {
     const draft = readOrderDraft();
     if (draft) {
-      if (draft.cart?.length) setCart(draft.cart);
+      if (draft.cart?.length) {
+        setCart(draft.cart.map((line) => ({
+          ...line,
+          key: line.key || String(line.menuItemId),
+          addons: line.addons || [],
+        })));
+      }
       if (draft.customerName) setCustomerName(draft.customerName);
       if (draft.customerPhone) setCustomerPhone(draft.customerPhone);
       if (draft.notes) setNotes(draft.notes);
@@ -230,39 +241,72 @@ export default function WaiterCreateOrderPage() {
     });
   }, [menuItems, selectedCategoryId, search]);
 
+  const setItemSize = (itemId: number, size: string) => {
+    setPicks((prev) => ({
+      ...prev,
+      [itemId]: {
+        addons: prev[itemId]?.addons || [],
+        size: prev[itemId]?.size === size ? undefined : size,
+      },
+    }));
+  };
+
+  const toggleItemAddon = (itemId: number, name: string) => {
+    setPicks((prev) => {
+      const current = prev[itemId]?.addons || [];
+      const addons = current.includes(name)
+        ? current.filter((addon) => addon !== name)
+        : [...current, name];
+      return { ...prev, [itemId]: { ...prev[itemId], addons } };
+    });
+  };
+
   const addToCart = (item: MenuItem) => {
+    const variations = parseMenuVariations(item);
+    const pick = picks[item.id] || { addons: [] };
+    if (variations.length && !pick.size) {
+      showToast("Select a size first", "error");
+      return;
+    }
+    const addonNames = pick.addons || [];
+    const key = menuSelectionKey(item.id, pick.size, addonNames);
+    const bits = [pick.size, ...addonNames].filter(Boolean);
+    const price = selectionUnitPrice(item, { size: pick.size, addonNames });
     setCart(prev => {
-      const existing = prev.find(l => l.menuItemId === item.id);
+      const existing = prev.find(l => l.key === key);
       if (existing) {
         return prev.map(l =>
-          l.menuItemId === item.id ? { ...l, quantity: l.quantity + 1 } : l
+          l.key === key ? { ...l, quantity: l.quantity + 1 } : l
         );
       }
       return [
         ...prev,
         {
+          key,
           menuItemId: item.id,
-          name: item.name,
-          price: item.price,
+          name: bits.length ? `${item.name} (${bits.join(", ")})` : item.name,
+          price,
           quantity: 1,
           tax: item.tax ?? 0,
+          variant: pick.size,
+          addons: addonNames,
         },
       ];
     });
   };
 
-  const updateQty = (menuItemId: number, delta: number) => {
+  const updateQty = (key: string, delta: number) => {
     setCart(prev =>
       prev
         .map(l =>
-          l.menuItemId === menuItemId ? { ...l, quantity: l.quantity + delta } : l
+          l.key === key ? { ...l, quantity: l.quantity + delta } : l
         )
         .filter(l => l.quantity > 0)
     );
   };
 
-  const removeLine = (menuItemId: number) => {
-    setCart(prev => prev.filter(l => l.menuItemId !== menuItemId));
+  const removeLine = (key: string) => {
+    setCart(prev => prev.filter(l => l.key !== key));
   };
 
   const subtotal = cart.reduce((s, l) => s + l.price * l.quantity, 0);
@@ -348,8 +392,8 @@ export default function WaiterCreateOrderPage() {
           tableId: Number(formTableId),
           customerName: customerName.trim() || undefined,
           customerPhone: customerPhone.trim() || undefined,
-          notes: notes.trim() || undefined,
-          items: cart.map(l => ({ menuItemId: l.menuItemId, quantity: l.quantity })),
+          notes: [notes.trim(), cart.filter((line) => line.variant || line.addons?.length).map((line) => `${line.quantity}× ${line.name}`).join("; ")].filter(Boolean).join(" | ") || undefined,
+          items: cart.map(l => ({ menuItemId: l.menuItemId, quantity: l.quantity, unitPrice: l.price })),
           paymentMethod,
           ...(payPhone ? { paymentPhone: payPhone } : {}),
           providerName: selectedPayment.providerName,
@@ -488,32 +532,77 @@ export default function WaiterCreateOrderPage() {
               <p className="text-center text-zinc-500 py-16">No menu items found</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-                {filteredItems.map(item => (
-                  <button
+                {filteredItems.map(item => {
+                  const variations = parseMenuVariations(item);
+                  const addons = parseMenuAddons(item);
+                  const pick = picks[item.id];
+                  const selected = variations.find((row) => row.size === pick?.size);
+                  const amount = selectionUnitPrice(item, { size: pick?.size, addonNames: pick?.addons });
+                  return (
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => addToCart(item)}
-                    className="bg-white rounded-2xl border border-zinc-100 shadow-sm hover:border-primary/40 hover:shadow-md transition-all p-3 sm:p-4 flex flex-col items-center text-center group active:scale-[0.98]"
+                    className="bg-white rounded-2xl border border-zinc-100 shadow-sm hover:border-primary/40 hover:shadow-md transition-all p-3 sm:p-4 flex flex-col items-center text-center"
                   >
-                    <div className="size-20 sm:size-24 rounded-full bg-zinc-50 border border-zinc-100 overflow-hidden flex items-center justify-center mb-3 group-hover:border-primary/20">
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        <UtensilsCrossed className="size-8 text-zinc-300" />
-                      )}
-                    </div>
-                    <p className="text-sm font-bold text-zinc-800 line-clamp-2 min-h-[2.5rem]">
-                      {item.name}
-                    </p>
-                    <p className="text-sm font-black text-primary mt-1">
-                      ${item.price.toFixed(2)}
-                    </p>
-                  </button>
-                ))}
+                    <button
+                      type="button"
+                      onClick={() => addToCart(item)}
+                      className="w-full flex flex-col items-center text-center group active:scale-[0.98]"
+                    >
+                      <div className="size-20 sm:size-24 rounded-full bg-zinc-50 border border-zinc-100 overflow-hidden flex items-center justify-center mb-3 group-hover:border-primary/20">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="size-full object-cover"
+                          />
+                        ) : (
+                          <UtensilsCrossed className="size-8 text-zinc-300" />
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-zinc-800 line-clamp-2 min-h-[2.5rem]">
+                        {item.name}
+                      </p>
+                      <p className="text-sm font-black text-primary mt-1">
+                        {variations.length > 1 && !selected ? "from " : ""}${amount.toFixed(2)}
+                      </p>
+                    </button>
+                    {(variations.length > 0 || addons.length > 0) && (
+                      <div className="mt-2 flex flex-wrap justify-center gap-1">
+                        {variations.map((row) => (
+                          <button
+                            key={row.size}
+                            type="button"
+                            onClick={() => setItemSize(item.id, row.size)}
+                            className={cn(
+                              "px-2 py-1 rounded-md text-[10px] font-semibold border",
+                              pick?.size === row.size
+                                ? "bg-primary text-white border-primary"
+                                : "bg-white text-zinc-500 border-zinc-200"
+                            )}
+                          >
+                            {row.size} ${row.price.toFixed(2)}
+                          </button>
+                        ))}
+                        {addons.map((row) => (
+                          <button
+                            key={row.name}
+                            type="button"
+                            onClick={() => toggleItemAddon(item.id, row.name)}
+                            className={cn(
+                              "px-2 py-1 rounded-md text-[10px] font-semibold border",
+                              pick?.addons?.includes(row.name)
+                                ? "bg-zinc-800 text-white border-zinc-800"
+                                : "bg-white text-zinc-500 border-zinc-200"
+                            )}
+                          >
+                            {row.name} +${row.price.toFixed(2)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -536,7 +625,7 @@ export default function WaiterCreateOrderPage() {
             ) : (
               cart.map(line => (
                 <div
-                  key={line.menuItemId}
+                  key={line.key}
                   className="flex items-center gap-3 bg-white rounded-xl border border-zinc-100 p-3"
                 >
                   <div className="flex-1 min-w-0">
@@ -546,7 +635,7 @@ export default function WaiterCreateOrderPage() {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
-                      onClick={() => updateQty(line.menuItemId, -1)}
+                      onClick={() => updateQty(line.key, -1)}
                       className="size-7 rounded-md border border-zinc-200 flex items-center justify-center hover:bg-zinc-50"
                     >
                       <Minus className="size-3.5" />
@@ -554,14 +643,14 @@ export default function WaiterCreateOrderPage() {
                     <span className="text-sm font-bold w-5 text-center">{line.quantity}</span>
                     <button
                       type="button"
-                      onClick={() => updateQty(line.menuItemId, 1)}
+                      onClick={() => updateQty(line.key, 1)}
                       className="size-7 rounded-md border border-zinc-200 flex items-center justify-center hover:bg-zinc-50"
                     >
                       <Plus className="size-3.5" />
                     </button>
                     <button
                       type="button"
-                      onClick={() => removeLine(line.menuItemId)}
+                      onClick={() => removeLine(line.key)}
                       className="size-7 rounded-md text-rose-500 hover:bg-rose-50 flex items-center justify-center ml-1"
                     >
                       <Trash2 className="size-3.5" />
@@ -645,7 +734,7 @@ export default function WaiterCreateOrderPage() {
               </p>
               <div className="space-y-1 max-h-28 overflow-y-auto">
                 {cart.map(line => (
-                  <div key={line.menuItemId} className="flex justify-between text-sm">
+                  <div key={line.key} className="flex justify-between text-sm">
                     <span className="text-zinc-700 truncate pr-2">
                       {line.quantity}× {line.name}
                     </span>

@@ -3,6 +3,7 @@ import { createResponseCache } from '../../../../utils/responseCache.js'
 
 const reportCache = createResponseCache(90 * 1000)
 const WEEKLY_TTL_MS = 2 * 60 * 1000
+const completedSaleStatuses = ['served', 'completed', 'paid']
 
 function reportCacheKey(prefix, query = {}) {
   const parts = [prefix]
@@ -21,7 +22,7 @@ async function fetchDashboardSummaryData(query) {
 
   const orderWhere = {
     ...(dateRange ? { createdAt: dateRange } : {}),
-    status: { not: 'cancelled' },
+    status: { in: completedSaleStatuses },
   }
 
   const [
@@ -114,7 +115,7 @@ async function fetchWeeklyAnalyticsData() {
 
   const orders = await prisma.order.findMany({
     where: {
-      status: { not: 'cancelled' },
+      status: { in: completedSaleStatuses },
       createdAt: { gte: start, lte: end },
     },
     select: {
@@ -872,7 +873,7 @@ export const getOrdersReport = async (req, res) => {
     const dateRange = parseDateRange(req.query)
     const orderWhere = {
       ...(dateRange ? { createdAt: dateRange } : {}),
-      status: { not: 'cancelled' },
+      status: { in: completedSaleStatuses },
     }
 
     const [orders, stats, cancelledCount] = await Promise.all([

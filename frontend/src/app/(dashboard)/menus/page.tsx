@@ -34,7 +34,16 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { menuItemApi, MenuItem, parseMenuItemOptions } from "@/lib/api/restaurant/menuItemApi";
+import {
+  menuItemApi,
+  MenuItem,
+  MenuItemAddon,
+  MenuItemOptionsObject,
+  MenuItemVariation,
+  parseMenuAddons,
+  parseMenuItemOptions,
+  parseMenuVariations,
+} from "@/lib/api/restaurant/menuItemApi";
 import {
   getMenuItemEffectivePrice,
   menuItemHasDiscount,
@@ -64,6 +73,141 @@ const formLabelClass = "text-xs font-medium text-[#1e293b] dark:text-zinc-200";
 const formInputClass =
   "w-full px-3 py-2 bg-white dark:bg-[#161616] border border-zinc-200 dark:border-[#2a2a2a] rounded-lg outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 text-sm font-medium dark:text-white placeholder:text-zinc-400";
 
+type VariationDraft = { size: string; price: string };
+type AddonDraft = { name: string; price: string };
+
+function vendorFields(item: MenuItem | null): Pick<MenuItemOptionsObject, "vendorId" | "vendorName"> {
+  const raw = item?.options;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return {
+    ...(raw.vendorId != null ? { vendorId: raw.vendorId } : {}),
+    ...(raw.vendorName ? { vendorName: raw.vendorName } : {}),
+  };
+}
+
+function completeVariations(rows: VariationDraft[]): { rows: MenuItemVariation[]; error?: string } {
+  const touched = rows.filter((row) => row.size.trim() || row.price.trim());
+  const parsed: MenuItemVariation[] = [];
+  for (const row of touched) {
+    const size = row.size.trim();
+    const price = Number(row.price);
+    if (!size || row.price.trim() === "" || Number.isNaN(price) || price < 0) {
+      return { rows: [], error: "Each variation needs a size and a price" };
+    }
+    parsed.push({ size, price });
+  }
+  return { rows: parsed };
+}
+
+function completeAddons(rows: AddonDraft[]): { rows: MenuItemAddon[]; error?: string } {
+  const touched = rows.filter((row) => row.name.trim() || row.price.trim());
+  const parsed: MenuItemAddon[] = [];
+  for (const row of touched) {
+    const name = row.name.trim();
+    const price = Number(row.price);
+    if (!name || row.price.trim() === "" || Number.isNaN(price) || price < 0) {
+      return { rows: [], error: "Each add-on needs a name and a price" };
+    }
+    parsed.push({ name, price });
+  }
+  return { rows: parsed };
+}
+
+function loadVariationDrafts(item: MenuItem): VariationDraft[] {
+  const structured = parseMenuVariations(item);
+  if (structured.length) {
+    return structured.map((row) => ({ size: row.size, price: String(row.price) }));
+  }
+  return parseMenuItemOptions(item).map((size) => ({ size, price: String(item.price) }));
+}
+
+function MenuPriceList({
+  title,
+  open,
+  onToggle,
+  hint,
+  labelPlaceholder,
+  pricePlaceholder,
+  rows,
+  onChange,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  hint: string;
+  labelPlaceholder: string;
+  pricePlaceholder: string;
+  rows: { label: string; price: string }[];
+  onChange: (rows: { label: string; price: string }[]) => void;
+}) {
+  const updateRow = (index: number, patch: Partial<{ label: string; price: string }>) => {
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-[#2a2a2a] bg-white dark:bg-[#161616] overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
+      >
+        <span className="text-sm font-semibold text-[#1e293b] dark:text-white">{title}</span>
+        <ChevronDown className={cn("size-4 text-zinc-400 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-3">
+          <p className="text-[11px] text-zinc-400">{hint}</p>
+          {rows.length > 0 && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_1fr_36px] gap-3 px-0.5">
+                <span className={formLabelClass}>{labelPlaceholder} <span className="text-rose-500">*</span></span>
+                <span className={formLabelClass}>Price ($) <span className="text-rose-500">*</span></span>
+                <span />
+              </div>
+              {rows.map((row, index) => (
+                <div key={index} className="grid grid-cols-[1fr_1fr_36px] gap-3 items-center">
+                  <input
+                    type="text"
+                    value={row.label}
+                    onChange={(e) => updateRow(index, { label: e.target.value })}
+                    placeholder={labelPlaceholder}
+                    className={formInputClass}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={row.price}
+                    onChange={(e) => updateRow(index, { price: e.target.value })}
+                    placeholder={pricePlaceholder}
+                    className={formInputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onChange(rows.filter((_, i) => i !== index))}
+                    className="size-9 rounded-full border border-rose-200 text-rose-500 flex items-center justify-center hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    aria-label={`Remove ${title.toLowerCase()} row`}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => onChange([...rows, { label: "", price: "" }])}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-zinc-200 dark:border-[#2a2a2a] bg-zinc-50 dark:bg-[#1a1a1a] text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:border-primary/30 hover:text-primary"
+          >
+            <Plus className="size-3.5" />
+            Add
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MenuPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -91,7 +235,10 @@ export default function MenuPage() {
   const [formIsRecommended, setFormIsRecommended] = useState(false);
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formTax, setFormTax] = useState("5");
-  const [formOptions, setFormOptions] = useState("");
+  const [formVariations, setFormVariations] = useState<VariationDraft[]>([]);
+  const [formAddons, setFormAddons] = useState<AddonDraft[]>([]);
+  const [variationsOpen, setVariationsOpen] = useState(true);
+  const [addonsOpen, setAddonsOpen] = useState(true);
   const [formDiscountType, setFormDiscountType] = useState<"" | "percentage" | "fixed">("");
   const [formDiscountValue, setFormDiscountValue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -179,7 +326,10 @@ export default function MenuPage() {
     setFormIsRecommended(false);
     setFormImageUrl("");
     setFormTax("5");
-    setFormOptions("");
+    setFormVariations([]);
+    setFormAddons([]);
+    setVariationsOpen(true);
+    setAddonsOpen(true);
     setFormDiscountType("");
     setFormDiscountValue("");
     setIsAddOpen(true);
@@ -198,7 +348,10 @@ export default function MenuPage() {
     setFormIsRecommended(item.isRecommended || false);
     setFormImageUrl(item.imageUrl || "");
     setFormTax(String(item.tax || 0));
-    setFormOptions(parseMenuItemOptions(item).join(", "));
+    setFormVariations(loadVariationDrafts(item));
+    setFormAddons(parseMenuAddons(item).map((row) => ({ name: row.name, price: String(row.price) })));
+    setVariationsOpen(true);
+    setAddonsOpen(true);
     setFormDiscountType(
       item.discountType === "percentage" || item.discountType === "fixed"
         ? item.discountType
@@ -246,13 +399,30 @@ export default function MenuPage() {
     if (!formIsSellable && !formIsPurchasable) {
       return showToast("Please select at least Sellable or Purchasable", "error");
     }
-    const resolvedPrice = formIsSellable
-      ? Number(formPrice)
-      : (Number(formPrice) || Number(formCostPrice) || 0);
+    const variations = completeVariations(formVariations);
+    if (variations.error) return showToast(variations.error, "error");
+    const addons = completeAddons(formAddons);
+    if (addons.error) return showToast(addons.error, "error");
 
-    if (formIsSellable && (!formPrice || isNaN(Number(formPrice)) || Number(formPrice) < 0)) {
+    const variationFloor = variations.rows.length
+      ? Math.min(...variations.rows.map((row) => row.price))
+      : null;
+    const resolvedPrice = variationFloor != null
+      ? variationFloor
+      : formIsSellable
+        ? Number(formPrice)
+        : (Number(formPrice) || Number(formCostPrice) || 0);
+
+    if (formIsSellable && variationFloor == null && (!formPrice || isNaN(Number(formPrice)) || Number(formPrice) < 0)) {
       return showToast("Valid selling price is required for sellable items", "error");
     }
+
+    const optionsPayload: MenuItemOptionsObject = {
+      ...vendorFields(isEditOpen ? selectedItem : null),
+      ...(variations.rows.length ? { variations: variations.rows } : {}),
+      ...(addons.rows.length ? { addons: addons.rows } : {}),
+    };
+    const hasOptions = Object.keys(optionsPayload).length > 0;
 
     setSaving(true);
     try {
@@ -268,9 +438,7 @@ export default function MenuPage() {
         isPurchasable: formIsPurchasable,
         isRecommended: formIsRecommended,
         imageUrl: formImageUrl.trim() || undefined,
-        options: formOptions.trim()
-          ? formOptions.split(",").map(s => s.trim()).filter(Boolean)
-          : null,
+        options: hasOptions ? optionsPayload : null,
         discountType: formDiscountType || null,
         discountValue: formDiscountType ? Number(formDiscountValue || 0) : 0,
       };
@@ -302,6 +470,19 @@ export default function MenuPage() {
       setSaving(false);
     }
   };
+
+  const variationPrices = formVariations
+    .filter((row) => row.size.trim() && row.price.trim() !== "" && !Number.isNaN(Number(row.price)) && Number(row.price) >= 0)
+    .map((row) => Number(row.price));
+  const variationFloor = variationPrices.length ? Math.min(...variationPrices) : null;
+  const sellingPriceValue = variationFloor != null ? String(variationFloor) : formPrice;
+  const previewPrice = sellingPriceValue && !Number.isNaN(Number(sellingPriceValue))
+    ? getMenuItemEffectivePrice({
+        price: Number(sellingPriceValue),
+        discountType: formDiscountType || undefined,
+        discountValue: Number(formDiscountValue || 0),
+      })
+    : 0;
 
   const handleDelete = async () => {
     if (!selectedItem) return;
@@ -471,7 +652,21 @@ export default function MenuPage() {
                       <TableCell className="px-6 py-3 text-right">
                         {item.isSellable === false ? (
                           <span className="text-[12px] text-zinc-400 italic font-normal">Not sellable</span>
-                        ) : menuItemHasDiscount(item) ? (() => {
+                        ) : parseMenuVariations(item).length > 1 && Math.min(...parseMenuVariations(item).map((row) => row.price)) !== Math.max(...parseMenuVariations(item).map((row) => row.price)) ? (() => {
+                          const variations = parseMenuVariations(item);
+                          const taxRate = item.tax || 0;
+                          const withVat = (price: number) => getMenuItemEffectivePrice({ ...item, price }) * (1 + taxRate / 100);
+                          const min = Math.min(...variations.map((row) => withVat(row.price)));
+                          const max = Math.max(...variations.map((row) => withVat(row.price)));
+                          return (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-[13px] font-semibold text-primary">
+                                ${min.toLocaleString(undefined, { minimumFractionDigits: 2 })} – ${max.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-[10px] text-zinc-400">{variations.length} sizes</span>
+                            </div>
+                          );
+                        })() : menuItemHasDiscount(item) ? (() => {
                           const effPrice = getMenuItemEffectivePrice(item);
                           const taxRate = item.tax || 0;
                           const priceWithVat = effPrice * (1 + taxRate / 100);
@@ -750,20 +945,23 @@ export default function MenuPage() {
                 </div>
                 <div className="space-y-1">
                   <label className={formLabelClass}>
-                    Selling price ($) {formIsSellable && <span className="text-rose-500">*</span>}
+                    Selling price ($) {formIsSellable && variationFloor == null && <span className="text-rose-500">*</span>}
                   </label>
                   <input
                     type="number"
                     step="0.01"
-                    disabled={!formIsSellable}
-                    value={formPrice}
+                    disabled={!formIsSellable || variationFloor != null}
+                    value={sellingPriceValue}
                     onChange={(e) => setFormPrice(e.target.value)}
                     placeholder={formIsSellable ? "0.00" : "Not sellable"}
                     className={cn(
                       formInputClass,
-                      !formIsSellable && "opacity-60 cursor-not-allowed bg-zinc-100 dark:bg-zinc-800"
+                      (!formIsSellable || variationFloor != null) && "opacity-60 cursor-not-allowed bg-zinc-100 dark:bg-zinc-800"
                     )}
                   />
+                  {variationFloor != null && (
+                    <p className="text-[11px] text-zinc-400">Taken from the lowest variation. POS charges the selected size.</p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className={formLabelClass}>Tax / VAT (%)</label>
@@ -812,14 +1010,7 @@ export default function MenuPage() {
                 <div className="space-y-1">
                   <label className={formLabelClass}>Final price</label>
                   <div className={cn(formInputClass, "bg-primary/5 text-primary border-primary/20")}>
-                    $
-                    {formPrice && !isNaN(Number(formPrice))
-                      ? getMenuItemEffectivePrice({
-                          price: Number(formPrice),
-                          discountType: formDiscountType || undefined,
-                          discountValue: Number(formDiscountValue || 0),
-                        }).toFixed(2)
-                      : "0.00"}
+                    ${previewPrice.toFixed(2)}
                   </div>
                 </div>
               </div>
@@ -849,16 +1040,27 @@ export default function MenuPage() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className={formLabelClass}>POS options</label>
-                <input
-                  type="text"
-                  value={formOptions}
-                  onChange={(e) => setFormOptions(e.target.value)}
-                  placeholder="Small, Medium, Large"
-                  className={formInputClass}
-                />
-              </div>
+              <MenuPriceList
+                title="Variations"
+                open={variationsOpen}
+                onToggle={() => setVariationsOpen((open) => !open)}
+                hint="Each size has its own price. The item price comes from the size that is selected."
+                labelPlaceholder="Size"
+                pricePlaceholder="0.00"
+                rows={formVariations.map((row) => ({ label: row.size, price: row.price }))}
+                onChange={(rows) => setFormVariations(rows.map((row) => ({ size: row.label, price: row.price })))}
+              />
+
+              <MenuPriceList
+                title="Add Ons"
+                open={addonsOpen}
+                onToggle={() => setAddonsOpen((open) => !open)}
+                hint="Optional extras. Their price is added on top of the item or the selected size."
+                labelPlaceholder="Name"
+                pricePlaceholder="0.00"
+                rows={formAddons.map((row) => ({ label: row.name, price: row.price }))}
+                onChange={(rows) => setFormAddons(rows.map((row) => ({ name: row.label, price: row.price })))}
+              />
 
               <div className="space-y-1">
                 <label className={formLabelClass}>Description</label>
@@ -995,13 +1197,37 @@ export default function MenuPage() {
                   {selectedItem?.isRecommended ? "Yes" : "No"}
                 </p>
               </div>
-              <div className="space-y-1">
-                <p className={viewLabelClass}>POS options</p>
-                <p className={viewValueClass}>
-                  {selectedItem
-                    ? parseMenuItemOptions(selectedItem).join(", ") || "—"
-                    : "—"}
-                </p>
+              <div className="space-y-1 col-span-2">
+                <p className={viewLabelClass}>Variations</p>
+                {selectedItem && parseMenuVariations(selectedItem).length > 0 ? (
+                  <ul className="space-y-1">
+                    {parseMenuVariations(selectedItem).map((row) => (
+                      <li key={row.size} className="flex items-center justify-between max-w-sm text-sm">
+                        <span className={viewValueClass}>{row.size}</span>
+                        <span className="font-semibold text-primary">${row.price.toFixed(2)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={viewValueClass}>
+                    {selectedItem ? parseMenuItemOptions(selectedItem).join(", ") || "—" : "—"}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1 col-span-2">
+                <p className={viewLabelClass}>Add-ons</p>
+                {selectedItem && parseMenuAddons(selectedItem).length > 0 ? (
+                  <ul className="space-y-1">
+                    {parseMenuAddons(selectedItem).map((row) => (
+                      <li key={row.name} className="flex items-center justify-between max-w-sm text-sm">
+                        <span className={viewValueClass}>{row.name}</span>
+                        <span className="font-semibold text-primary">${row.price.toFixed(2)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={viewValueClass}>—</p>
+                )}
               </div>
             </div>
 
