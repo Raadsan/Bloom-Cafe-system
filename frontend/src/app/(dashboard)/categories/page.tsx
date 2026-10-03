@@ -185,16 +185,15 @@ export default function MenuCategoriesPage() {
   };
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
-      {/* Standard Pro Header: Title and Button on the same row */}
-      <div className="mb-6 px-4 flex items-start justify-between gap-4">
-        <div>
+      <div className="mb-6 px-4 space-y-4">
+        <div className="page-title-block">
           <h1 className={pageHeaderTitleClass}>Categories Management</h1>
           <p className="text-xs text-zinc-400 mt-1">
             {loading ? "Loading..." : `${categories.length} categories total`}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {/* Search */}
           <div className="relative">
             <input

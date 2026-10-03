@@ -1418,7 +1418,6 @@ export default function PosTerminalPage() {
                 const priceWithVat = effectivePrice * (1 + taxRate / 100);
                 const originalPriceWithVat = hasDiscount ? pricedBase * (1 + taxRate / 100) : undefined;
                 const discountPct = getMenuItemDiscountPercent(pricedItem);
-                const fromPrice = variations.length > 1 && new Set(variations.map((row) => row.price)).size > 1;
                 const comboLabel = product.isComposite && product.components?.length
                   ? product.components.map(c => `${c.quantity}× ${c.name}`).join(" + ")
                   : undefined;
@@ -1434,7 +1433,6 @@ export default function PosTerminalPage() {
                     }
                     imageUrl={product.imageUrl}
                     price={priceWithVat}
-                    fromPrice={fromPrice}
                     originalPrice={hasDiscount ? originalPriceWithVat : product.savings ? product.componentsTotal : undefined}
                     discountPercent={discountPct}
                     hasDiscount={hasDiscount || (product.savings != null && product.savings > 0)}
@@ -1455,7 +1453,6 @@ export default function PosTerminalPage() {
                   ? Math.min(...variations.map((row) => row.price))
                   : product.price;
                 const taxRate = product.tax || 0;
-                const fromPrice = variations.length > 1 && new Set(variations.map((row) => row.price)).size > 1;
                 const unit = getMenuItemEffectivePrice({ ...product, price: pricedBase });
                 return (
                 <button
@@ -1476,7 +1473,7 @@ export default function PosTerminalPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <span className={cn("text-sm font-bold block", priceAmountClass)}>
-                      {fromPrice ? "from " : ""}${(unit * (1 + taxRate / 100)).toFixed(2)}
+                      ${(unit * (1 + taxRate / 100)).toFixed(2)}
                     </span>
                     {menuItemHasDiscount({ ...product, price: pricedBase }) && (
                       <span className="text-[10px] text-zinc-400 line-through">
@@ -1774,9 +1771,9 @@ export default function PosTerminalPage() {
       </aside>
 
       <Dialog open={!!picker} onOpenChange={(open) => { if (!open) setPicker(null); }}>
-        <DialogContent className="sm:max-w-[460px] gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 [&>button]:hidden">
+        <DialogContent className="sm:max-w-[560px] gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 [&>button]:hidden">
           {picker && pickerChoices && (
-            <div className="grid grid-cols-1 sm:grid-cols-[148px_1fr]">
+            <div className="grid grid-cols-1 sm:grid-cols-[168px_1fr]">
               <div className="relative h-36 sm:h-full sm:min-h-[180px] bg-zinc-100">
                 <PosMenuItemImage
                   src={picker.product.imageUrl}
@@ -1822,14 +1819,14 @@ export default function PosTerminalPage() {
                       <div className="flex flex-wrap gap-2">
                         {pickerChoices.variations.map((row) => {
                           const active = picker.size === row.size;
-                          const price = selectionUnitPrice(picker.product, { size: row.size });
+                          const price = selectionUnitPrice(picker.product, { size: row.size }) * (1 + (picker.product.tax || 0) / 100);
                           return (
                             <button
                               key={row.size}
                               type="button"
                               onClick={() => setPicker({ ...picker, size: row.size })}
                               className={cn(
-                                "h-10 px-4 rounded-lg border text-sm font-semibold transition-all",
+                                "h-10 shrink-0 px-3.5 rounded-lg border text-sm font-semibold whitespace-nowrap transition-all",
                                 active
                                   ? "border-primary bg-primary text-white"
                                   : "border-zinc-200 bg-white text-zinc-700 hover:border-primary/40"
@@ -1841,14 +1838,14 @@ export default function PosTerminalPage() {
                         })}
                         {pickerChoices.legacySizes.map((size) => {
                           const active = picker.size === size;
-                          const price = getMenuItemEffectivePrice(picker.product);
+                          const price = getMenuItemEffectivePrice(picker.product) * (1 + (picker.product.tax || 0) / 100);
                           return (
                             <button
                               key={size}
                               type="button"
                               onClick={() => setPicker({ ...picker, size })}
                               className={cn(
-                                "h-10 px-4 rounded-lg border text-sm font-semibold transition-all",
+                                "h-10 shrink-0 px-3.5 rounded-lg border text-sm font-semibold whitespace-nowrap transition-all",
                                 active
                                   ? "border-primary bg-primary text-white"
                                   : "border-zinc-200 bg-white text-zinc-700 hover:border-primary/40"
@@ -1887,7 +1884,7 @@ export default function PosTerminalPage() {
                             >
                               <span className="text-sm font-semibold text-zinc-800">{row.name}</span>
                               <span className={cn("text-sm font-bold shrink-0", active ? "text-primary" : "text-zinc-500")}>
-                                +${row.price.toFixed(2)}
+                                +${(row.price * (1 + (picker.product.tax || 0) / 100)).toFixed(2)}
                               </span>
                             </button>
                           );
@@ -1908,8 +1905,8 @@ export default function PosTerminalPage() {
                       picker.addons.length > 0 ? picker.addons.join(", ") : "",
                     ].filter(Boolean).join(" + ")}
                     {(picker.size || picker.addons.length > 0) ? " · " : ""}
-                    ${pickerUnit.toFixed(2)} each
-                    {pickerTaxRate > 0 ? " · total includes VAT" : ""}
+                    ${(pickerUnit * (1 + pickerTaxRate / 100)).toFixed(2)} each
+                    {pickerTaxRate > 0 ? " · includes VAT" : ""}
                   </p>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">

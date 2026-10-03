@@ -134,7 +134,7 @@ export default function WaiterReadyOrdersView({
       className={isPos ? "h-full overflow-y-auto bg-gradient-to-br from-background via-secondary/8 to-secondary/15 p-5 md:p-6" : dashboardPageClass}
       style={isPos ? undefined : dashboardPageStyle}
     >
-      <div className={cn("mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4", !isPos && "px-4")}>
+      <div className={cn("page-title-block mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4", !isPos && "px-4")}>
         <div>
           <h1 className={pageHeaderTitleClass}>
             {pageTitle}

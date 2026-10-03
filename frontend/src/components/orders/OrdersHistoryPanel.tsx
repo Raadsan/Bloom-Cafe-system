@@ -127,6 +127,10 @@ export default function OrdersHistoryPanel({
         getLocationLabel(o).toLowerCase().includes(q) ||
         getOrderTitle(o).toLowerCase().includes(q);
       return matchesStatus && matchesType && matchesSearch;
+    }).sort((a, b) => {
+      const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return bTime - aTime;
     });
   }, [orders, search, statusFilter, typeFilter]);
 
@@ -267,7 +271,7 @@ export default function OrdersHistoryPanel({
                       lastDayKey = dayKey;
                       rows.push(
                         <TableRow
-                          key={`sep-${dayKey}`}
+                          key={`sep-${dayKey}-${idx}`}
                           className="bg-primary/5 border-y border-primary/10"
                         >
                           <TableCell colSpan={10} className="px-6 py-2">

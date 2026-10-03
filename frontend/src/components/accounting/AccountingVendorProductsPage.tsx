@@ -391,7 +391,7 @@ export default function AccountingVendorProductsPage() {
 
   return (
     <div
-      className={cn(dashboardPageClass, "space-y-6 animate-in fade-in duration-500")}
+      className={cn(dashboardPageClass, "min-w-0 w-full space-y-6 animate-in fade-in duration-500")}
       style={dashboardPageStyle}
     >
       {/* Page Header */}
@@ -481,9 +481,9 @@ export default function AccountingVendorProductsPage() {
       </div>
 
       {/* Main Table Box */}
-      <div className="bg-white dark:bg-card rounded-xl border border-zinc-200 dark:border-border shadow-sm overflow-hidden mx-4">
+      <div className="min-w-0 bg-white dark:bg-card rounded-xl border border-zinc-200 dark:border-border shadow-sm overflow-hidden mx-4">
         {/* Controls Row */}
-        <div className="px-6 py-4 flex flex-wrap items-center gap-4 border-b border-zinc-100 dark:border-border">
+        <div className="px-4 py-4 sm:px-6 flex flex-wrap items-center gap-3 border-b border-zinc-100 dark:border-border">
           {/* Classification Type Tabs */}
           <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-muted rounded-lg shrink-0">
             <button
@@ -561,11 +561,9 @@ export default function AccountingVendorProductsPage() {
             </div>
           </div>
 
-          <div className="flex-1" />
-
           {/* Right: search + Add button */}
-          <div className="flex items-center gap-3">
-            <div className="relative w-64 group">
+          <div className="flex flex-wrap items-center gap-3 ml-auto">
+            <div className="relative w-full sm:w-56 group">
               <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input
                 type="text"
@@ -587,9 +585,9 @@ export default function AccountingVendorProductsPage() {
         </div>
 
         {/* Table */}
-        <div className="border-t border-zinc-100 dark:border-border overflow-hidden">
+        <div className="min-w-0 border-t border-zinc-100 dark:border-border">
           <div className="overflow-x-auto">
-            <Table className="w-full">
+            <Table className="min-w-[1080px]">
               <TableHeader className={dashboardTableHeaderClass}>
                 <TableRow className={dashboardTableHeadRowClass}>
                   <TableHead className={cn(dashboardTableHeadClass, "text-left")}>No</TableHead>

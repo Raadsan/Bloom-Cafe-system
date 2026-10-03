@@ -389,3 +389,14 @@
     opacity: 0.6;
   }
 }
+
+/* Keep the page title beside the dashboard switcher on every dashboard page. */
+.dashboard-frame:has([data-dashboard-switcher]) .page-title-block {
+  padding-right: 11.5rem;
+}
+
+@media (min-width: 640px) {
+  .dashboard-frame:has([data-dashboard-switcher]) .page-title-block {
+    padding-right: 23rem;
+  }
+}

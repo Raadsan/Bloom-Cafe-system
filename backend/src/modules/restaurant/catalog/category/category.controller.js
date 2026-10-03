@@ -18,8 +18,13 @@ async function fetchAllCategoriesData() {
 
 async function fetchCategoriesWithItemsData() {
   return prisma.category.findMany({
-    include: { menuitem: true },
     orderBy: { id: 'asc' },
+    include: {
+      menuitem: {
+        select: { id: true, name: true, price: true },
+        orderBy: { name: 'asc' },
+      },
+    },
   })
 }
 

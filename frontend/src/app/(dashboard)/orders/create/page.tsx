@@ -460,7 +460,7 @@ export default function WaiterCreateOrderPage() {
 
   return (
     <div className={dashboardPageClass} style={dashboardPageStyle}>
-      <div className="px-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="page-title-block px-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <Link
             href="/orders"
@@ -536,7 +536,6 @@ export default function WaiterCreateOrderPage() {
                   const variations = parseMenuVariations(item);
                   const addons = parseMenuAddons(item);
                   const pick = picks[item.id];
-                  const selected = variations.find((row) => row.size === pick?.size);
                   const amount = selectionUnitPrice(item, { size: pick?.size, addonNames: pick?.addons });
                   return (
                   <div
@@ -563,7 +562,7 @@ export default function WaiterCreateOrderPage() {
                         {item.name}
                       </p>
                       <p className="text-sm font-black text-primary mt-1">
-                        {variations.length > 1 && !selected ? "from " : ""}${amount.toFixed(2)}
+                        ${amount.toFixed(2)}
                       </p>
                     </button>
                     {(variations.length > 0 || addons.length > 0) && (

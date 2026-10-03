@@ -8,7 +8,7 @@ function getDatabaseUrl() {
   if (!url) return url;
 
   const isDev = process.env.NODE_ENV !== 'production';
-  const defaultLimit = process.env.DATABASE_POOL_LIMIT || (isDev ? '1' : '10');
+  const defaultLimit = process.env.DATABASE_POOL_LIMIT || (isDev ? '5' : '10');
 
   const params = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
   if (!params.has('connection_limit')) params.set('connection_limit', defaultLimit);

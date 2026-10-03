@@ -93,7 +93,7 @@ export function DashboardSwitcher() {
   const ActiveIcon = active.icon;
 
   return (
-    <div className="flex items-center justify-end gap-3">
+    <div data-dashboard-switcher className="flex items-center justify-end gap-2 sm:gap-3">
       <span className="hidden text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground sm:block">
         Dashboards
       </span>
@@ -101,7 +101,7 @@ export function DashboardSwitcher() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-10 w-full min-w-0 items-center gap-2 rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground shadow-sm outline-none transition-colors hover:border-primary/30 hover:bg-muted/40 sm:w-auto sm:min-w-[220px]"
+            className="flex h-10 w-auto max-w-[168px] min-w-0 items-center gap-2 rounded-full border border-border bg-background px-2.5 text-xs font-semibold text-foreground shadow-sm outline-none transition-colors hover:border-primary/30 hover:bg-muted/40 sm:max-w-none sm:min-w-[220px] sm:px-3"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
               <ActiveIcon className="size-3.5" />

@@ -22,7 +22,7 @@ export const pageHeaderSubtitleClass =
   "text-[12px] text-zinc-500 dark:text-white/80 uppercase tracking-wider mt-1 font-medium";
 
 /** Page title block — same layout on every page. */
-export const pageHeaderWrapperClass = "mb-6 px-4";
+export const pageHeaderWrapperClass = "page-title-block mb-6 px-4";
 
 /** Main content card wrapper (tables, lists). */
 export const dashboardCardClass =

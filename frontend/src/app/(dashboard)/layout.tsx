@@ -123,7 +123,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       <PermissionProvider>
         <AppSidebar />
 
-        <SidebarInset className="bg-[#F8F9FA] dark:bg-[#161616]">
+        <SidebarInset className="min-w-0 bg-[#F8F9FA] dark:bg-[#161616]">
           {/* Top Header */}
           <header className="sticky top-0 z-30 shrink-0 border-b border-border bg-white/80 dark:bg-[#161616]/95 backdrop-blur-md transition-all duration-300">
             <div className="flex h-14 lg:h-[72px] items-center gap-2 sm:gap-3 px-3 sm:px-4 lg:px-6">
@@ -329,11 +329,13 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           </header>
 
           {/* Page Content */}
-          <main className="dashboard-scope flex-1 overflow-auto">
-            <div className="py-4 px-2 md:px-3 lg:px-4">
-              <div className="w-full mx-auto">
-                <div className="mb-4 px-2">
-                  <DashboardSwitcher />
+          <main className="dashboard-scope min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <div className="min-w-0 py-4 px-2 md:px-3 lg:px-4">
+              <div className="dashboard-frame relative w-full min-w-0">
+                <div className="pointer-events-none absolute top-0 right-3 z-20 sm:right-4">
+                  <div className="pointer-events-auto">
+                    <DashboardSwitcher />
+                  </div>
                 </div>
                 {children}
               </div>

@@ -113,6 +113,38 @@ function completeAddons(rows: AddonDraft[]): { rows: MenuItemAddon[]; error?: st
   return { rows: parsed };
 }
 
+function money(amount: number) {
+  return `$${Number(amount || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function SellingPrice({ item, align = "end" }: { item: MenuItem; align?: "start" | "end" }) {
+  if (item.isSellable === false) {
+    return <span className="text-[12px] text-zinc-400 italic font-normal">Not sellable</span>;
+  }
+  const taxRate = item.tax || 0;
+  const effPrice = getMenuItemEffectivePrice(item);
+  const priceWithVat = effPrice * (1 + taxRate / 100);
+  const vatAmt = effPrice * taxRate / 100;
+  const discounted = menuItemHasDiscount(item);
+  return (
+    <div className={cn("flex flex-col gap-0.5", align === "end" ? "items-end" : "items-start")}>
+      <span className="text-[13px] font-semibold text-primary">{money(priceWithVat)}</span>
+      {discounted && (
+        <span className="text-[11px] text-zinc-400 line-through">{money(item.price)}</span>
+      )}
+      {taxRate > 0 && (
+        <span className="text-[10px] text-amber-600">+VAT ${vatAmt.toFixed(2)}</span>
+      )}
+      {discounted && (
+        <span className="text-[10px] text-emerald-600">{getMenuItemDiscountLabel(item)}</span>
+      )}
+    </div>
+  );
+}
+
 function loadVariationDrafts(item: MenuItem): VariationDraft[] {
   const structured = parseMenuVariations(item);
   if (structured.length) {
@@ -509,8 +541,8 @@ export default function MenuPage() {
       {/* Main Container Box */}
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
         {/* Controls Row: Inside the box */}
-        <div className="px-8 py-4 flex flex-wrap items-center gap-6 border-b border-zinc-50">
-          <div className="flex items-center gap-4">
+        <div className="px-4 py-4 md:px-8 flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 md:gap-6 border-b border-zinc-50">
+          <div className="flex flex-wrap items-center gap-3 md:gap-4">
             <div className="flex items-center gap-2 text-[13px] text-zinc-400 font-normal shrink-0">
               <span>Show</span>
               <select
@@ -530,7 +562,7 @@ export default function MenuPage() {
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
+                className="w-[9.5rem] sm:w-40 h-[42px] px-3 border border-zinc-200 rounded-md outline-none focus:border-primary transition-colors bg-white cursor-pointer text-sm font-normal text-zinc-600"
               >
                 <option value="all">All Categories</option>
                 {categoriesWithItems.map(c => (
@@ -540,10 +572,10 @@ export default function MenuPage() {
             </div>
           </div>
 
-          <div className="flex-1"></div>
+          <div className="hidden md:block flex-1"></div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative w-64 group">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 md:gap-3">
+            <div className="relative w-full sm:w-64 group">
               <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" />
               <input
                 type="text"
@@ -586,8 +618,90 @@ export default function MenuPage() {
           </div>
         </div>
 
-        {/* Table - Flush to sides */}
-        <div className="border-t border-zinc-100 overflow-hidden bg-white">
+        {/* Cards on phones */}
+        <div className="md:hidden border-t border-zinc-100 bg-zinc-50/60 p-3 space-y-3">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-28 rounded-xl bg-white border border-zinc-100 animate-pulse" />
+            ))
+          ) : paginatedItems.length > 0 ? (
+            paginatedItems.map((item) => (
+              <div key={item.id} className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-lg overflow-hidden flex items-center justify-center shrink-0 border border-zinc-100 bg-zinc-50">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="size-5 text-zinc-300" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-zinc-800 leading-tight flex items-center gap-1.5">
+                          <span className="truncate">{item.name}</span>
+                          {item.isRecommended && <Star className="size-3 shrink-0 fill-amber-400 text-amber-400" />}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-wider mt-0.5">
+                          {item.category?.name || "No Category"}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        dashboardStatusBadgeClass,
+                        "shrink-0",
+                        getTableStatusBadgeClass(item.isAvailable ? "active" : "inactive")
+                      )}>
+                        {item.isAvailable ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      {item.isPurchasable && item.isSellable !== false && (
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Resellable
+                        </span>
+                      )}
+                      {item.isPurchasable && item.isSellable === false && (
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          Purchasable Only
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-zinc-50 px-3 py-2">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400">Cost</p>
+                    <p className="text-[13px] font-medium text-zinc-500">{money(item.costPrice || 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400">Selling</p>
+                    <SellingPrice item={item} align="start" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-400">Tax</p>
+                    <p className="text-[13px] font-medium text-zinc-500">{item.tax}%</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => openViewModal(item)} className={actionBtnView} title="View item">
+                    <Eye className="size-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => openEditModal(item)} className={actionBtnEdit}>
+                    <Edit className="size-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => openDeleteModal(item)} className={actionBtnDelete}>
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="px-3 py-10 text-center text-zinc-500">No menu items found</p>
+          )}
+        </div>
+
+        {/* Table from tablet width up */}
+        <div className="hidden md:block border-t border-zinc-100 overflow-hidden bg-white">
           <div className="overflow-x-auto">
             <Table className="w-full">
               <TableHeader className={dashboardTableHeaderClass}>
@@ -647,59 +761,10 @@ export default function MenuPage() {
                         </div>
                       </TableCell>
                       <TableCell className="px-6 py-3 text-[13px] font-medium text-zinc-400 text-right">
-                        ${(item.costPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {money(item.costPrice || 0)}
                       </TableCell>
                       <TableCell className="px-6 py-3 text-right">
-                        {item.isSellable === false ? (
-                          <span className="text-[12px] text-zinc-400 italic font-normal">Not sellable</span>
-                        ) : parseMenuVariations(item).length > 1 && Math.min(...parseMenuVariations(item).map((row) => row.price)) !== Math.max(...parseMenuVariations(item).map((row) => row.price)) ? (() => {
-                          const variations = parseMenuVariations(item);
-                          const taxRate = item.tax || 0;
-                          const withVat = (price: number) => getMenuItemEffectivePrice({ ...item, price }) * (1 + taxRate / 100);
-                          const min = Math.min(...variations.map((row) => withVat(row.price)));
-                          const max = Math.max(...variations.map((row) => withVat(row.price)));
-                          return (
-                            <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-[13px] font-semibold text-primary">
-                                ${min.toLocaleString(undefined, { minimumFractionDigits: 2 })} – ${max.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </span>
-                              <span className="text-[10px] text-zinc-400">{variations.length} sizes</span>
-                            </div>
-                          );
-                        })() : menuItemHasDiscount(item) ? (() => {
-                          const effPrice = getMenuItemEffectivePrice(item);
-                          const taxRate = item.tax || 0;
-                          const priceWithVat = effPrice * (1 + taxRate / 100);
-                          const vatAmt = effPrice * taxRate / 100;
-                          return (
-                            <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-[13px] font-semibold text-primary">
-                                ${priceWithVat.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </span>
-                              <span className="text-[11px] text-zinc-400 line-through">
-                                ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </span>
-                              {taxRate > 0 && (
-                                <span className="text-[10px] text-amber-600">+VAT ${vatAmt.toFixed(2)}</span>
-                              )}
-                              <span className="text-[10px] text-emerald-600">{getMenuItemDiscountLabel(item)}</span>
-                            </div>
-                          );
-                        })() : (() => {
-                          const taxRate = item.tax || 0;
-                          const priceWithVat = item.price * (1 + taxRate / 100);
-                          const vatAmt = item.price * taxRate / 100;
-                          return (
-                            <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-[13px] font-semibold text-primary">
-                                ${priceWithVat.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </span>
-                              {taxRate > 0 && (
-                                <span className="text-[10px] text-amber-600">+VAT ${vatAmt.toFixed(2)}</span>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        <SellingPrice item={item} />
                       </TableCell>
                       <TableCell className="px-6 py-3 text-[13px] font-medium text-zinc-500 text-right">
                         {item.tax}%
@@ -756,7 +821,7 @@ export default function MenuPage() {
         </div>
 
         {/* Table Footer / Pagination */}
-        <div className="py-2 px-8 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-zinc-400 border-t border-zinc-100 bg-zinc-50/30">
+        <div className="py-2 px-4 md:px-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-zinc-400 border-t border-zinc-100 bg-zinc-50/30">
           <div>
             {Math.min(filteredItems.length, (currentPage - 1) * pageSize + 1)}-{Math.min(filteredItems.length, currentPage * pageSize)} of {filteredItems.length}
           </div>

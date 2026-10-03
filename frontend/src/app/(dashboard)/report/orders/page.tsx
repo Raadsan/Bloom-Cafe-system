@@ -18,7 +18,6 @@ import {
   Percent,
   Trophy,
   Award,
-  Moon,
 } from "lucide-react";
 import {
   AreaChart,
@@ -128,7 +127,6 @@ export default function OrdersReportPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<OrdersReportData | null>(null);
   const [weeklyData, setWeeklyData] = useState(EMPTY_WEEKLY);
-  const [nightlyCloseLoading, setNightlyCloseLoading] = useState(false);
   
   // Table state
   const [search, setSearch] = useState("");
@@ -216,24 +214,6 @@ export default function OrdersReportPage() {
   useEffect(() => {
     fetchReport();
   }, [fetchReport]);
-
-  const handleNightlyClose = async () => {
-    if (!window.confirm("Are you sure you want to close all open orders? This will cancel all pending, preparing, and held orders.")) return;
-    try {
-      setNightlyCloseLoading(true);
-      const res = await reportApi.triggerNightlyClose();
-      if (res.success) {
-        showToast(`✅ Closed ${res.data?.closed ?? 0} open orders for end of business day.`, "success");
-        fetchReport();
-      } else {
-        showToast(res.message || "Failed to close orders", "error");
-      }
-    } catch {
-      showToast("Failed to close orders. Please try again.", "error");
-    } finally {
-      setNightlyCloseLoading(false);
-    }
-  };
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount || 0);
@@ -554,12 +534,12 @@ export default function OrdersReportPage() {
       className={cn(dashboardPageClass, "space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700")}
       style={dashboardPageStyle}
     >
-      {/* Header Bar */}
-      <div className={cn(pageHeaderWrapperClass, "flex flex-col lg:flex-row lg:items-end justify-between gap-4")}>
-        <div>
-          <h1 className={pageHeaderTitleClass}>Orders & Sales Report</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 trezo-card p-2">
+      <div className="space-y-3">
+      <div className={cn(pageHeaderWrapperClass, "mb-0")}>
+        <h1 className={pageHeaderTitleClass}>Orders & Sales Report</h1>
+      </div>
+      <div className="px-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 trezo-card p-2 w-fit ml-auto">
           {/* Preset Buttons */}
           <div className="flex flex-wrap items-center gap-1 border-r border-border pr-2">
             {[
@@ -616,17 +596,8 @@ export default function OrdersReportPage() {
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
             {loading ? "Updating..." : "Apply"}
           </Button>
-          <Button
-            type="button"
-            onClick={handleNightlyClose}
-            disabled={nightlyCloseLoading || loading}
-            title="Close all open orders at end of business day (6 PM)"
-            className="h-9 px-3 rounded-lg text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 !text-white border-amber-700 shadow-sm"
-          >
-            <Moon className={cn("size-3.5", nightlyCloseLoading && "animate-spin")} />
-            {nightlyCloseLoading ? "Closing..." : "Close Day"}
-          </Button>
         </div>
+      </div>
       </div>
 
       {loading && !data ? (
