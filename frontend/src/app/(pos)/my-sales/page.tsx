@@ -56,31 +56,27 @@ import {
   chartTooltipStyle,
   chartAxisTick,
 } from "@/lib/dashboard-ui";
+import { businessDateKey, dateFromBusinessKey, formatLocalKey } from "@/lib/businessDay";
 
 type DatePreset = "today" | "yesterday" | "week" | "last-month" | "custom";
 
-function formatDateInput(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().split("T")[0];
-}
-
 function getPresetRange(preset: Exclude<DatePreset, "custom">) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (preset === "today") return { startDate: formatDateInput(today), endDate: formatDateInput(today) };
+  const today = dateFromBusinessKey(businessDateKey());
+  const todayStr = formatLocalKey(today);
+  if (preset === "today") return { startDate: todayStr, endDate: todayStr };
   if (preset === "yesterday") {
     const date = new Date(today);
     date.setDate(date.getDate() - 1);
-    return { startDate: formatDateInput(date), endDate: formatDateInput(date) };
+    return { startDate: formatLocalKey(date), endDate: formatLocalKey(date) };
   }
   if (preset === "week") {
     const start = new Date(today);
     start.setDate(start.getDate() - 6);
-    return { startDate: formatDateInput(start), endDate: formatDateInput(today) };
+    return { startDate: formatLocalKey(start), endDate: todayStr };
   }
   return {
-    startDate: formatDateInput(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
-    endDate: formatDateInput(new Date(today.getFullYear(), today.getMonth(), 0)),
+    startDate: formatLocalKey(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+    endDate: formatLocalKey(new Date(today.getFullYear(), today.getMonth(), 0)),
   };
 }
 
@@ -124,13 +120,10 @@ export default function MySalesPage() {
   };
 
   const rangeOrders = useMemo(() => {
-    const start = new Date(dateRange.startDate);
-    const end = new Date(dateRange.endDate);
-    end.setHours(23, 59, 59, 999);
     return orders.filter((o) => {
       if (!o.createdAt) return true;
-      const d = new Date(o.createdAt as unknown as string);
-      return d >= start && d <= end;
+      const key = businessDateKey(new Date(o.createdAt as unknown as string));
+      return key >= dateRange.startDate && key <= dateRange.endDate;
     });
   }, [orders, dateRange]);
 

@@ -11,9 +11,11 @@ import {
   getFinanceReport,
   getWeeklyAnalytics,
   getOrdersReport,
-  getClientsReport
+  getClientsReport,
+  clearReportCache
 } from './report.controller.js'
 import { runNightlyOrderClose } from '../../../../utils/nightlyOrderClose.js'
+import { closeBusinessDay, getBusinessDayStatus } from '../../../../utils/businessDay.js'
 import { protect, checkPermission } from '../../../../middlewares/authMiddleware.js'
 
 const router = express.Router()
@@ -31,6 +33,25 @@ router.get('/finance', protect, checkPermission('/report', 'canView'), getFinanc
 router.get('/weekly', protect, checkPermission('/report', 'canView'), getWeeklyAnalytics)
 router.get('/orders', protect, checkPermission('/report', 'canView'), getOrdersReport)
 router.get('/clients', protect, checkPermission('/report', 'canView'), getClientsReport)
+
+router.get('/business-day', protect, async (req, res) => {
+  try {
+    const data = await getBusinessDayStatus()
+    return res.status(200).json({ success: true, data })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+router.post('/business-day/close', protect, async (req, res) => {
+  try {
+    const data = await closeBusinessDay(req.user?.id)
+    clearReportCache()
+    return res.status(200).json({ success: true, data })
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message })
+  }
+})
 
 // Manual trigger for nightly order close (admin only)
 router.post('/nightly-close', protect, async (req, res) => {

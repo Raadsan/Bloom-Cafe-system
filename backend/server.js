@@ -30,7 +30,8 @@ import { warmCategoryCaches } from './src/modules/restaurant/catalog/category/ca
 import { isDbAuthError, isDbUnreachableError } from './src/utils/dbErrors.js'
 import { ensureCustomerInvoiceDefaults } from './src/modules/accounting/receivables/customerInvoices/customerInvoice.controller.js'
 import { ensureWalletChartOfAccounts } from './src/modules/accounting/services/walletAccounts.service.js'
-import { startNightlyOrderCloseScheduler, stopNightlyOrderCloseScheduler } from './src/utils/nightlyOrderClose.js'
+import { backfillBusinessDates } from './src/utils/businessDay.js'
+
 
 const skipStartupWarmup =
   process.env.SKIP_STARTUP_WARMUP === 'true' || process.env.SKIP_STARTUP_WARMUP === '1'
@@ -96,19 +97,16 @@ server.listen(PORT, () => {
     }
 
     try {
+      await backfillBusinessDates()
       await runStartupWarmup()
     } catch (err) {
       console.warn('Sidebar menu ensure skipped:', err?.message)
     }
-
-    // Start nightly 6 PM order-close scheduler
-    startNightlyOrderCloseScheduler()
   })
 })
 
 async function shutdown(signal) {
   console.log(`\n${signal ?? 'Shutdown'}: releasing database connections...`)
-  stopNightlyOrderCloseScheduler()
   await prisma.$disconnect().catch(() => { })
   server.close(() => process.exit(0))
   setTimeout(() => process.exit(1), 5000).unref()

@@ -792,7 +792,11 @@ export default function PosTerminalPage() {
       showToast("This combo has unavailable items", "error");
       return;
     }
-    const { variations, legacySizes } = itemChoiceLists(product);
+    const { variations, legacySizes, addons } = itemChoiceLists(product);
+    if (!variations.length && !legacySizes.length && !addons.length) {
+      addToCart(product, { quantity: 1 });
+      return;
+    }
     setPicker({
       product,
       size: variations[0]?.size || legacySizes[0],
@@ -1662,9 +1666,6 @@ export default function PosTerminalPage() {
                     >
                       ${itemTotal.toFixed(2)}
                     </span>
-                    <span className="text-[9.5px] text-zinc-500 font-medium tabular-nums block leading-tight">
-                      ${itemNet.toFixed(2)}{item.tax > 0 && <span className="text-amber-600 font-semibold"> +${itemVat.toFixed(2)} VAT</span>}
-                    </span>
                   </div>
                   <button
                     type="button"
@@ -1771,7 +1772,12 @@ export default function PosTerminalPage() {
       </aside>
 
       <Dialog open={!!picker} onOpenChange={(open) => { if (!open) setPicker(null); }}>
-        <DialogContent className="sm:max-w-[560px] gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 [&>button]:hidden">
+        <DialogContent className={cn(
+          "gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 [&>button]:hidden",
+          pickerChoices && (pickerChoices.variations.length > 0 || pickerChoices.legacySizes.length > 0)
+            ? "sm:max-w-[720px]"
+            : "sm:max-w-[560px]"
+        )}>
           {picker && pickerChoices && (
             <div className="grid grid-cols-1 sm:grid-cols-[168px_1fr]">
               <div className="relative h-36 sm:h-full sm:min-h-[180px] bg-zinc-100">
@@ -1816,7 +1822,7 @@ export default function PosTerminalPage() {
                   {(pickerChoices.variations.length > 0 || pickerChoices.legacySizes.length > 0) && (
                     <div>
                       <p className="text-sm font-semibold text-zinc-800 mb-2">Sizes</p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                         {pickerChoices.variations.map((row) => {
                           const active = picker.size === row.size;
                           const price = selectionUnitPrice(picker.product, { size: row.size }) * (1 + (picker.product.tax || 0) / 100);

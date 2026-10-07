@@ -749,6 +749,7 @@ import { clearReportCache } from '../../reporting/report/report.controller.js'
 import { buildOrderItemsPayload } from '../../../../utils/compositeMenuHelper.js'
 import { upsertCustomerByPhone } from '../../../shared/customers/customer.service.js'
 import { processCompletedPOSOrderSafely } from '../../../accounting/services/posOrderAccounting.service.js'
+import { businessWindow, resolveBusinessDate } from '../../../../utils/businessDay.js'
 
 const MOBILE_WALLET_METHODS = ['evc_plus', 'edahab', 'premier_wallet', 'waafi']
 
@@ -842,6 +843,8 @@ export const createOrder = async (req, res) => {
     const discountAmount = Math.max(0, Number(discountAmountInput) || 0)
     const parsedDiscountValue = Math.max(0, Number(discountValue) || 0)
     const orderTotal = Math.max(0, subTotal + taxAmount - discountAmount)
+    const createdAt = req.body.createdAt ? new Date(req.body.createdAt) : new Date()
+    const businessDate = await resolveBusinessDate(createdAt)
 
     const order = await prisma.order.create({
       data: {
@@ -861,7 +864,8 @@ export const createOrder = async (req, res) => {
         total: orderTotal,
         status: req.body.status || 'pending',
         source: req.body.source || 'pos',
-        createdAt: req.body.createdAt ? new Date(req.body.createdAt) : new Date(),
+        createdAt,
+        businessDate,
         orderitem: {
           create: orderItemsData
         }
@@ -1004,6 +1008,9 @@ export const createPosCheckout = async (req, res) => {
       }
     }
 
+    const paidCreatedAt = req.body.createdAt ? new Date(req.body.createdAt) : new Date()
+    const paidBusinessDate = await resolveBusinessDate(paidCreatedAt)
+
     const order = await prisma.order.create({
       data: {
         orderType: type || 'dine-in',
@@ -1024,7 +1031,8 @@ export const createPosCheckout = async (req, res) => {
         // Mobile orders keep pending → preparing → ready → served.
         status: (req.body.source || 'pos') !== 'mobile' ? 'served' : 'pending',
         source: req.body.source || 'pos',
-        createdAt: req.body.createdAt ? new Date(req.body.createdAt) : new Date(),
+        createdAt: paidCreatedAt,
+        businessDate: paidBusinessDate,
         orderitem: { create: orderItemsData },
         payment: {
           create: {
@@ -1399,22 +1407,27 @@ export const getAllOrders = async (req, res) => {
     const where = {}
     if (status) where.status = status
     if (startDate || endDate) {
-      const createdAt = {}
-      if (startDate) {
-        const start = new Date(startDate)
-        if (Number.isNaN(start.getTime())) {
-          return res.status(400).json({ success: false, message: 'Invalid startDate' })
+      const dateKey = /^\d{4}-\d{2}-\d{2}$/
+      if ((!startDate || dateKey.test(startDate)) && (!endDate || dateKey.test(endDate))) {
+        where.createdAt = businessWindow(startDate || endDate, endDate || startDate)
+      } else {
+        const createdAt = {}
+        if (startDate) {
+          const start = new Date(startDate)
+          if (Number.isNaN(start.getTime())) {
+            return res.status(400).json({ success: false, message: 'Invalid startDate' })
+          }
+          createdAt.gte = start
         }
-        createdAt.gte = start
-      }
-      if (endDate) {
-        const end = new Date(endDate)
-        if (Number.isNaN(end.getTime())) {
-          return res.status(400).json({ success: false, message: 'Invalid endDate' })
+        if (endDate) {
+          const end = new Date(endDate)
+          if (Number.isNaN(end.getTime())) {
+            return res.status(400).json({ success: false, message: 'Invalid endDate' })
+          }
+          createdAt.lte = end
         }
-        createdAt.lte = end
+        where.createdAt = createdAt
       }
-      where.createdAt = createdAt
     }
 
     const userRole = req.user?.role?.toLowerCase()

@@ -62,6 +62,7 @@ import {
   dashboardTableCellClass,
   dashboardTableIdClass,
 } from "@/lib/dashboard-ui";
+import { businessDateKey, dateFromBusinessKey, formatLocalKey } from "@/lib/businessDay";
 
 const EMPTY_WEEKLY = [
   { name: "Mon", orders: 0, revenue: 0 },
@@ -142,41 +143,35 @@ export default function OrdersReportPage() {
   });
   const { showToast } = useToast();
 
-  const getLocalDateString = (d: Date) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
   const handleSelectPreset = (p: PresetType) => {
     setPreset(p);
-    const now = new Date();
+    const today = dateFromBusinessKey(businessDateKey());
+    const todayStr = formatLocalKey(today);
     if (p === "all") {
       setDateRange({ startDate: "", endDate: "" });
     } else if (p === "today") {
-      const todayStr = getLocalDateString(now);
       setDateRange({ startDate: todayStr, endDate: todayStr });
     } else if (p === "week") {
-      const day = now.getDay();
-      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(now.setDate(diff));
+      const day = today.getDay();
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(today);
+      monday.setDate(diff);
       setDateRange({
-        startDate: getLocalDateString(monday),
-        endDate: getLocalDateString(new Date()),
+        startDate: formatLocalKey(monday),
+        endDate: todayStr,
       });
     } else if (p === "month") {
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
       setDateRange({
-        startDate: getLocalDateString(firstDay),
-        endDate: getLocalDateString(now),
+        startDate: formatLocalKey(firstDay),
+        endDate: todayStr,
       });
     } else if (p === "last30") {
-      const d = new Date();
+      const d = new Date(today);
       d.setDate(d.getDate() - 30);
       setDateRange({
-        startDate: getLocalDateString(d),
-        endDate: getLocalDateString(now),
+        startDate: formatLocalKey(d),
+        endDate: todayStr,
       });
     }
   };

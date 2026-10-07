@@ -1,4 +1,5 @@
 import prisma from '../../../config/db.js'
+import { businessDateKey, dateFromKey, formatDateKey } from '../../../utils/businessDay.js'
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100
 const normalize = (value) => String(value || '').trim().toLowerCase()
@@ -258,7 +259,10 @@ export async function processCompletedPOSOrder(orderId, { db = prisma } = {}) {
       const currencyId = order.currencyId || company.currency_id
       const currency = await tx.currencies.findUnique({ where: { id: currencyId } })
       if (!currency?.is_active) throw new POSAccountingError('The POS order currency is inactive or missing')
-      const entryDate = order.updatedAt || order.payment.paidAt || new Date()
+      const entryDate = dateFromKey(
+        (order.businessDate && formatDateKey(order.businessDate)) ||
+          businessDateKey(order.createdAt || order.payment?.paidAt || order.updatedAt || new Date())
+      )
       const fiscalPeriod = await tx.fiscal_periods.findFirst({
         where: {
           state: 'open',

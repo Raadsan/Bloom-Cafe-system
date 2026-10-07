@@ -26,6 +26,8 @@ import { receiptSettingsApi, ReceiptSettings } from "@/lib/api/restaurant/receip
 import { ReceiptBody, ReceiptSnapshot } from "@/components/receipt/ReceiptBody";
 import { PermissionProvider } from "@/context/PermissionContext";
 import PosHeaderNotifications from "@/components/pos/PosHeaderNotifications";
+import CloseBusinessDayButton from "@/components/pos/CloseBusinessDayButton";
+import { businessDateKey } from "@/lib/businessDay";
 import { PosSearchProvider } from "@/context/PosSearchContext";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -72,27 +74,10 @@ function orderToReceiptSnapshot(o: Order): ReceiptSnapshot {
   };
 }
 
-function getLocalDateString(d = new Date()) {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function getYesterdayDateString() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return getLocalDateString(d);
-}
-
-function getDateRangeForDay(dateStr: string) {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
-  const end = new Date(year, month - 1, day, 23, 59, 59, 999);
-  return {
-    startDate: start.toISOString(),
-    endDate: end.toISOString(),
-  };
+  const [year, month, day] = businessDateKey().split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day - 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function PosLayoutInner({ children }: { children: React.ReactNode }) {
@@ -111,7 +96,7 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [dateFilterPreset, setDateFilterPreset] = useState<"today" | "yesterday" | "recent" | "custom">("today");
-  const [filterDate, setFilterDate] = useState<string>(() => getLocalDateString());
+  const [filterDate, setFilterDate] = useState<string>(() => businessDateKey());
   const [searchQuery, setSearchQuery] = useState("");
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -188,8 +173,7 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
         if (preset === "recent") {
           params = { includeServed: true, limit: 30 };
         } else {
-          const { startDate, endDate } = getDateRangeForDay(dateStr);
-          params = { startDate, endDate, includeServed: true, limit: 200 };
+          params = { startDate: dateStr, endDate: dateStr, includeServed: true, limit: 200 };
         }
         const [orders, settings] = await Promise.all([
           orderApi.getAllOrders(params, true),
@@ -220,7 +204,7 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
 
   const openRecentOrders = () => {
     setShowRecentOrders(true);
-    const todayStr = getLocalDateString();
+    const todayStr = businessDateKey();
     setFilterDate(todayStr);
     setDateFilterPreset("today");
     setSearchQuery("");
@@ -294,6 +278,8 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
 
           {/* Right spacer */}
           <div className="flex-1 min-w-0" />
+
+          <CloseBusinessDayButton />
 
           <PosHeaderNotifications />
 
@@ -424,7 +410,7 @@ function PosLayoutInner({ children }: { children: React.ReactNode }) {
                   <button
                     type="button"
                     onClick={() => {
-                      const d = getLocalDateString();
+                      const d = businessDateKey();
                       setFilterDate(d);
                       setDateFilterPreset("today");
                       fetchReceiptOrders("today", d);

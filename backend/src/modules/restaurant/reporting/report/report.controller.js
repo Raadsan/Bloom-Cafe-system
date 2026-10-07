@@ -1,5 +1,6 @@
 import prisma from '../../../../config/db.js'
 import { createResponseCache } from '../../../../utils/responseCache.js'
+import { addDays, businessDateKey, dateFromKey } from '../../../../utils/businessDay.js'
 
 const reportCache = createResponseCache(90 * 1000)
 const WEEKLY_TTL_MS = 2 * 60 * 1000
@@ -21,7 +22,7 @@ async function fetchDashboardSummaryData(query) {
   const dateRange = parseDateRange(query)
 
   const orderWhere = {
-    ...(dateRange ? { createdAt: dateRange } : {}),
+    ...(dateRange ? { businessDate: dateRange } : {}),
     status: { in: completedSaleStatuses },
   }
 
@@ -44,25 +45,25 @@ async function fetchDashboardSummaryData(query) {
     prisma.payment.aggregate({
       where: {
         status: 'paid',
-        ...(dateRange ? { paidAt: dateRange } : {}),
+        ...(dateRange ? { order: { businessDate: dateRange } } : {}),
       },
       _sum: { amount: true },
     }),
     prisma.payment.count({
       where: {
         status: 'paid',
-        ...(dateRange ? { paidAt: dateRange } : {}),
+        ...(dateRange ? { order: { businessDate: dateRange } } : {}),
       },
     }),
     prisma.order.count({
       where: {
-        ...(dateRange ? { createdAt: dateRange } : {}),
+        ...(dateRange ? { businessDate: dateRange } : {}),
         status: { in: ['pending', 'preparing', 'held'] },
       },
     }),
     prisma.order.count({
       where: {
-        ...(dateRange ? { createdAt: dateRange } : {}),
+        ...(dateRange ? { businessDate: dateRange } : {}),
         status: 'cancelled',
       },
     }),
@@ -91,23 +92,18 @@ async function fetchDashboardSummaryData(query) {
 }
 
 async function fetchWeeklyAnalyticsData() {
-  const end = new Date()
-  end.setHours(23, 59, 59, 999)
-
-  const start = new Date()
-  start.setDate(start.getDate() - 6)
-  start.setHours(0, 0, 0, 0)
-
+  const endKey = businessDateKey(new Date())
+  const startKey = addDays(endKey, -6)
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const buckets = []
 
   for (let i = 0; i < 7; i++) {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    const key = d.toISOString().split('T')[0]
+    const key = addDays(startKey, i)
+    const [year, month, day] = key.split('-').map(Number)
+    const labelDate = new Date(Date.UTC(year, month - 1, day))
     buckets.push({
       key,
-      name: dayLabels[d.getDay()],
+      name: dayLabels[labelDate.getUTCDay()],
       revenue: 0,
       orders: 0,
     })
@@ -116,16 +112,18 @@ async function fetchWeeklyAnalyticsData() {
   const orders = await prisma.order.findMany({
     where: {
       status: { in: completedSaleStatuses },
-      createdAt: { gte: start, lte: end },
+      businessDate: { gte: dateFromKey(startKey), lte: dateFromKey(endKey) },
     },
     select: {
       total: true,
-      createdAt: true,
+      businessDate: true,
     },
   })
 
   for (const order of orders) {
-    const key = new Date(order.createdAt).toISOString().split('T')[0]
+    const key = order.businessDate
+      ? new Date(order.businessDate).toISOString().split('T')[0]
+      : null
     const bucket = buckets.find((b) => b.key === key)
     if (!bucket) continue
 
@@ -180,90 +178,41 @@ export async function warmReportCaches() {
   ]).catch(() => {})
 }
 
-// 🔹 DATE RANGE (Strict 12:00 AM Midnight Boundary)
-const DEFAULT_TZ_OFFSET_MINUTES = -180 // UTC+3 (East Africa Time - Somalia / Kenya)
-
-function resolveTzOffsetMinutes(query = {}) {
-  if (query.tzOffset !== undefined && query.tzOffset !== null && query.tzOffset !== '') {
-    const val = Number(query.tzOffset)
-    if (!isNaN(val)) return val
-  }
-  return DEFAULT_TZ_OFFSET_MINUTES
+function dateKeyFromQuery(value) {
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return businessDateKey(parsed)
 }
 
 const parseDateRange = (query = {}) => {
   const { startDate, endDate } = query
-
   if (!startDate && !endDate) return null
 
-  const offsetMinutes = resolveTzOffsetMinutes(query)
   const range = {}
-
   if (startDate) {
-    const parts = startDate.split('-').map(Number)
-    if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
-      const [y, m, d] = parts
-      // 00:00:00.000 local time (12:00 AM Midnight sharp)
-      range.gte = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) + offsetMinutes * 60 * 1000)
-    } else {
-      const start = new Date(startDate)
-      start.setHours(0, 0, 0, 0)
-      range.gte = start
-    }
+    const key = dateKeyFromQuery(startDate)
+    if (key) range.gte = dateFromKey(key)
   }
-
   if (endDate) {
-    const parts = endDate.split('-').map(Number)
-    if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
-      const [y, m, d] = parts
-      // 23:59:59.999 local time (Right before next 12:00 AM Midnight)
-      range.lte = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) + offsetMinutes * 60 * 1000)
-    } else {
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
-      range.lte = end
-    }
+    const key = dateKeyFromQuery(endDate)
+    if (key) range.lte = dateFromKey(key)
   }
-
-  return range
+  return Object.keys(range).length ? range : null
 }
 
-const getStartOfDay = (query = {}) => {
-  const offsetMinutes = resolveTzOffsetMinutes(query)
-  const now = new Date()
-  const localNow = new Date(now.getTime() - offsetMinutes * 60 * 1000)
-  const y = localNow.getUTCFullYear()
-  const m = localNow.getUTCMonth()
-  const d = localNow.getUTCDate()
-  return new Date(Date.UTC(y, m, d, 0, 0, 0, 0) + offsetMinutes * 60 * 1000)
+const currentBusinessDate = () => dateFromKey(businessDateKey(new Date()))
+
+const getStartOfMonth = () => {
+  const [year, month] = businessDateKey(new Date()).split('-')
+  return dateFromKey(`${year}-${month}-01`)
 }
 
-const getEndOfDay = (query = {}) => {
-  const offsetMinutes = resolveTzOffsetMinutes(query)
-  const now = new Date()
-  const localNow = new Date(now.getTime() - offsetMinutes * 60 * 1000)
-  const y = localNow.getUTCFullYear()
-  const m = localNow.getUTCMonth()
-  const d = localNow.getUTCDate()
-  return new Date(Date.UTC(y, m, d, 23, 59, 59, 999) + offsetMinutes * 60 * 1000)
-}
-
-const getStartOfMonth = (query = {}) => {
-  const offsetMinutes = resolveTzOffsetMinutes(query)
-  const now = new Date()
-  const localNow = new Date(now.getTime() - offsetMinutes * 60 * 1000)
-  const y = localNow.getUTCFullYear()
-  const m = localNow.getUTCMonth()
-  return new Date(Date.UTC(y, m, 1, 0, 0, 0, 0) + offsetMinutes * 60 * 1000)
-}
-
-const getEndOfMonth = (query = {}) => {
-  const offsetMinutes = resolveTzOffsetMinutes(query)
-  const now = new Date()
-  const localNow = new Date(now.getTime() - offsetMinutes * 60 * 1000)
-  const y = localNow.getUTCFullYear()
-  const m = localNow.getUTCMonth()
-  return new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999) + offsetMinutes * 60 * 1000)
+const getEndOfMonth = () => {
+  const [year, month] = businessDateKey(new Date()).split('-').map(Number)
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return dateFromKey(`${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`)
 }
 
 // DASHBOARD INIT — summary + weekly chart + recent orders in one round trip
@@ -319,7 +268,7 @@ export const getRevenueReport = async (req, res) => {
     const payments = await prisma.payment.findMany({
       where: {
         status: 'paid',
-        ...(dateRange ? { paidAt: dateRange } : {})
+        ...(dateRange ? { order: { businessDate: dateRange } } : {})
       },
       orderBy: {
         paidAt: 'desc'
@@ -386,7 +335,7 @@ export const getTopSellingItems = async (req, res) => {
       },
       where: {
         menuitem: { isSellable: true },
-        ...(dateRange ? { order: { createdAt: dateRange } } : {}),
+        ...(dateRange ? { order: { businessDate: dateRange } } : {}),
       },
       orderBy: {
         _sum: {
@@ -454,7 +403,7 @@ export const getTablePerformanceReport = async (req, res) => {
       },
       where: dateRange
         ? {
-            createdAt: dateRange
+            businessDate: dateRange
           }
         : {},
       orderBy: {
@@ -504,24 +453,19 @@ export const getTablePerformanceReport = async (req, res) => {
 // DAILY REPORT
 export const getDailyReport = async (req, res) => {
   try {
-    const start = getStartOfDay()
-    const end = getEndOfDay()
+    const day = currentBusinessDate()
 
     const [ordersCount, payments, topItems] = await Promise.all([
       prisma.order.count({
         where: {
-          createdAt: {
-            gte: start,
-            lte: end
-          }
+          businessDate: day
         }
       }),
       prisma.payment.findMany({
         where: {
           status: 'paid',
-          paidAt: {
-            gte: start,
-            lte: end
+          order: {
+            businessDate: day
           }
         },
         include: {
@@ -540,10 +484,7 @@ export const getDailyReport = async (req, res) => {
         },
         where: {
           order: {
-            createdAt: {
-              gte: start,
-              lte: end
-            }
+            businessDate: day
           }
         },
         orderBy: {
@@ -561,7 +502,7 @@ export const getDailyReport = async (req, res) => {
       success: true,
       data: {
         reportType: 'daily',
-        date: start,
+        date: day,
         totalOrders: ordersCount,
         totalRevenue: revenue,
         totalPaidPayments: payments.length,
@@ -587,7 +528,7 @@ export const getMonthlyReport = async (req, res) => {
     const [ordersCount, payments, topItems] = await Promise.all([
       prisma.order.count({
         where: {
-          createdAt: {
+          businessDate: {
             gte: start,
             lte: end
           }
@@ -596,9 +537,11 @@ export const getMonthlyReport = async (req, res) => {
       prisma.payment.findMany({
         where: {
           status: 'paid',
-          paidAt: {
-            gte: start,
-            lte: end
+          order: {
+            businessDate: {
+              gte: start,
+              lte: end
+            }
           }
         },
         include: {
@@ -617,7 +560,7 @@ export const getMonthlyReport = async (req, res) => {
         },
         where: {
           order: {
-            createdAt: {
+            businessDate: {
               gte: start,
               lte: end
             }
@@ -727,7 +670,7 @@ export const getFinanceReport = async (req, res) => {
     const payments = await prisma.payment.findMany({
       where: {
         status: 'paid',
-        ...(dateRange ? { paidAt: dateRange } : {})
+        ...(dateRange ? { order: { businessDate: dateRange } } : {})
       },
       include: {
         order: {
@@ -872,7 +815,7 @@ export const getOrdersReport = async (req, res) => {
   try {
     const dateRange = parseDateRange(req.query)
     const orderWhere = {
-      ...(dateRange ? { createdAt: dateRange } : {}),
+      ...(dateRange ? { businessDate: dateRange } : {}),
       status: { in: completedSaleStatuses },
     }
 
@@ -906,7 +849,7 @@ export const getOrdersReport = async (req, res) => {
       }),
       prisma.order.count({
         where: {
-          ...(dateRange ? { createdAt: dateRange } : {}),
+          ...(dateRange ? { businessDate: dateRange } : {}),
           status: 'cancelled',
         },
       }),
@@ -1079,7 +1022,7 @@ export const getClientsReport = async (req, res) => {
     const customers = await prisma.customers.findMany({
       include: {
         order: {
-          where: dateRange ? { createdAt: dateRange } : {},
+          where: dateRange ? { businessDate: dateRange } : {},
           select: { total: true, source: true, createdAt: true }
         }
       }

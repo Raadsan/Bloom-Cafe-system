@@ -285,6 +285,16 @@ export const reportApi = {
     return res.data;
   },
 
+  getBusinessDay: async (): Promise<any> => {
+    const res = await api.get('/reports/business-day');
+    return res.data;
+  },
+
+  closeBusinessDay: async (): Promise<any> => {
+    const res = await api.post('/reports/business-day/close');
+    return res.data;
+  },
+
   /** Manually trigger the nightly 6 PM order close (admin/manager only) */
   triggerNightlyClose: async (): Promise<any> => {
     const res = await api.post('/reports/nightly-close');

@@ -243,6 +243,7 @@ model order {
   userId           Int?
   orderType        String           @default("dine-in")
   source           String           @default("pos")
+  businessDate     DateTime?        @db.Date
   accountingStatus String           @default("pending") @db.VarChar(16)
   journalEntryId   Int?             @unique @db.UnsignedInt
   accountedAt      DateTime?
@@ -268,6 +269,16 @@ model order {
   @@index([companyId])
   @@index([currencyId])
   @@index([accountingStatus])
+  @@index([businessDate])
+}
+
+model business_day_close {
+  id           Int      @id @default(autoincrement())
+  businessDate DateTime @unique @db.Date
+  closedAt     DateTime
+  reason       String   @db.VarChar(16)
+  userId       Int?
+  createdAt    DateTime @default(now())
 }
 
 model orderitem {
