@@ -8,7 +8,8 @@ export const IDLE_CLOSE_MS = 2 * 60 * 60 * 1000
 
 export function dateFromKey(key) {
   const [year, month, day] = String(key).split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0))
+  // MySQL DATE compares as midnight. A noon timestamp misses that whole day.
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0))
 }
 
 export function formatDateKey(value) {

@@ -3,6 +3,27 @@ import { createResponseCache } from '../../../../utils/responseCache.js'
 import { addDays, businessDateKey, dateFromKey } from '../../../../utils/businessDay.js'
 
 const reportCache = createResponseCache(90 * 1000)
+
+/** Selling price is the 2-decimal VAT-inclusive price. Totals stay in cents so rows add up. */
+function lineSalesCents(unitPrice, quantity, taxRate) {
+  const qty = Number(quantity) || 0
+  const netUnit = Number(unitPrice) || 0
+  const rate = Math.max(0, Number(taxRate) || 0)
+  const sellingCents = Math.round(netUnit * (1 + rate / 100) * 100)
+  const netCents = Math.round(netUnit * 100)
+  const totalCents = Math.round(sellingCents * qty)
+  const netTotalCents = Math.round(netCents * qty)
+  return {
+    unitSelling: sellingCents / 100,
+    totalCents,
+    netCents: netTotalCents,
+    vatCents: totalCents - netTotalCents,
+  }
+}
+
+function centsToMoney(cents) {
+  return Math.round(cents) / 100
+}
 const WEEKLY_TTL_MS = 2 * 60 * 1000
 const completedSaleStatuses = ['served', 'completed', 'paid']
 
@@ -722,21 +743,17 @@ export const getFinanceReport = async (req, res) => {
       // Items calculation
       if (p.order && p.order.orderitem) {
         p.order.orderitem.forEach(item => {
-          const cost = (item.menuitem?.costPrice || 0) * item.quantity
-          const selling = item.unitPrice * item.quantity
-          const itemTaxRate = Number(item.tax) || 0
-          
-          let itemVat = 0
-          if (itemTaxRate > 0) {
-            itemVat = selling * (itemTaxRate / 100)
-          } else if (orderVat > 0 && (p.order?.subTotal || 0) > 0) {
-            itemVat = orderVat * (selling / p.order.subTotal)
-          }
+          const qty = Number(item.quantity) || 0
+          const sale = lineSalesCents(item.unitPrice, qty, item.tax)
+          const cost = (Number(item.menuitem?.costPrice) || 0) * qty
+          const itemVat = centsToMoney(sale.vatCents)
+          const selling = centsToMoney(sale.totalCents)
+          const itemNet = centsToMoney(sale.netCents)
 
           calculatedItemsVat += itemVat
           totalCost += cost
-          
-          const profit = selling - cost - itemVat
+
+          const profit = itemNet - cost
 
           itemsList.push({
             id: item.id,
@@ -744,10 +761,10 @@ export const getFinanceReport = async (req, res) => {
             name: item.menuitem?.name || 'Unknown',
             quantity: item.quantity,
             costPrice: item.menuitem?.costPrice || 0,
-            sellingPrice: item.unitPrice,
-            totalCost: cost,
+            sellingPrice: sale.unitSelling,
+            totalCost: Number(cost.toFixed(2)),
             totalSelling: selling,
-            vat: Number(itemVat.toFixed(2)),
+            vat: itemVat,
             profit: Number(profit.toFixed(2)),
             date: p.paidAt,
             paymentMethod: p.method || 'unknown',
@@ -866,30 +883,14 @@ export const getOrdersReport = async (req, res) => {
 
       if (!o.orderitem || o.orderitem.length === 0) return
 
-      const orderTaxAmount = Number(o.taxAmount) || 0
-      const orderDiscountAmount = Number(o.discountAmount) || 0
-
-      // Calculate raw items subtotal for this order to apportion tax & discount proportionally
-      const itemsRawSum = o.orderitem.reduce(
-        (s, it) => s + (Number(it.unitPrice) || 0) * (Number(it.quantity) || 1),
-        0
-      )
-
       o.orderitem.forEach((item) => {
         const catName = item.menuitem?.category?.name || 'Uncategorized'
         const itemName = item.menuitem?.name || 'Unknown Item'
-        const qty = Number(item.quantity) || 1
-        const unitPrice = Number(item.unitPrice) || 0
-        const rawSub = unitPrice * qty
-
-        const ratio = itemsRawSum > 0 ? rawSub / itemsRawSum : 1 / o.orderitem.length
-        const itemTax =
-          orderTaxAmount > 0
-            ? orderTaxAmount * ratio
-            : rawSub * ((Number(item.tax) || 0) / 100)
-        const itemDiscount = orderDiscountAmount > 0 ? orderDiscountAmount * ratio : 0
-        const itemNet = rawSub - itemDiscount
-        const itemTotal = itemNet + itemTax
+        const sale = lineSalesCents(item.unitPrice, item.quantity, item.tax)
+        const qty = Number(item.quantity) || 0
+        const itemNet = centsToMoney(sale.netCents)
+        const itemTotal = centsToMoney(sale.totalCents)
+        const itemVat = centsToMoney(sale.vatCents)
 
         totalItemsSold += qty
 
@@ -906,7 +907,7 @@ export const getOrdersReport = async (req, res) => {
 
         categoryMap[catName].totalQuantity += qty
         categoryMap[catName].totalAmount += itemTotal
-        categoryMap[catName].totalVat += itemTax
+        categoryMap[catName].totalVat += itemVat
         categoryMap[catName].totalNet += itemNet
 
         if (!categoryMap[catName].itemsMap[itemName]) {
@@ -916,43 +917,46 @@ export const getOrdersReport = async (req, res) => {
             totalAmount: 0,
             vat: 0,
             netAmount: 0,
-            unitPrice: unitPrice,
+            unitPrice: sale.unitSelling,
           }
         }
 
         categoryMap[catName].itemsMap[itemName].quantity += qty
         categoryMap[catName].itemsMap[itemName].totalAmount += itemTotal
-        categoryMap[catName].itemsMap[itemName].vat += itemTax
+        categoryMap[catName].itemsMap[itemName].vat += itemVat
         categoryMap[catName].itemsMap[itemName].netAmount += itemNet
       })
     })
 
     const categorySales = Object.values(categoryMap)
-      .map((cat) => ({
-        categoryName: cat.categoryName,
-        totalQuantity: Number(cat.totalQuantity.toFixed(1)),
-        totalAmount: Number(cat.totalAmount.toFixed(2)),
-        totalVat: Number(cat.totalVat.toFixed(2)),
-        totalNet: Number(cat.totalNet.toFixed(2)),
-        items: Object.values(cat.itemsMap)
+      .map((cat) => {
+        const items = Object.values(cat.itemsMap)
           .map((it) => ({
             name: it.name,
             quantity: Number(it.quantity.toFixed(1)),
-            totalAmount: Number(it.totalAmount.toFixed(2)),
-            vat: Number(it.vat.toFixed(2)),
-            netAmount: Number(it.netAmount.toFixed(2)),
+            totalAmount: centsToMoney(Math.round(it.totalAmount * 100)),
+            vat: centsToMoney(Math.round(it.vat * 100)),
+            netAmount: centsToMoney(Math.round(it.netAmount * 100)),
             unitPrice: it.unitPrice,
           }))
-          .sort((a, b) => b.totalAmount - a.totalAmount),
-      }))
+          .sort((a, b) => b.totalAmount - a.totalAmount)
+        return {
+          categoryName: cat.categoryName,
+          totalQuantity: Number(items.reduce((sum, it) => sum + it.quantity, 0).toFixed(1)),
+          totalAmount: centsToMoney(items.reduce((sum, it) => sum + Math.round(it.totalAmount * 100), 0)),
+          totalVat: centsToMoney(items.reduce((sum, it) => sum + Math.round(it.vat * 100), 0)),
+          totalNet: centsToMoney(items.reduce((sum, it) => sum + Math.round(it.netAmount * 100), 0)),
+          items,
+        }
+      })
       .sort((a, b) => b.totalAmount - a.totalAmount)
 
     const totalOrders = stats._count.id || orders.length
-    const totalAmount = Number((stats._sum.total || 0).toFixed(2))
-    const totalVat = Number((stats._sum.taxAmount || 0).toFixed(2))
-    const totalSubTotal = Number((stats._sum.subTotal || 0).toFixed(2))
+    const totalAmount = centsToMoney(categorySales.reduce((sum, cat) => sum + Math.round(cat.totalAmount * 100), 0))
+    const totalVat = centsToMoney(categorySales.reduce((sum, cat) => sum + Math.round(cat.totalVat * 100), 0))
+    const totalSubTotal = centsToMoney(categorySales.reduce((sum, cat) => sum + Math.round(cat.totalNet * 100), 0))
     const totalDiscount = Number((stats._sum.discountAmount || 0).toFixed(2))
-    const totalNet = Number((totalSubTotal - totalDiscount).toFixed(2))
+    const totalNet = totalSubTotal
 
     // Top 5 Sales items by total sales revenue
     const allItemsList = []
