@@ -16,6 +16,7 @@ export interface OrderItem {
   menuItemId: number;
   quantity: number;
   unitPrice: number;
+  note?: string | null;
   menuitem?: { id: number; name: string; price: number; imageUrl?: string; description?: string };
 }
 
@@ -65,6 +66,7 @@ export interface CreateOrderPayload {
     unitPrice?: number;
     tax?: number;
     discountAmount?: number;
+    note?: string;
   }[];
 }
 

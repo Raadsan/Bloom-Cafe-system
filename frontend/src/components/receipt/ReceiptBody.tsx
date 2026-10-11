@@ -9,6 +9,7 @@ export interface ReceiptLineItem {
   name: string;
   price: number;
   quantity: number;
+  note?: string;
 }
 
 export interface ReceiptSnapshot {
@@ -23,6 +24,8 @@ export interface ReceiptSnapshot {
   tax: number;
   total: number;
   discount?: number;
+  discountType?: string | null;
+  discountValue?: number;
   createdAt: string;
   servedBy?: string;
 }
@@ -80,6 +83,26 @@ export function ReceiptHeader({ settings }: { settings: ReceiptSettings | null }
   );
 }
 
+function ReceiptRule() {
+  return (
+    <div
+      aria-hidden
+      className="receipt-rule my-1.5 overflow-hidden whitespace-nowrap font-mono text-[11px] leading-none tracking-normal text-black"
+    >
+      {"-".repeat(64)}
+    </div>
+  );
+}
+
+function discountLabel(data: ReceiptSnapshot) {
+  const value = Number(data.discountValue) || 0;
+  if (data.discountType === "percentage" && value > 0) {
+    const shown = Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
+    return `Discount (${shown}%)`;
+  }
+  return "Discount";
+}
+
 export function ReceiptBody({
   data,
   settings,
@@ -121,7 +144,7 @@ export function ReceiptBody({
       </div>
 
       {/* ── Order meta (Date / Time / Receipt# / Type) ── */}
-      <div className="border-t border-dashed border-zinc-300 pt-2 pb-2 mb-2 text-[10px] text-zinc-500 space-y-0.5">
+      <div className="pb-1 mb-1 text-[10px] text-zinc-700 space-y-0.5">
         <div className="flex justify-between">
           <span>Date</span>
           <span>{dateStr}</span>
@@ -145,40 +168,47 @@ export function ReceiptBody({
       {/* ── Items ── */}
       <div className="mb-3">
         {/* Column headers */}
-        <div className="flex justify-between text-[9px] font-bold text-zinc-400 uppercase mb-1 pb-1 border-b border-dashed border-zinc-200">
+        <div className="flex justify-between text-[9px] font-bold text-zinc-700 uppercase mb-1">
           <span className="w-6">Qty</span>
           <span className="flex-1 px-1">Item</span>
           <span className="w-14 text-right">U.Price</span>
           <span className="w-14 text-right">Total</span>
         </div>
-        {/* Rows */}
-        {data.items.map((item) => (
-          <div key={item.menuItemId} className="flex justify-between items-start py-1">
-            <span className="w-6 text-zinc-600">{item.quantity}x</span>
-            <span className="flex-1 px-1 font-semibold">{item.name}</span>
-            <span className="w-14 text-right text-zinc-500">${item.price.toFixed(2)}</span>
-            <span className="w-14 text-right font-semibold">${(item.quantity * item.price).toFixed(2)}</span>
+        <ReceiptRule />
+        {data.items.map((item, index) => (
+          <div key={`${item.menuItemId}-${index}`} className="py-1">
+            <div className="flex justify-between items-start">
+              <span className="w-6 text-zinc-700">{item.quantity}x</span>
+              <span className="flex-1 px-1 font-semibold">{item.name}</span>
+              <span className="w-14 text-right text-zinc-700">${item.price.toFixed(2)}</span>
+              <span className="w-14 text-right font-semibold">${(item.quantity * item.price).toFixed(2)}</span>
+            </div>
+            {item.note ? (
+              <p className="pl-7 pr-1 text-[10px] italic leading-snug text-zinc-700">Note: {item.note}</p>
+            ) : null}
           </div>
         ))}
       </div>
 
       {/* ── Totals ── */}
-      <div className="border-t border-dashed border-zinc-300 pt-2 space-y-0.5 mb-4">
-        <div className="flex justify-between text-zinc-600">
+      <ReceiptRule />
+      <div className="space-y-0.5 mb-4">
+        <div className="flex justify-between text-zinc-700">
           <span>Subtotal</span>
           <span>${data.subtotal.toFixed(2)}</span>
         </div>
         {(data.discount ?? 0) > 0 && (
-          <div className="flex justify-between text-zinc-600">
-            <span>Discount</span>
+          <div className="flex justify-between text-zinc-800">
+            <span>{discountLabel(data)}</span>
             <span>-${(data.discount ?? 0).toFixed(2)}</span>
           </div>
         )}
-        <div className="flex justify-between text-zinc-600">
+        <div className="flex justify-between text-zinc-700">
           <span>VAT 5%</span>
           <span>${data.tax.toFixed(2)}</span>
         </div>
-        <div className="flex justify-between font-black text-sm border-t border-dashed border-zinc-300 pt-1 mt-1">
+        <ReceiptRule />
+        <div className="flex justify-between font-black text-sm">
           <span>Total</span>
           <span>${data.total.toFixed(2)}</span>
         </div>
@@ -189,18 +219,21 @@ export function ReceiptBody({
       </div>
 
       {/* ── QR Code (links to order ticket page) ── */}
-      <div className="flex items-center gap-3 mb-4 border-t border-dashed border-zinc-300 pt-3">
+      <ReceiptRule />
+      <div className="flex items-center gap-3 mb-4">
         <div className="shrink-0">
           <QRCode value={ticketUrl} size={60} level="L" />
         </div>
         <div className="text-[9px] text-zinc-500 pt-1 space-y-0.5 leading-snug">
-          <p className="font-bold text-zinc-900 ">Need an invoice?</p>
+          <p className="font-bold text-zinc-900">Need an invoice?</p>
+          <p>Scan the QR code.</p>
           {/* <p className="break-all">{ticketUrl}</p> */}
         </div>
       </div>
 
       {/* ── Footer: footerText + email + Powered by ── */}
-      <div className="text-center border-t border-dashed border-zinc-300 pt-3 space-y-1">
+      <ReceiptRule />
+      <div className="text-center space-y-1">
         {settings?.footerText && (
           <p className="text-[10px] italic text-zinc-500 leading-relaxed">
             {settings.footerText}

@@ -65,10 +65,13 @@ function orderToReceiptSnapshot(o: Order): ReceiptSnapshot {
       name: oi.menuitem?.name || "Item",
       price: Number(oi.unitPrice),
       quantity: oi.quantity,
+      note: oi.note || undefined,
     })),
     subtotal: Number(o.subTotal),
     tax: Number(o.taxAmount),
     discount: Number(o.discountAmount ?? 0),
+    discountType: o.discountType,
+    discountValue: Number(o.discountValue ?? 0),
     total: Number(o.total),
     createdAt: o.createdAt || new Date().toISOString(),
   };

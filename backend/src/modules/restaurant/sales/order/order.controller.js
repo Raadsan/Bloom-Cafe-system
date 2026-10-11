@@ -751,6 +751,55 @@ import { upsertCustomerByPhone } from '../../../shared/customers/customer.servic
 import { processCompletedPOSOrderSafely } from '../../../accounting/services/posOrderAccounting.service.js'
 import { businessWindow, resolveBusinessDate } from '../../../../utils/businessDay.js'
 
+let orderItemNoteColumnReady = false
+
+async function ensureOrderItemNoteColumn() {
+  if (orderItemNoteColumnReady) return
+  await prisma.$executeRawUnsafe('ALTER TABLE `orderitem` ADD COLUMN `note` VARCHAR(255) NULL').catch((error) => {
+    const message = String(error?.message || '')
+    if (!/duplicate|already exists/i.test(message)) throw error
+  })
+  orderItemNoteColumnReady = true
+}
+
+async function saveOrderItemNotes(orderId, notes = []) {
+  if (!notes.some(Boolean)) return
+  await ensureOrderItemNoteColumn()
+  const rows = await prisma.orderitem.findMany({
+    where: { orderId },
+    orderBy: { id: 'asc' },
+    select: { id: true },
+  })
+  for (let i = 0; i < rows.length; i += 1) {
+    const note = notes[i]
+    if (!note) continue
+    await prisma.$executeRawUnsafe('UPDATE `orderitem` SET `note` = ? WHERE `id` = ?', note, rows[i].id)
+  }
+}
+
+export async function attachOrderItemNotes(orders) {
+  const list = (Array.isArray(orders) ? orders : [orders]).filter(Boolean)
+  const ids = list.flatMap((order) => (order.orderitem || []).map((item) => item.id)).filter(Boolean)
+  if (!ids.length) return orders
+  let rows = []
+  try {
+    await ensureOrderItemNoteColumn()
+    rows = await prisma.$queryRawUnsafe(
+      `SELECT id, note FROM \`orderitem\` WHERE id IN (${ids.map(() => '?').join(',')})`,
+      ...ids
+    )
+  } catch {
+    return orders
+  }
+  const notes = new Map(rows.map((row) => [Number(row.id), row.note || null]))
+  for (const order of list) {
+    for (const item of order.orderitem || []) {
+      item.note = notes.get(item.id) || null
+    }
+  }
+  return orders
+}
+
 const MOBILE_WALLET_METHODS = ['evc_plus', 'edahab', 'premier_wallet', 'waafi']
 
 const generateInternalRef = () => {
@@ -833,6 +882,7 @@ export const createOrder = async (req, res) => {
     subTotal = priced.subTotal
     taxAmount = priced.taxAmount
     const orderItemsData = priced.orderItemsData
+    const itemNotes = priced.itemNotes || []
 
     let customer = null
 
@@ -890,6 +940,8 @@ export const createOrder = async (req, res) => {
         }
       }
     })
+
+    await saveOrderItemNotes(order.id, itemNotes)
 
     // Table stays active/inactive only — no separate "occupied" status
     // (orders track table usage; admin sets inactive to disable a table)
@@ -965,7 +1017,7 @@ export const createPosCheckout = async (req, res) => {
     if (priced.error) {
       return res.status(400).json({ success: false, message: priced.error })
     }
-    const { subTotal, taxAmount, orderItemsData } = priced
+    const { subTotal, taxAmount, orderItemsData, itemNotes = [] } = priced
 
     let customer = null
     if (customerName && customerPhone) {
@@ -1057,6 +1109,7 @@ export const createPosCheckout = async (req, res) => {
       },
     })
 
+    await saveOrderItemNotes(order.id, itemNotes)
     await processCompletedPOSOrderSafely(order.id, 'POS checkout payment')
 
     clearOrderListCache()
@@ -1242,6 +1295,7 @@ export const updateOrder = async (req, res) => {
     }
     const total = priced.subTotal + priced.taxAmount
     const orderItemsData = priced.orderItemsData
+    const itemNotes = priced.itemNotes || []
 
     // Delete old items
     await prisma.orderitem.deleteMany({
@@ -1273,6 +1327,7 @@ export const updateOrder = async (req, res) => {
       include: orderListInclude,
     })
 
+    await saveOrderItemNotes(updatedOrder.id, itemNotes)
     emitOrderUpdate(updatedOrder)
 
     logAudit({ userId: req.user?.id, action: 'Updated', entity: 'Order', entityId: updatedOrder.id, description: `Updated order #${updatedOrder.id}` })
@@ -1500,6 +1555,7 @@ export const getAllOrders = async (req, res) => {
 
     orderListInflight.set(cacheKey, fetchPromise)
     const orders = await fetchPromise
+    await attachOrderItemNotes(orders)
 
     res.json({ success: true, data: orders })
   } catch (error) {
@@ -1518,6 +1574,7 @@ export const getOrderById = async (req, res) => {
   })
 
   if (!order) return res.status(404).json({ success: false })
+  await attachOrderItemNotes(order)
 
   res.json({ success: true, data: order })
 }

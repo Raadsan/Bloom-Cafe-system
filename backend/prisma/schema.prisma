@@ -286,6 +286,7 @@ model orderitem {
   quantity   Int      @default(1)
   unitPrice  Float
   tax        Float    @default(0)
+  note       String?  @db.VarChar(255)
   orderId    Int
   menuItemId Int
   menuitem   menuitem @relation(fields: [menuItemId], references: [id], onDelete: NoAction)

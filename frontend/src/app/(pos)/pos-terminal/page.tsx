@@ -951,6 +951,7 @@ export default function PosTerminalPage() {
         unitPrice: i.price,
         tax: i.tax,
         discountAmount: i.lineDiscount,
+        note: i.lineNote || undefined,
       })),
       ...getDiscountPayload(),
     };
@@ -1223,9 +1224,13 @@ export default function PosTerminalPage() {
           : item.name,
         price: item.quantity > 0 ? lineNet(item) / item.quantity : 0,
         quantity: item.quantity,
+        note: item.lineNote,
       })),
       subtotal,
       tax: taxAmount,
+      discount: Number(discountAmount.toFixed(2)),
+      discountType,
+      discountValue: Number(discount) || 0,
       total,
       createdAt: new Date().toISOString(),
     };

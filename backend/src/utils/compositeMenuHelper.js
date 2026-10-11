@@ -156,6 +156,7 @@ export async function buildOrderItemsPayload(items, prisma, { allowOverrides = f
   let subTotal = 0
   let taxAmount = 0
   const orderItemsData = []
+  const itemNotes = []
 
   for (const item of items) {
     const menuItem = itemMap.get(Number(item.menuItemId))
@@ -189,10 +190,11 @@ export async function buildOrderItemsPayload(items, prisma, { allowOverrides = f
     subTotal += line.subtotal
     taxAmount += line.taxAmount
     orderItemsData.push(line.orderItem)
+    itemNotes.push(String(item.note || '').trim().slice(0, 255))
   }
 
   // Keep the legacy flat VAT outside POS; POS sends each edited line's tax rate.
   if (!allowOverrides) taxAmount = subTotal * 0.05
 
-  return { subTotal, taxAmount, orderItemsData }
+  return { subTotal, taxAmount, orderItemsData, itemNotes }
 }

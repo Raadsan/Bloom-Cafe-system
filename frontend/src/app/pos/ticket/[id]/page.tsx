@@ -38,6 +38,7 @@ export default function OrderTicketPage() {
           name: oi.menuitem?.name || oi.name || "Item",
           price: Number(oi.unitPrice ?? oi.menuitem?.price ?? 0),
           quantity: oi.quantity,
+          note: oi.note || undefined,
         }));
         const subtotal = Number(o.subTotal ?? o.subtotal ?? 0);
         const tax = Number(o.taxAmount ?? o.tax ?? 0);
@@ -56,6 +57,8 @@ export default function OrderTicketPage() {
           subtotal,
           tax,
           discount: Number(o.discountAmount ?? 0),
+          discountType: o.discountType,
+          discountValue: Number(o.discountValue ?? 0),
           total,
           createdAt: o.createdAt,
         });
